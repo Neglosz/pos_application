@@ -24,6 +24,11 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "scheme": "zippytill",
+    "plugins": [
+      "@react-native-community/datetimepicker",
+      "expo-web-browser"
+    ]
   }
 }
