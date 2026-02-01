@@ -85,7 +85,14 @@ function MainStack({ onLogout }) {
           animationEnabled: true,
         }}
       />
-      <Stack.Screen name="Alert" component={AlertScreen} />
+      <Stack.Screen
+        name="Alert"
+        component={AlertScreen}
+        options={{
+          cardStyle: { backgroundColor: '#fff' },
+          cardOverlayEnabled: true,
+        }}
+      />
       <Stack.Screen name="DeviceConnect" component={DeviceConnectScreen} />
     </Stack.Navigator>
   );
@@ -182,70 +189,76 @@ export default function App() {
   };
 
   // Show auth screens if not logged in
-  if (!isLoggedIn) {
-    if (currentScreen === 'SignIn') {
-      return (
-        <SafeAreaProvider>
-          <SignInScreen
-            onLogin={handleLogin}
-            onNavigateToSignUp={() => navigateTo('SignUp')}
-            onNavigateToForgotPassword={() => navigateTo('ForgotPassword')}
-          />
-          <StatusBar style="light" />
-        </SafeAreaProvider>
-      );
-    } else if (currentScreen === 'SignUp') {
-      return (
-        <SafeAreaProvider>
-          <SignUpScreen
-            onSignUp={() => navigateTo('SignIn')}
-            onNavigateToSignIn={() => navigateTo('SignIn')}
-          />
-          <StatusBar style="light" />
-        </SafeAreaProvider>
-      );
-    } else if (currentScreen === 'ForgotPassword') {
-      return (
-        <SafeAreaProvider>
-          <ForgotPasswordScreen
-            onNavigateToSignIn={() => navigateTo('SignIn')}
-          />
-          <StatusBar style="light" />
-        </SafeAreaProvider>
-      );
-    } else if (currentScreen === 'BranchList') {
-      return (
-        <SafeAreaProvider>
-          <BranchListScreen
-            userProfile={authData?.profile}
-            onSelectBranch={handleBranchSelect}
-            onLogout={handleLogout}
-          />
-          <StatusBar style="light" />
-        </SafeAreaProvider>
-      );
-    } else if (currentScreen === 'BranchDetail') {
-      return (
-        <SafeAreaProvider>
-          <BranchDetailScreen
-            branch={selectedBranch}
-            onBack={handleBackToBranchList}
-            onEnterPOS={handleEnterPOS}
-          />
-          <StatusBar style="light" />
-        </SafeAreaProvider>
-      );
+  const renderContent = () => {
+    if (!isLoggedIn) {
+      if (currentScreen === 'SignIn') {
+        return (
+          <>
+            <SignInScreen
+              onLogin={handleLogin}
+              onNavigateToSignUp={() => navigateTo('SignUp')}
+              onNavigateToForgotPassword={() => navigateTo('ForgotPassword')}
+            />
+            <StatusBar style="light" />
+          </>
+        );
+      } else if (currentScreen === 'SignUp') {
+        return (
+          <>
+            <SignUpScreen
+              onSignUp={() => navigateTo('SignIn')}
+              onNavigateToSignIn={() => navigateTo('SignIn')}
+            />
+            <StatusBar style="light" />
+          </>
+        );
+      } else if (currentScreen === 'ForgotPassword') {
+        return (
+          <>
+            <ForgotPasswordScreen
+              onNavigateToSignIn={() => navigateTo('SignIn')}
+            />
+            <StatusBar style="light" />
+          </>
+        );
+      } else if (currentScreen === 'BranchList') {
+        return (
+          <>
+            <BranchListScreen
+              userProfile={authData?.profile}
+              onSelectBranch={handleBranchSelect}
+              onLogout={handleLogout}
+            />
+            <StatusBar style="light" />
+          </>
+        );
+      } else if (currentScreen === 'BranchDetail') {
+        return (
+          <>
+            <BranchDetailScreen
+              branch={selectedBranch}
+              onBack={handleBackToBranchList}
+              onEnterPOS={handleEnterPOS}
+            />
+            <StatusBar style="light" />
+          </>
+        );
+      }
     }
-  }
 
-  // Main app after login
+    return (
+      <NavigationContainer>
+        <MainStack onLogout={handleLogout} />
+        <StatusBar style="dark" />
+      </NavigationContainer>
+    );
+  };
+
+  // Main app wrap
   return (
     <SafeAreaProvider>
       <StoreProvider>
-        <NavigationContainer>
-          <MainStack onLogout={handleLogout} />
-          <StatusBar style="dark" />
-        </NavigationContainer>
+        {renderContent()}
       </StoreProvider>
     </SafeAreaProvider>
   );

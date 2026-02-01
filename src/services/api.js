@@ -113,6 +113,13 @@ export const createCreditSale = async (saleData) => {
     });
 };
 
+export const createSale = async (saleData) => {
+    return apiRequest('/sales', {
+        method: 'POST',
+        body: JSON.stringify(saleData),
+    });
+};
+
 export const checkDueNotifications = async () => {
     return apiRequest('/check-due-notifications', {
         method: 'POST',
@@ -176,6 +183,33 @@ export const addProductBatch = async (productId, batchData) => {
     return apiRequest(`/products/${productId}/add-batch`, {
         method: 'POST',
         body: JSON.stringify(batchData),
+    });
+};
+
+// Store Settings & PromptPay
+export const getStoreSettings = async (storeId = null) => {
+    const options = {};
+    if (storeId) {
+        options.headers = { 'x-store-id': storeId };
+    }
+    return apiRequest('/stores/settings', options);
+};
+
+export const updateStoreSettings = async (settings, storeId = null) => {
+    const options = {
+        method: 'PUT',
+        body: JSON.stringify(settings),
+    };
+    if (storeId) {
+        options.headers = { 'x-store-id': storeId };
+    }
+    return apiRequest('/stores/settings', options);
+};
+
+export const getQRPayload = async (amount) => {
+    return apiRequest('/sales/qr-payload', {
+        method: 'POST',
+        body: JSON.stringify({ amount }),
     });
 };
 

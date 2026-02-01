@@ -380,9 +380,13 @@ export default function DebtScreen() {
                             <TouchableOpacity key={debtor.id} style={styles.debtorCard} onPress={() => handleEdit(debtor)}>
                                 <View style={styles.cardHeader}>
                                     <View style={styles.userInfo}>
-                                        <View style={[styles.avatar, { backgroundColor: getAvatarColor(debtor.name) }]}>
-                                            <Text style={styles.avatarText}>{debtor.name ? debtor.name.charAt(0).toUpperCase() : '?'}</Text>
-                                        </View>
+                                        {debtor.image_url ? (
+                                            <Image source={{ uri: debtor.image_url }} style={[styles.avatar, { backgroundColor: '#f0f0f0' }]} />
+                                        ) : (
+                                            <View style={[styles.avatar, { backgroundColor: getAvatarColor(debtor.name) }]}>
+                                                <Text style={styles.avatarText}>{debtor.name ? debtor.name.charAt(0).toUpperCase() : '?'}</Text>
+                                            </View>
+                                        )}
                                         <View>
                                             <Text style={styles.userName}>{debtor.name}</Text>
                                             <Text style={styles.userPhone}>
@@ -446,9 +450,13 @@ export default function DebtScreen() {
                             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                                 <View>
                                     <View style={styles.customerInfoModal}>
-                                        <View style={[styles.avatarLarge, { backgroundColor: getAvatarColor(selectedDebtor?.name || '') }]}>
-                                            <Text style={styles.avatarTextLarge}>{selectedDebtor?.name ? selectedDebtor.name.charAt(0).toUpperCase() : '?'}</Text>
-                                        </View>
+                                        {selectedDebtor?.image_url ? (
+                                            <Image source={{ uri: selectedDebtor.image_url }} style={[styles.avatarLarge, { backgroundColor: '#f0f0f0' }]} />
+                                        ) : (
+                                            <View style={[styles.avatarLarge, { backgroundColor: getAvatarColor(selectedDebtor?.name || '') }]}>
+                                                <Text style={styles.avatarTextLarge}>{selectedDebtor?.name ? selectedDebtor.name.charAt(0).toUpperCase() : '?'}</Text>
+                                            </View>
+                                        )}
                                         <Text style={styles.customerNameModal}>คุณ{selectedDebtor?.name || '-'}</Text>
                                     </View>
                                     <View style={styles.billsContainer}>

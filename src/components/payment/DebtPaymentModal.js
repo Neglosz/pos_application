@@ -276,22 +276,19 @@ export default function DebtPaymentModal({
     const submitForm = async (isNewCustomer) => {
         let finalImageUrl = customerImage;
 
-        // Upload image to Supabase if it's a new local image
-        if (customerImage && isLocalUri(customerImage)) {
-            const storeId = getCurrentStoreId();
-            if (storeId) {
-                const uploadResult = await uploadCustomerImage(customerImage, storeId);
-                if (uploadResult.success) {
-                    finalImageUrl = uploadResult.url;
-                } else {
-                    console.error('Customer image upload failed:', uploadResult.error);
-                    // Continue with existing URL or null
+        try {
+            // Upload image to Supabase if it's a new local image
+            if (customerImage && isLocalUri(customerImage)) {
+                const storeId = getCurrentStoreId();
+                if (storeId) {
+                    const uploadResult = await uploadCustomerImage(customerImage, storeId);
+                    if (uploadResult.success) {
+                        finalImageUrl = uploadResult.url;
+                    }
                 }
             }
-        }
 
-        handleClose(() => {
-            onConfirm?.({
+            const dataToSend = {
                 customerId: selectedCustomer?.id || null,
                 customerName,
                 customerPhone,
@@ -299,8 +296,33 @@ export default function DebtPaymentModal({
                 dueDate,
                 amount,
                 isNewCustomer,
-            });
-        });
+            };
+
+            // Call onConfirm - parent handles API and closing modal
+            if (onConfirm) {
+                onConfirm(dataToSend);
+            } else {
+                Alert.alert('ผิดพลาด', 'ไม่สามารถส่งข้อมูลได้');
+                return;
+            }
+
+            // Start visual close animation
+            Animated.parallel([
+                Animated.timing(fadeAnim, {
+                    toValue: 0,
+                    duration: 200,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(slideAnim, {
+                    toValue: SCREEN_HEIGHT,
+                    duration: 250,
+                    useNativeDriver: true,
+                }),
+            ]).start();
+
+        } catch (error) {
+            Alert.alert('ผิดพลาด', `เกิดข้อผิดพลาด: ${error.message}`);
+        }
     };
 
     const handleDateChange = (event, date) => {

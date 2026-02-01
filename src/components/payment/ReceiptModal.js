@@ -44,14 +44,15 @@ export default function ReceiptModal({
             minute: '2-digit'
         }),
         paymentMethod = 'เงินสด',
-        items = [
-            { name: 'ขนมปัง', quantity: 2, price: 50.00 },
-            { name: 'น้ำเปล่า', quantity: 2, price: 20.00 },
-            { name: 'เลย์', quantity: 1, price: 22.00 },
-        ],
-        total = 92.00,
-        received = 100.00,
-        change = 8.00,
+        items = [],
+        total = 0,
+        received = 0,
+        change = 0,
+        store = {
+            name: 'เจเค ปาร์ค',
+            address: '100 ถ.ทุ่งสลา อ.ศรีราชา จ.ชลบุรี',
+            phone: '012-xxx-xxxx',
+        }
     } = safeTransaction;
 
     useEffect(() => {
@@ -167,9 +168,9 @@ export default function ReceiptModal({
 
                     {/* Store Info */}
                     <View style={styles.storeInfo}>
-                        <Text style={styles.storeName}>{STORE_INFO.name}</Text>
-                        <Text style={styles.storeAddress}>{STORE_INFO.address}</Text>
-                        <Text style={styles.storePhone}>โทร : {STORE_INFO.phone}</Text>
+                        <Text style={styles.storeName}>{store.name}</Text>
+                        <Text style={styles.storeAddress}>{store.address}</Text>
+                        <Text style={styles.storePhone}>โทร : {store.phone}</Text>
                     </View>
 
                     {/* Receipt Details */}
