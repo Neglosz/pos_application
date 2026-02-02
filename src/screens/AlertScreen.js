@@ -6,9 +6,11 @@ import {
     TouchableOpacity,
     ScrollView,
     Linking,
+    ActivityIndicator,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { getNotifications, checkDueNotifications, checkStockNotifications, deleteNotification, markNotificationAsRead, markNotificationsAsRead } from '../services/api';
+import { getNotifications, deleteNotification, markNotificationAsRead, markNotificationsAsRead, runDailyCheck } from '../services/api';
+import { supabase } from '../services/supabase';
 import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 
 const tabs = [
@@ -22,21 +24,26 @@ export default function AlertScreen({ navigation }) {
     const [activeTab, setActiveTab] = useState('all');
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [checking, setChecking] = useState(false);
 
-    useEffect(() => {
-        fetchNotifications();
-    }, []);
+    // Function to run daily check and refresh notifications
+    const handleCheckNotifications = async () => {
+        try {
+            setChecking(true);
+            await runDailyCheck();
+            await fetchNotifications();
+        } catch (error) {
+            console.error('Check error:', error);
+        } finally {
+            setChecking(false);
+        }
+    };
 
     const fetchNotifications = async () => {
         try {
             setLoading(true);
-
-            // Check both payment and stock notifications
-            await Promise.all([
-                checkDueNotifications(),
-                checkStockNotifications()
-            ]);
-
+            // Just fetch existing notifications - no more auto-check!
+            // Notifications are now created by database triggers & daily cron
             const response = await getNotifications();
             if (response.success) {
                 setNotifications(response.data);
@@ -47,6 +54,27 @@ export default function AlertScreen({ navigation }) {
             setLoading(false);
         }
     };
+
+    useEffect(() => {
+        fetchNotifications();
+
+        // Subscribe to realtime updates
+        const channel = supabase
+            .channel('alert-screen-notifications')
+            .on('postgres_changes', {
+                event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+                schema: 'public',
+                table: 'notifications'
+            }, () => {
+                // Refetch when any change happens
+                fetchNotifications();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []);
 
     const handleBack = () => {
         navigation?.goBack();
@@ -266,7 +294,16 @@ export default function AlertScreen({ navigation }) {
                     <Ionicons name="arrow-back" size={24} color="#000" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>การแจ้งเตือน</Text>
-                <TouchableOpacity style={styles.bellContainer}>
+                <TouchableOpacity
+                    style={styles.refreshButton}
+                    onPress={handleCheckNotifications}
+                    disabled={checking}
+                >
+                    {checking ? (
+                        <ActivityIndicator size="small" color="#F37021" />
+                    ) : (
+                        <Ionicons name="refresh" size={22} color="#F37021" />
+                    )}
                 </TouchableOpacity>
             </View>
 
@@ -364,6 +401,11 @@ const styles = StyleSheet.create({
     },
     bellContainer: {
         padding: 8,
+    },
+    refreshButton: {
+        padding: 8,
+        borderRadius: 20,
+        backgroundColor: '#FFF5F0',
     },
     tabBarContainer: {
         flexDirection: 'row',

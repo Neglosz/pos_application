@@ -4,7 +4,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 export default function BottomNav({ activeTab = 'ค้างชำระ', onTabPress }) {
     const tabs = [
-        { name: 'ขาย', icon: 'cart-outline', activeIcon: 'cart', iconType: 'ionicons' },
+        { name: 'ผู้ช่วย', icon: 'robot-outline', activeIcon: 'robot', iconType: 'material' },
         { name: 'คลัง', icon: 'cube-outline', activeIcon: 'cube', iconType: 'ionicons' },
         { name: 'สแกน', icon: 'barcode-scan', iconType: 'material', isCenter: true },
         { name: 'ค้างชำระ', icon: 'people-outline', activeIcon: 'people', iconType: 'ionicons' },

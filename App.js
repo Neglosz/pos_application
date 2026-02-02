@@ -15,7 +15,8 @@ import { supabase } from './src/services/supabase';
 // Disable native screens to fix "expected dynamic type 'boolean', but had type 'string'" error on Expo 52
 enableScreens(false);
 
-import SaleScreen from './src/screens/SaleScreen';
+// import SaleScreen from './src/screens/SaleScreen';
+import AIScreen from './src/screens/AIScreen';
 import StockScreen from './src/screens/StockScreen';
 import StockScanScreen from './src/screens/StockScanScreen';
 import ScanScreen from './src/screens/ScanScreen';
@@ -30,6 +31,8 @@ import BottomNav from './src/components/BottomNav';
 import BranchListScreen from './src/screens/BranchListScreen';
 import BranchDetailScreen from './src/screens/BranchDetailScreen';
 import DeviceConnectScreen from './src/screens/DeviceConnectScreen';
+import BackupScreen from './src/screens/BackupScreen';
+import TransactionHistoryScreen from './src/screens/TransactionHistoryScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -53,7 +56,7 @@ function MainTabs({ onLogout }) {
         }}
         detachInactiveScreens={false}
       >
-        <Tab.Screen name="ขาย" component={SaleScreen} />
+        <Tab.Screen name="ผู้ช่วย" component={AIScreen} />
         <Tab.Screen name="คลัง" component={StockScreen} />
         <Tab.Screen name="สแกน" component={ScanScreen} />
         <Tab.Screen name="ค้างชำระ" component={DebtScreen} />
@@ -94,6 +97,8 @@ function MainStack({ onLogout }) {
         }}
       />
       <Stack.Screen name="DeviceConnect" component={DeviceConnectScreen} />
+      <Stack.Screen name="Backup" component={BackupScreen} />
+      <Stack.Screen name="TransactionHistory" component={TransactionHistoryScreen} />
     </Stack.Navigator>
   );
 }

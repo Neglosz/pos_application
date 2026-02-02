@@ -126,6 +126,13 @@ export const checkDueNotifications = async () => {
     });
 }
 
+// Run daily check for expiry, payment due, promo ending notifications
+export const runDailyCheck = async () => {
+    return apiRequest('/notifications/daily-check', {
+        method: 'POST',
+    });
+}
+
 export const deleteNotification = async (id) => {
     return apiRequest(`/notifications/${id}`, {
         method: 'DELETE',
@@ -240,3 +247,39 @@ export const addProduct = async (productData) => {
     });
 };
 
+
+// Reports
+export const getSalesSummary = async (period = 'today') => {
+    return apiRequest(`/reports/sales-summary?period=${period}`);
+};
+
+export const getSalesChartData = async (period = 'today') => {
+    return apiRequest(`/reports/sales-chart?period=${period}`);
+};
+
+export const getPaymentMethodStats = async (period = 'today') => {
+    return apiRequest(`/reports/payment-methods?period=${period}`);
+};
+
+export const getRecentOrders = async () => {
+    return apiRequest('/reports/recent-orders');
+};
+
+// Transactions / Expenses
+export const getTransactions = async (filters = {}) => {
+    const queryParams = new URLSearchParams(filters).toString();
+    return apiRequest(`/transactions?${queryParams}`);
+};
+
+export const createTransaction = async (data) => {
+    return apiRequest('/transactions', {
+        method: 'POST',
+        body: JSON.stringify(data),
+    });
+};
+
+export const deleteTransaction = async (id) => {
+    return apiRequest(`/transactions/${id}`, {
+        method: 'DELETE',
+    });
+};

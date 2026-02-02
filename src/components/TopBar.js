@@ -3,15 +3,14 @@ import { View, Text, Image, StyleSheet, TouchableOpacity, Modal, TouchableWithou
 import { Ionicons, FontAwesome5, FontAwesome } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../services/supabase';
-
-import { getUnreadNotificationCount } from '../services/api'; // Add import
+import { getUnreadNotificationCount } from '../services/api';
 
 export default function TopBar({ onLogout }) {
     const navigation = useNavigation();
     const [menuVisible, setMenuVisible] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
 
-    // Fetch unread count on mount and when screen focuses
+    // Fetch unread count on mount and subscribe to Realtime
     React.useEffect(() => {
         const fetchUnreadCount = async () => {
             try {
@@ -24,16 +23,44 @@ export default function TopBar({ onLogout }) {
             }
         };
 
-        const unsubscribe = navigation.addListener('focus', fetchUnreadCount);
-        // Also fetch immediately
+        // Initial fetch
         fetchUnreadCount();
 
-        // Optional: Poll every minute
-        const interval = setInterval(fetchUnreadCount, 60000);
+        // Subscribe to realtime notifications
+        const channel = supabase
+            .channel('topbar-notifications')
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'notifications'
+            }, (payload) => {
+                // New notification arrived, increment count
+                setUnreadCount(prev => prev + 1);
+            })
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'notifications'
+            }, () => {
+                // Notification updated (e.g., marked as read), refetch count
+                fetchUnreadCount();
+            })
+            .on('postgres_changes', {
+                event: 'DELETE',
+                schema: 'public',
+                table: 'notifications'
+            }, () => {
+                // Notification deleted, refetch count
+                fetchUnreadCount();
+            })
+            .subscribe();
+
+        // Also refetch when screen focuses
+        const unsubscribe = navigation.addListener('focus', fetchUnreadCount);
 
         return () => {
+            supabase.removeChannel(channel);
             unsubscribe();
-            clearInterval(interval);
         };
     }, [navigation]);
 
@@ -65,7 +92,15 @@ export default function TopBar({ onLogout }) {
             label: 'สำรองข้อมูล',
             onPress: () => {
                 setMenuVisible(false);
-                //navigation.navigate('Backup');
+                navigation.navigate('Backup');
+            },
+        },
+        {
+            icon: <FontAwesome5 name='file-invoice-dollar' size={22} color="#F37021" />,
+            label: 'รายการเดินบัญชี',
+            onPress: () => {
+                setMenuVisible(false);
+                navigation.navigate('TransactionHistory');
             },
         },
     ];
@@ -73,11 +108,8 @@ export default function TopBar({ onLogout }) {
     return (
         <View style={styles.container}>
             {/* Profile Image - กดแล้วเปิด Menu */}
-            <TouchableOpacity onPress={() => setMenuVisible(true)}>
-                <Image
-                    source={{ uri: 'https://img2.pic.in.th/Screenshot-2025-12-18-001409.md.png' }}
-                    style={styles.profileImage}
-                />
+            <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.menuButton}>
+                <Ionicons name="storefront" size={20} color="#fff" />
             </TouchableOpacity>
             <Text style={styles.title}>Zippy Till</Text>
             {/* Bell Icon */}
@@ -151,11 +183,19 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 12,
     },
-    profileImage: {
-        width: 45,
-        height: 45,
-        borderRadius: 22.5,
-        backgroundColor: '#ddd',
+    menuButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#F37021', // Orange theme
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#F37021',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
+        elevation: 5,
+        left: 10,
     },
     title: {
         fontSize: 24,
