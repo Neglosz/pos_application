@@ -6,7 +6,7 @@ import { Alert } from 'react-native';
 let currentStoreId = null;
 let currentUserId = null;
 
-const apiRequest = async (endpoint, options = {}) => {
+export const apiRequest = async (endpoint, options = {}) => {
     let token = null;
     try {
         const { data: { session } } = await supabase.auth.getSession();
