@@ -12,6 +12,7 @@ export const useProductStore = create(
         (set, get) => ({
             // State
             products: [],
+            weightProducts: [],
             categories: [], // Cached categories
             isLoading: false,
             hasMore: true,
@@ -40,7 +41,7 @@ export const useProductStore = create(
                 try {
                     const storeId = getCurrentStoreId();
                     const { searchQuery, selectedCategoryId } = get();
-                    let url = `${API_BASE_URL}/products?page=${page}&limit=${PAGE_SIZE}`;
+                    let url = `${API_BASE_URL}/products?page=${page}&limit=${PAGE_SIZE}&type=normal`;
                     if (searchQuery) {
                         url += `&search=${encodeURIComponent(searchQuery)}`;
                     }
@@ -103,6 +104,63 @@ export const useProductStore = create(
                 }
             },
 
+            // Fetch weight products
+            fetchWeightProducts: async () => {
+                const storeId = getCurrentStoreId();
+                const { data: { session } } = await supabase.auth.getSession();
+                const token = session?.access_token;
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/products?type=weight&limit=100`, {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(storeId && { 'x-store-id': storeId }),
+                            ...(token && { 'Authorization': `Bearer ${token}` }),
+                        }
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        set({ weightProducts: result.data || [] });
+                    }
+                } catch (error) {
+                    console.error("Fetch weight products error:", error);
+                }
+            },
+
+            // Add new product
+            addProduct: async (productData) => {
+                const storeId = getCurrentStoreId();
+                const { data: { session } } = await supabase.auth.getSession();
+                const token = session?.access_token;
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/products`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(storeId && { 'x-store-id': storeId }),
+                            ...(token && { 'Authorization': `Bearer ${token}` }),
+                        },
+                        body: JSON.stringify(productData)
+                    });
+                    const result = await response.json();
+
+                    if (result.success) {
+                        if (productData.isWeightable) {
+                            await get().fetchWeightProducts();
+                        } else {
+                            // Refresh normal products
+                            get().fetchProducts(true);
+                        }
+                        return { success: true, data: result.data };
+                    } else {
+                        return { success: false, error: result.error };
+                    }
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            },
+
             // Fetch categories
             fetchCategories: async () => {
                 try {
@@ -123,6 +181,36 @@ export const useProductStore = create(
                     }
                 } catch (error) {
                     console.log('Fetch categories error:', error);
+                }
+            },
+
+            // Create new category
+            createCategory: async (name) => {
+                const storeId = getCurrentStoreId();
+                const { data: { session } } = await supabase.auth.getSession();
+                const token = session?.access_token;
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/product-categories`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(storeId && { 'x-store-id': storeId }),
+                            ...(token && { 'Authorization': `Bearer ${token}` }),
+                        },
+                        body: JSON.stringify({ name })
+                    });
+                    const result = await response.json();
+
+                    if (result.success) {
+                        // Refresh categories
+                        await get().fetchCategories();
+                        return { success: true, data: result.data };
+                    } else {
+                        return { success: false, error: result.error };
+                    }
+                } catch (error) {
+                    return { success: false, error: error.message };
                 }
             },
 
@@ -171,7 +259,7 @@ export const useProductStore = create(
                     const storeId = getCurrentStoreId();
                     const { data: { session } } = await supabase.auth.getSession();
                     const token = session?.access_token;
-                    
+
                     const url = `${API_BASE_URL}/products/barcode/${barcode}`;
                     const response = await fetch(url, {
                         headers: {

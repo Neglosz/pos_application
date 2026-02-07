@@ -203,7 +203,7 @@ export default function ReportScreen() {
                 <View style={styles.chartContainer}>
                     <LineChart
                         data={data}
-                        width={width - 40}
+                        width={width - 80}
                         height={220}
                         yAxisLabel=""
                         yAxisSuffix=""

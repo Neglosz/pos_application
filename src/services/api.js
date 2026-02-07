@@ -1,8 +1,6 @@
 import { API_BASE_URL as BASE_URL } from '../config';
 import { supabase } from './supabase';
 
-import { Alert } from 'react-native';
-
 let currentStoreId = null;
 let currentUserId = null;
 
