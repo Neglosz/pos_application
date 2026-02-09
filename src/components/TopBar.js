@@ -4,6 +4,8 @@ import { Ionicons, FontAwesome5, FontAwesome } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../services/supabase';
 import { getUnreadNotificationCount } from '../services/api';
+import { useProductStore } from '../stores/useProductStore';
+import { useCartStore } from '../stores/useCartStore';
 
 export default function TopBar({ onLogout }) {
     const navigation = useNavigation();
@@ -66,6 +68,12 @@ export default function TopBar({ onLogout }) {
 
     const handleLogout = async () => {
         setMenuVisible(false);
+
+        // Clear all cached data to prevent data leakage between accounts
+        console.log('Logging out, clearing all caches...');
+        useProductStore.getState().clearProducts();
+        useCartStore.getState().clearCart();
+
         await supabase.auth.signOut();
         if (onLogout) onLogout();
     };

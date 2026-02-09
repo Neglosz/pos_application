@@ -159,6 +159,29 @@ export default function DebtPaymentModal({
         setCustomerName(customer.name || '');
         setCustomerPhone(customer.phone || '');
         setCustomerImage(customer.image_url);
+
+        // Helper to parse "YYYY-MM-DD" to Date object
+        const parseDate = (dateString) => {
+            if (!dateString) return new Date();
+            const parts = dateString.split('-');
+            if (parts.length === 3) {
+                return new Date(parts[0], parts[1] - 1, parts[2]);
+            }
+            return new Date(dateString);
+        };
+
+        // Set Due Date from customer info if available
+        if (customer.due_date) {
+            const customerDueDate = parseDate(customer.due_date);
+            setDueDate(formatDate(customerDueDate));
+            setSelectedDate(customerDueDate);
+        } else {
+            // Default: Today or Business Logic (e.g. Next Month)
+            const today = new Date();
+            setDueDate(formatDate(today));
+            setSelectedDate(today);
+        }
+
         setShowDropdown(false);
         Keyboard.dismiss();
     };

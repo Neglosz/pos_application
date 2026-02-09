@@ -74,17 +74,17 @@ export default function DebtScreen() {
         let nearDue = 0;
         let overDue = 0;
         debtors.forEach(debtor => {
-            const isNear = debtor.accounts?.some(acc => {
-                const dueDate = new Date(acc.due_date);
-                const diffDays = Math.ceil((dueDate - new Date()) / (1000 * 60 * 60 * 24));
-                return diffDays >= 0 && diffDays <= 3;
-            });
-            const isOver = debtor.accounts?.some(acc => {
-                const dueDate = new Date(acc.due_date);
-                return (dueDate - new Date()) < 0;
-            });
-            if (isNear) nearDue++;
-            if (isOver) overDue++;
+            if (!debtor.due_date) return;
+            const dueDate = new Date(debtor.due_date);
+            const today = new Date();
+            // Reset time part for accurate day calculation
+            today.setHours(0, 0, 0, 0);
+            dueDate.setHours(0, 0, 0, 0);
+
+            const diffDays = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+
+            if (diffDays < 0) overDue++;
+            else if (diffDays <= 3) nearDue++;
         });
         return { all: debtors.length, nearDue, overDue };
     };
@@ -100,9 +100,13 @@ export default function DebtScreen() {
         if (filterType === 'all') return result;
 
         return result.filter(debtor => {
-            return debtor.accounts?.some(acc => {
-                const dueDate = new Date(acc.due_date);
+            return result.filter(debtor => {
+                if (!debtor.due_date) return false;
+                const dueDate = new Date(debtor.due_date);
                 const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                dueDate.setHours(0, 0, 0, 0);
+
                 const diffDays = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
 
                 if (filterType === 'nearDue') return diffDays >= 0 && diffDays <= 3;
@@ -280,23 +284,24 @@ export default function DebtScreen() {
         return Math.max(0, totalAmount - payment).toFixed(2);
     };
 
-    const getLatestDueDate = (bills) => {
-        if (!bills || bills.length === 0) return null;
-        const sorted = [...bills].sort((a, b) => new Date(b.due_date) - new Date(a.due_date));
-        return sorted[0].due_date;
+    const getLatestDueDate = (debtor) => {
+        return debtor.due_date;
     };
 
     const getStatusInfo = (debtor) => {
         if (!debtor.accounts || debtor.accounts.length === 0) return { label: 'ปกติ', color: '#4CAF50', bg: '#E8F5E9' };
 
-        const hasOverdue = debtor.accounts.some(acc => (new Date(acc.due_date) - new Date()) < 0);
-        if (hasOverdue) return { label: 'เกินกำหนด', color: '#D32F2F', bg: '#FFEBEE' };
+        if (!debtor.due_date) return { label: 'ปกติ', color: '#4CAF50', bg: '#E8F5E9' };
 
-        const hasNearDue = debtor.accounts.some(acc => {
-            const diffDays = Math.ceil((new Date(acc.due_date) - new Date()) / (1000 * 60 * 60 * 24));
-            return diffDays >= 0 && diffDays <= 3;
-        });
-        if (hasNearDue) return { label: 'ใกล้ครบกำหนด', color: '#F57F17', bg: '#FFF8E1' };
+        const dueDate = new Date(debtor.due_date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        dueDate.setHours(0, 0, 0, 0);
+
+        const diffDays = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+
+        if (diffDays < 0) return { label: 'เกินกำหนด', color: '#D32F2F', bg: '#FFEBEE' };
+        if (diffDays <= 3) return { label: 'ใกล้ครบกำหนด', color: '#F57F17', bg: '#FFF8E1' };
 
         return { label: 'ปกติ', color: '#4CAF50', bg: '#E8F5E9' };
     };
@@ -375,7 +380,7 @@ export default function DebtScreen() {
                 <View style={styles.listSection}>
                     {filteredDebtors.map((debtor) => {
                         const status = getStatusInfo(debtor);
-                        const latestDue = getLatestDueDate(debtor.accounts);
+                        const latestDue = getLatestDueDate(debtor);
                         return (
                             <TouchableOpacity key={debtor.id} style={styles.debtorCard} onPress={() => handleEdit(debtor)}>
                                 <View style={styles.cardHeader}>

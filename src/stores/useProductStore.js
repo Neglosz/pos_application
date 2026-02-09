@@ -134,6 +134,15 @@ export const useProductStore = create(
                 const token = session?.access_token;
 
                 try {
+                    // Format expireDate if it's a Date object
+                    let formattedData = { ...productData };
+                    if (productData.expireDate && productData.expireDate instanceof Date) {
+                        const day = productData.expireDate.getDate().toString().padStart(2, '0');
+                        const month = (productData.expireDate.getMonth() + 1).toString().padStart(2, '0');
+                        const year = productData.expireDate.getFullYear();
+                        formattedData.expireDate = `${day}/${month}/${year}`;
+                    }
+
                     const response = await fetch(`${API_BASE_URL}/products`, {
                         method: 'POST',
                         headers: {
@@ -141,7 +150,7 @@ export const useProductStore = create(
                             ...(storeId && { 'x-store-id': storeId }),
                             ...(token && { 'Authorization': `Bearer ${token}` }),
                         },
-                        body: JSON.stringify(productData)
+                        body: JSON.stringify(formattedData)
                     });
                     const result = await response.json();
 

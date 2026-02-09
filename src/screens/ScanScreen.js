@@ -12,6 +12,9 @@ import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { useProductStore } from '../stores/useProductStore';
 import { useCartStore } from '../stores/useCartStore';
 
+// Hooks
+import { useRealtimeSync } from '../hooks/useRealtimeSync';
+
 // API
 import { createCreditSale, createSale } from '../services/api';
 
@@ -44,6 +47,9 @@ export default function ScanScreen({ navigation, route }) {
     const isFocused = useIsFocused(); // Track if screen is focused
     const { getProductByBarcode, products: storeProducts, weightProducts, categories, fetchProducts, fetchWeightProducts, fetchCategories, addProduct, refreshProducts, setSearchQuery, selectedCategoryId, setSelectedCategory, isLoading, hasMore } = useProductStore();
     const { cart: products, addToCart, removeFromCart, updateQuantity, clearCart } = useCartStore();
+
+    // Enable real-time sync for products across devices
+    useRealtimeSync();
 
     const handleDecreaseQty = (item) => {
         if (item.quantity > 1) {
@@ -95,7 +101,7 @@ export default function ScanScreen({ navigation, route }) {
     const [showCategoryFilter, setShowCategoryFilter] = useState(false);
 
     // --- State: Weight Tab ---
-    const [selectedWeightCategory, setSelectedWeightCategory] = useState(FIXED_WEIGHT_CATEGORIES[0]);
+    const [selectedWeightCategoryId, setSelectedWeightCategoryId] = useState(FIXED_WEIGHT_CATEGORIES[0].id);
     const [selectedItem, setSelectedItem] = useState(null);
     const [weightInput, setWeightInput] = useState('1.0');
     const [selectedUnit, setSelectedUnit] = useState(WEIGHT_UNITS[0]);
@@ -120,6 +126,16 @@ export default function ScanScreen({ navigation, route }) {
         return groups;
     }, [weightProducts, categories]);
 
+    // Derive currentWeightCategory from weightCategories using ID
+    const currentWeightCategory = useMemo(() => {
+        return weightCategories.find(cat => cat.id === selectedWeightCategoryId) || weightCategories[0];
+    }, [weightCategories, selectedWeightCategoryId]);
+
+    // Helper to change category
+    const setSelectedWeightCategory = (cat) => {
+        setSelectedWeightCategoryId(cat.id);
+    };
+
     // Fetch weight products when entering tab
     useEffect(() => {
         if (activeTab === 'weight') {
@@ -127,38 +143,17 @@ export default function ScanScreen({ navigation, route }) {
         }
     }, [activeTab]);
 
-    // Auto-select first item
+    // Auto-select first item when category changes or products load
     useEffect(() => {
-        // Re-select category if needed (e.g. after refresh), but prefer staying on current valid one
-        if (selectedWeightCategory) {
-            const currentGroup = weightCategories.find(g => g.id === selectedWeightCategory.id);
-            if (currentGroup && currentGroup.items.length > 0) {
-                // Try to keep selected item
-                if (!selectedItem || !currentGroup.items.find(i => i.id === selectedItem.id)) {
-                    setSelectedItem(currentGroup.items[0]);
-                }
-                return;
+        if (currentWeightCategory && currentWeightCategory.items && currentWeightCategory.items.length > 0) {
+            // Only auto-select if no item selected or current item not in category
+            if (!selectedItem || !currentWeightCategory.items.find(i => i.id === selectedItem.id)) {
+                setSelectedItem(currentWeightCategory.items[0]);
             }
+        } else {
+            setSelectedItem(null);
         }
-        // Fallback
-        const firstPopulated = weightCategories.find(g => g.items.length > 0);
-        if (firstPopulated) {
-            setSelectedWeightCategory(firstPopulated);
-            setSelectedItem(firstPopulated.items[0]);
-        }
-    }, [weightCategories]);
-
-    // Update items when category changes
-    useEffect(() => {
-        if (selectedWeightCategory) {
-            const currentGroup = weightCategories.find(g => g.id === selectedWeightCategory.id);
-            if (currentGroup && currentGroup.items.length > 0) {
-                setSelectedItem(currentGroup.items[0]);
-            } else {
-                setSelectedItem(null);
-            }
-        }
-    }, [selectedWeightCategory]);
+    }, [currentWeightCategory]);
 
     // --- State: Modals ---
     const [quantityModalVisible, setQuantityModalVisible] = useState(false);
@@ -193,6 +188,7 @@ export default function ScanScreen({ navigation, route }) {
                             aspect: [1, 1],
                             quality: 0.5,
                             base64: true,
+                            // quality: 1, // Don't use this with base64
                         });
                         if (!result.canceled) {
                             setNewProductImage(`data:image/jpeg;base64,${result.assets[0].base64}`);
@@ -208,6 +204,7 @@ export default function ScanScreen({ navigation, route }) {
                             aspect: [1, 1],
                             quality: 0.5,
                             base64: true,
+                            // quality: 1,
                         });
                         if (!result.canceled) {
                             setNewProductImage(`data:image/jpeg;base64,${result.assets[0].base64}`);
@@ -221,10 +218,10 @@ export default function ScanScreen({ navigation, route }) {
 
     // Pre-fill category when opening modal
     useEffect(() => {
-        if (showAddProductModal && selectedWeightCategory) {
-            setNewProductCategory(selectedWeightCategory);
+        if (showAddProductModal && currentWeightCategory) {
+            setNewProductCategory(currentWeightCategory);
         }
-    }, [showAddProductModal, selectedWeightCategory]);
+    }, [showAddProductModal, currentWeightCategory]);
 
     const handleAddProduct = async () => {
         if (!newProductName || !newProductPrice) {
@@ -732,16 +729,16 @@ export default function ScanScreen({ navigation, route }) {
                         {weightCategories?.map(cat => (
                             <TouchableOpacity
                                 key={cat.id}
-                                style={[styles.categoryPill, selectedWeightCategory?.id === cat.id && styles.activeCategoryPill]}
+                                style={[styles.categoryPill, currentWeightCategory?.id === cat.id && styles.activeCategoryPill]}
                                 onPress={() => { setSelectedWeightCategory(cat); }}
                             >
-                                <Text style={[styles.categoryText, selectedWeightCategory?.id === cat.id && styles.activeCategoryText]}>{cat.name}</Text>
+                                <Text style={[styles.categoryText, currentWeightCategory?.id === cat.id && styles.activeCategoryText]}>{cat.name}</Text>
                             </TouchableOpacity>
                         ))}
                     </View>
                     {/* Items */}
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 20 }}>
-                        {selectedWeightCategory?.items?.map(item => (
+                        {currentWeightCategory?.items?.map(item => (
                             <TouchableOpacity
                                 key={item.id}
                                 style={[styles.itemPill, selectedItem?.id === item.id && styles.activeItemPill]}
@@ -955,42 +952,27 @@ export default function ScanScreen({ navigation, route }) {
                             </TouchableOpacity>
                             {/* Date Picker Modal (iOS Style) */}
                             {showDatePicker && (
-                                <Modal
-                                    transparent={true}
-                                    animationType="fade"
-                                    visible={showDatePicker}
-                                    onRequestClose={() => setShowDatePicker(false)}
-                                >
-                                    <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
-                                        <View style={{ backgroundColor: '#fff', borderRadius: 20, padding: 20, width: '90%', alignItems: 'center' }}>
-                                            <DateTimePicker
-                                                value={newProductExpireDate || new Date()}
-                                                mode="date"
-                                                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                                                locale="th-TH" // Force Thai locale
-                                                onChange={(event, selectedDate) => {
-                                                    if (Platform.OS === 'android') {
-                                                        setShowDatePicker(false);
-                                                        if (selectedDate) setNewProductExpireDate(selectedDate);
-                                                    } else {
-                                                        // iOS: Just update internal state, confirm later
-                                                        if (selectedDate) setNewProductExpireDate(selectedDate);
-                                                    }
-                                                }}
-                                                style={{ height: 120, width: '100%' }}
-                                                textColor="#000"
-                                            />
-                                            {Platform.OS === 'ios' && (
-                                                <TouchableOpacity
-                                                    style={{ marginTop: 20, backgroundColor: '#F37021', paddingVertical: 10, paddingHorizontal: 30, borderRadius: 20 }}
-                                                    onPress={() => setShowDatePicker(false)}
-                                                >
-                                                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>ตกลง (OK)</Text>
-                                                </TouchableOpacity>
-                                            )}
-                                        </View>
-                                    </View>
-                                </Modal>
+                                <View style={{ marginTop: 8 }}>
+                                    <DateTimePicker
+                                        value={newProductExpireDate || new Date()}
+                                        mode="date"
+                                        display="default"
+                                        onChange={(event, selectedDate) => {
+                                            if (Platform.OS === 'android') {
+                                                setShowDatePicker(false);
+                                                if (event.type === 'set' && selectedDate) {
+                                                    setNewProductExpireDate(selectedDate);
+                                                }
+                                            } else {
+                                                // iOS
+                                                setShowDatePicker(false);
+                                                if (selectedDate) {
+                                                    setNewProductExpireDate(selectedDate);
+                                                }
+                                            }
+                                        }}
+                                    />
+                                </View>
                             )}
 
                             {/* Unit Selector */}

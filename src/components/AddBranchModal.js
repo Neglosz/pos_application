@@ -12,6 +12,7 @@ const ENCRYPTION_KEY = 'yourpos-secret-key-2026';
 export default function AddBranchModal({ visible, onClose, onSuccess }) {
     const [branchName, setBranchName] = useState('');
     const [address, setAddress] = useState('');
+    const [phone, setPhone] = useState('');
     const [generatedEmail, setGeneratedEmail] = useState('');
     const [generatedPassword, setGeneratedPassword] = useState('');
     const [loading, setLoading] = useState(false);
@@ -21,6 +22,7 @@ export default function AddBranchModal({ visible, onClose, onSuccess }) {
             // Reset form when modal opens
             setBranchName('');
             setAddress('');
+            setPhone('');
             generateCredentials();
         }
     }, [visible]);
@@ -72,9 +74,12 @@ export default function AddBranchModal({ visible, onClose, onSuccess }) {
         setLoading(true);
 
         try {
-            // Get current user
+            // Get current user and session
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('กรุณา login ใหม่');
+
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) throw new Error('Session หมดอายุ กรุณา login ใหม่');
 
             // 1. Create store
             const { data: store, error: storeError } = await supabase
@@ -83,6 +88,7 @@ export default function AddBranchModal({ visible, onClose, onSuccess }) {
                     owner_id: user.id,
                     name: branchName,
                     address: address,
+                    phone: phone,
                 })
                 .select()
                 .single();
@@ -94,6 +100,7 @@ export default function AddBranchModal({ visible, onClose, onSuccess }) {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`,
                     'x-user-id': user.id,
                     'x-store-id': store.id,
                 },
@@ -183,6 +190,20 @@ export default function AddBranchModal({ visible, onClose, onSuccess }) {
                                     placeholder="เลขที่, ถนน, แขวง/ตำบล, เขต/อำเภอ"
                                     value={address}
                                     onChangeText={setAddress}
+                                />
+                            </View>
+                        </View>
+
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>เบอร์โทรศัพท์</Text>
+                            <View style={styles.inputContainer}>
+                                <Ionicons name="call-outline" size={20} color="#999" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="0xx-xxx-xxxx"
+                                    value={phone}
+                                    onChangeText={setPhone}
+                                    keyboardType="phone-pad"
                                 />
                             </View>
                         </View>
