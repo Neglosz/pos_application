@@ -65,7 +65,14 @@ export const checkStockNotifications = async () => {
 };
 
 export const getCustomersWithDebt = async () => {
-    return apiRequest('/customers/with-debt');
+    const response = await apiRequest('/customers/with-debt');
+    if (response.success && response.data) {
+        // Cache debtors for offline use
+        // Note: The response structure might need mapping if it differs from search results
+        // Assuming data is an array of customers
+        useCustomerStore.getState().addCustomers(response.data);
+    }
+    return response;
 };
 
 export const getCustomerPendingBills = async (customerId) => {
@@ -104,7 +111,43 @@ export const getUnreadNotificationCount = async () => {
     return apiRequest('/notifications/unread-count');
 };
 
+import { useOfflineStore } from '../stores/useOfflineStore';
+import { useCustomerStore } from '../stores/useCustomerStore';
+
 export const createCreditSale = async (saleData) => {
+    // Check Offline Mode
+    const isOnline = useOfflineStore.getState().isOnline;
+    if (!isOnline) {
+        console.log("OFFLINE MODE: Queuing Credit Sale");
+        const tempId = `OFF-${Date.now()}`;
+        const offlineSale = {
+            ...saleData,
+            tempId,
+            status: 'pending',
+            created_at: new Date().toISOString(),
+            isCredit: true
+        };
+        useOfflineStore.getState().addPendingSale(offlineSale);
+
+        // Return Mock Data Structure matching Backend Response
+        return {
+            success: true,
+            data: {
+                id: tempId,
+                order_no: tempId,
+                isOffline: true,
+                created_at: new Date().toISOString(),
+                total_amount: saleData.amount,
+                customer: { name: saleData.customer_name },
+                order_items: saleData.items.map(p => ({
+                    products: { name: p.name },
+                    qty: p.quantity,
+                    price_per_unit: p.price
+                }))
+            }
+        };
+    }
+
     return apiRequest('/credit-sales', {
         method: 'POST',
         body: JSON.stringify(saleData),
@@ -112,6 +155,40 @@ export const createCreditSale = async (saleData) => {
 };
 
 export const createSale = async (saleData) => {
+    // Check Offline Mode
+    const isOnline = useOfflineStore.getState().isOnline;
+    if (!isOnline) {
+        console.log("OFFLINE MODE: Queuing Sale");
+        const tempId = `OFF-${Date.now()}`;
+        const offlineSale = {
+            ...saleData,
+            tempId,
+            status: 'pending',
+            created_at: new Date().toISOString(),
+            isCredit: false
+        };
+        useOfflineStore.getState().addPendingSale(offlineSale);
+
+        // Return Mock Data Structure matching Backend Response
+        return {
+            success: true,
+            data: {
+                id: tempId,
+                order_no: tempId,
+                isOffline: true,
+                created_at: new Date().toISOString(),
+                total_amount: saleData.receivedAmount || saleData.totalAmount || 0,
+                // store: { name: 'Offline Store' }, // Optional
+                stores: { name: 'Offline Store' },
+                order_items: saleData.items.map(p => ({
+                    products: { name: p.name },
+                    qty: p.quantity,
+                    price_per_unit: p.price
+                }))
+            }
+        };
+    }
+
     return apiRequest('/sales', {
         method: 'POST',
         body: JSON.stringify(saleData),
@@ -151,7 +228,20 @@ export const markNotificationAsRead = async (id) => {
 };
 
 export const searchCustomers = async (query) => {
-    return apiRequest(`/customers/search?q=${encodeURIComponent(query)}`);
+    // Check Offline Mode
+    const isOnline = useOfflineStore.getState().isOnline;
+    if (!isOnline) {
+        console.log("OFFLINE MODE: Searching local customers");
+        const localResults = useCustomerStore.getState().searchLocal(query);
+        return { success: true, data: localResults };
+    }
+
+    const response = await apiRequest(`/customers/search?q=${encodeURIComponent(query)}`);
+    if (response.success && response.data) {
+        // Cache results for offline use
+        useCustomerStore.getState().addCustomers(response.data);
+    }
+    return response;
 };
 
 export const getProductCategories = async () => {
@@ -273,6 +363,57 @@ export const createTransaction = async (data) => {
     return apiRequest('/transactions', {
         method: 'POST',
         body: JSON.stringify(data),
+    });
+};
+
+// AI Endpoints (Legacy)
+export const getAISuggestions = async (lat, lon) => {
+    let endpoint = '/ai/suggestions';
+    if (lat && lon) endpoint += `?lat=${lat}&lon=${lon}`;
+    return apiRequest(endpoint);
+};
+
+export const sendAIChat = async (message, lat, lon, history = []) => {
+    return apiRequest('/ai/chat', {
+        method: 'POST',
+        body: JSON.stringify({ message, lat, lon, history }),
+    });
+};
+
+// AI Recommendations (New)
+export const getAIRecommendations = async (lat, lon) => {
+    let endpoint = '/ai/recommendations';
+    if (lat && lon) endpoint += `?lat=${lat}&lon=${lon}`;
+    return apiRequest(endpoint);
+};
+
+export const takeRecommendationAction = async (id, action, actualOutcome = null, actualAmount = null) => {
+    return apiRequest(`/ai/recommendations/${id}/action`, {
+        method: 'POST',
+        body: JSON.stringify({ action, actual_outcome: actualOutcome, actual_amount: actualAmount }),
+    });
+};
+
+export const getRecommendationHistory = async (days = 30) => {
+    return apiRequest(`/ai/recommendations/history?days=${days}`);
+};
+
+export const getRecommendationStats = async () => {
+    return apiRequest('/ai/recommendations/stats');
+};
+
+// AI Action Endpoints
+export const applyPromotion = async (recommendationId, productNames, discountPercent, daysValid = 3) => {
+    return apiRequest('/ai/apply-promotion', {
+        method: 'POST',
+        body: JSON.stringify({ recommendationId, productNames, discountPercent, daysValid })
+    });
+};
+
+export const disposeProduct = async (recommendationId, productNames) => {
+    return apiRequest('/ai/dispose-product', {
+        method: 'POST',
+        body: JSON.stringify({ recommendationId, productNames })
     });
 };
 

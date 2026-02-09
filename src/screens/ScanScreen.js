@@ -372,9 +372,18 @@ export default function ScanScreen({ navigation, route }) {
                     addToCart(product, 1);
                 } else {
                     // Price Check Mode
+                    let priceMsg = `ราคา: ฿${product.price}`;
+                    const promo = product.promotion;
+
+                    if (promo && promo.type === 'buy_x_get_y') {
+                        priceMsg = `🔥 โปร: ซื้อ ${promo.min_qty} แถม ${promo.free_qty}\nราคาปกติ: ฿${product.price}`;
+                    } else if (product.discount_percent > 0) {
+                        priceMsg = `🔥 ราคาโปร: ฿${product.price} (ปกติ ฿${product.original_price})\nลด ${product.discount_percent}%`;
+                    }
+
                     Alert.alert(
                         product.name,
-                        `ราคา: ฿${product.price}\nสต็อก: ${product.stock_qty || 0} ${product.unit_type || 'ชิ้น'}`
+                        `${priceMsg}\nสต็อก: ${product.stock_qty || 0} ${product.unit_type || 'ชิ้น'}`
                     );
                 }
             }
@@ -387,7 +396,31 @@ export default function ScanScreen({ navigation, route }) {
     };
 
     // --- Logic: Payment ---
-    const totalAmount = products.reduce((sum, p) => sum + (p.price * p.quantity), 0);
+    // Calculate Total with Promotion Logic
+    const calculateTotal = (items) => {
+        return items.reduce((sum, p) => {
+            let lineTotal = 0;
+            const promo = p.promotion;
+
+            if (promo && promo.type === 'buy_x_get_y') {
+                const buy = promo.min_qty || 1;
+                const get = promo.free_qty || 1;
+                const setSize = buy + get;
+                const fullSets = Math.floor(p.quantity / setSize);
+                const remainder = p.quantity % setSize;
+
+                // Pay for 'buy' amount in each set + remainder
+                const payableQty = (fullSets * buy) + remainder;
+                lineTotal = payableQty * p.price;
+            } else {
+                // Normal or Discount % (price is already discounted from backend)
+                lineTotal = p.price * p.quantity;
+            }
+            return sum + lineTotal;
+        }, 0);
+    };
+
+    const totalAmount = calculateTotal(products);
     const totalItems = products.length;
 
     const handleConfirmAddToCart = (quantity) => {
@@ -590,7 +623,25 @@ export default function ScanScreen({ navigation, route }) {
                             <Image source={{ uri: item.image_url || item.image || 'https://via.placeholder.com/50' }} style={styles.cartItemImage} />
                             <View style={{ marginLeft: 10, flex: 1 }}>
                                 <Text style={styles.cartItemName} numberOfLines={1}>{item.name}</Text>
-                                <Text style={styles.cartItemPrice}>฿{item.price}</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                                    {item.discount_percent > 0 && (
+                                        <Text style={{ textDecorationLine: 'line-through', color: '#999', fontSize: 12, marginRight: 5 }}>
+                                            ฿{item.original_price}
+                                        </Text>
+                                    )}
+                                    <Text style={[styles.cartItemPrice, item.discount_percent > 0 && { color: '#F37021', fontWeight: 'bold' }]}>
+                                        ฿{item.price}
+                                    </Text>
+
+                                    {/* B1G1 Badge in Cart */}
+                                    {item.promotion?.type === 'buy_x_get_y' && (
+                                        <View style={{ marginLeft: 8, backgroundColor: '#FFD700', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                            <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#000' }}>
+                                                ซื้อ {item.promotion.min_qty} แถม {item.promotion.free_qty}
+                                            </Text>
+                                        </View>
+                                    )}
+                                </View>
                             </View>
                         </View>
                         {/* Qty Controls */}
@@ -705,7 +756,24 @@ export default function ScanScreen({ navigation, route }) {
                     {selectedItem && (
                         <View style={styles.unifiedCard}>
                             <Text style={styles.unifiedProductName}>{selectedItem.name}</Text>
-                            <Text style={{ textAlign: 'center', color: '#666', marginBottom: 15 }}>฿{selectedItem.price} / {selectedUnit.label}</Text>
+                            {selectedItem.is_promotion && selectedItem.original_price > selectedItem.price ? (
+                                <View style={{ alignItems: 'center', marginBottom: 15 }}>
+                                    <Text style={{ color: '#999', textDecorationLine: 'line-through', fontSize: 14 }}>
+                                        ฿{selectedItem.original_price}
+                                    </Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Text style={{ color: '#F37021', fontWeight: 'bold', fontSize: 18 }}>
+                                            ฿{selectedItem.price}
+                                        </Text>
+                                        <Text style={{ color: '#666', fontSize: 14 }}> / {selectedUnit.label}</Text>
+                                    </View>
+                                    {selectedItem.promotion?.name && (
+                                        <Text style={{ color: '#F37021', fontSize: 12 }}>{selectedItem.promotion.name}</Text>
+                                    )}
+                                </View>
+                            ) : (
+                                <Text style={{ textAlign: 'center', color: '#666', marginBottom: 15 }}>฿{selectedItem.price} / {selectedUnit.label}</Text>
+                            )}
                             <TextInput
                                 style={styles.unifiedInput}
                                 value={weightInput}

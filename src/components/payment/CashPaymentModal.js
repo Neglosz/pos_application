@@ -7,6 +7,10 @@ import {
     Modal,
     TextInput,
     Alert,
+    TouchableWithoutFeedback,
+    Keyboard,
+    KeyboardAvoidingView,
+    Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -62,70 +66,75 @@ export default function CashPaymentModal({
             visible={visible}
             onRequestClose={onClose}
         >
-            <View style={styles.modalOverlay}>
-                <View style={styles.modalContent}>
-                    {/* Header */}
-                    <View style={styles.header}>
-                        <Text style={styles.headerTitle}>ชำระเงินสด</Text>
-                        <TouchableOpacity onPress={onClose}>
-                            <Ionicons name="close" size={24} color="#333" />
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={styles.modalOverlay}
+                >
+                    <View style={styles.modalContent}>
+                        {/* Header */}
+                        <View style={styles.header}>
+                            <Text style={styles.headerTitle}>ชำระเงินสด</Text>
+                            <TouchableOpacity onPress={onClose}>
+                                <Ionicons name="close" size={24} color="#333" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Amount Display */}
+                        <View style={styles.amountDisplay}>
+                            <Text style={styles.amountLabel}>ยอดชำระ</Text>
+                            <Text style={styles.amountValue}>฿{amount.toLocaleString()}</Text>
+                        </View>
+
+                        {/* Input */}
+                        <View style={styles.inputContainer}>
+                            <Text style={styles.inputLabel}>รับเงินมา</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={receivedAmount}
+                                onChangeText={setReceivedAmount}
+                                keyboardType="decimal-pad"
+                                placeholder="0.00"
+                                autoFocus={true}
+                            />
+                        </View>
+
+                        {/* Quick Buttons */}
+                        <View style={styles.quickButtons}>
+                            <TouchableOpacity style={styles.quickBtn} onPress={exactAmount}>
+                                <Text style={styles.quickBtnText}>พอดี</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.quickBtn} onPress={() => addAmount(20)}>
+                                <Text style={styles.quickBtnText}>+20</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.quickBtn} onPress={() => addAmount(100)}>
+                                <Text style={styles.quickBtnText}>+100</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.quickBtn} onPress={() => addAmount(500)}>
+                                <Text style={styles.quickBtnText}>+500</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.quickBtn} onPress={() => addAmount(1000)}>
+                                <Text style={styles.quickBtnText}>+1000</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Change Display */}
+                        <View style={[styles.changeContainer, change >= 0 ? styles.changePositive : styles.changeNegative]}>
+                            <Text style={styles.changeLabel}>เงินทอน</Text>
+                            <Text style={styles.changeValue}>฿{change.toFixed(2)}</Text>
+                        </View>
+
+                        {/* Confirm Button */}
+                        <TouchableOpacity
+                            style={[styles.confirmBtn, (parseFloat(receivedAmount) || 0) < amount && styles.disabledBtn]}
+                            onPress={handleConfirm}
+                            disabled={(parseFloat(receivedAmount) || 0) < amount}
+                        >
+                            <Text style={styles.confirmBtnText}>ยืนยันการชำระเงิน</Text>
                         </TouchableOpacity>
                     </View>
-
-                    {/* Amount Display */}
-                    <View style={styles.amountDisplay}>
-                        <Text style={styles.amountLabel}>ยอดชำระ</Text>
-                        <Text style={styles.amountValue}>฿{amount.toLocaleString()}</Text>
-                    </View>
-
-                    {/* Input */}
-                    <View style={styles.inputContainer}>
-                        <Text style={styles.inputLabel}>รับเงินมา</Text>
-                        <TextInput
-                            style={styles.input}
-                            value={receivedAmount}
-                            onChangeText={setReceivedAmount}
-                            keyboardType="decimal-pad"
-                            placeholder="0.00"
-                            autoFocus={true}
-                        />
-                    </View>
-
-                    {/* Quick Buttons */}
-                    <View style={styles.quickButtons}>
-                        <TouchableOpacity style={styles.quickBtn} onPress={exactAmount}>
-                            <Text style={styles.quickBtnText}>พอดี</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.quickBtn} onPress={() => addAmount(20)}>
-                            <Text style={styles.quickBtnText}>+20</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.quickBtn} onPress={() => addAmount(100)}>
-                            <Text style={styles.quickBtnText}>+100</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.quickBtn} onPress={() => addAmount(500)}>
-                            <Text style={styles.quickBtnText}>+500</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.quickBtn} onPress={() => addAmount(1000)}>
-                            <Text style={styles.quickBtnText}>+1000</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Change Display */}
-                    <View style={[styles.changeContainer, change >= 0 ? styles.changePositive : styles.changeNegative]}>
-                        <Text style={styles.changeLabel}>เงินทอน</Text>
-                        <Text style={styles.changeValue}>฿{change.toFixed(2)}</Text>
-                    </View>
-
-                    {/* Confirm Button */}
-                    <TouchableOpacity
-                        style={[styles.confirmBtn, (parseFloat(receivedAmount) || 0) < amount && styles.disabledBtn]}
-                        onPress={handleConfirm}
-                        disabled={(parseFloat(receivedAmount) || 0) < amount}
-                    >
-                        <Text style={styles.confirmBtnText}>ยืนยันการชำระเงิน</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
+                </KeyboardAvoidingView>
+            </TouchableWithoutFeedback>
         </Modal>
     );
 }

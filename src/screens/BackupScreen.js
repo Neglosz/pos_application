@@ -1,21 +1,93 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, SafeAreaView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, SafeAreaView, Alert } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useOfflineStore } from '../stores/useOfflineStore';
+import { createSale, createCreditSale } from '../services/api';
+import NetInfo from '@react-native-community/netinfo';
 
 export default function BackupScreen() {
     const navigation = useNavigation();
+
+    // Store State
+    const pendingSales = useOfflineStore(state => state.pendingSales);
+    const isOnline = useOfflineStore(state => state.isOnline);
+    const lastSyncTime = useOfflineStore(state => state.lastSyncTime);
+    const removePendingSale = useOfflineStore(state => state.removePendingSale);
+    const clearQueue = useOfflineStore(state => state.clearQueue);
 
     // UI State
     const [autoBackup, setAutoBackup] = useState(true);
     const [wifiOnly, setWifiOnly] = useState(true);
     const [notify, setNotify] = useState(true);
+    const [isSyncing, setIsSyncing] = useState(false);
 
-    const historyData = [
-        { id: 1, date: 'เมื่อวาน, 1 ก.พ.', time: '18:00 น.', size: '12.4 MB', status: 'success' },
-        { id: 2, date: '31 ม.ค. 67', time: '18:00 น.', size: '12.2 MB', status: 'success' },
-        { id: 3, date: '30 ม.ค. 67', time: '18:00 น.', size: '11.8 MB', status: 'waiting' },
-    ];
+    // Sync Function
+    const handleSync = async () => {
+        if (pendingSales.length === 0) {
+            Alert.alert("แจ้งเตือน", "ไม่มีข้อมูลที่ต้องส่งครับ");
+            return;
+        }
+
+        const state = await NetInfo.fetch();
+        if (!state.isConnected) {
+            Alert.alert("ข้อผิดพลาด", "กรุณาเชื่อมต่ออินเทอร์เน็ตก่อนส่งข้อมูล");
+            return;
+        }
+
+        setIsSyncing(true);
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const sale of pendingSales) {
+            try {
+                // Remove tempId before sending, but keep created_at as client_created_at
+                const { tempId, isCredit, ...payload } = sale;
+
+                // Add client_created_at to payload
+                const syncPayload = {
+                    ...payload,
+                    client_created_at: sale.created_at
+                };
+
+                let result;
+                if (isCredit) {
+                    // For credit sales, we might need to adjust the API to handle the specific payload structure
+                    // Assuming createCreditSale handles it or we use generic createSale
+                    // Note: createCreditSale in api.js now checks for offline. 
+                    // We need to BYPASS the offline check in api.js? 
+                    // No, api.js checks useOfflineStore.isOnline. 
+                    // Ensure we are online before calling this.
+                    // IMPORTANT: We should duplicate logic or force 'online' behavior?
+                    // Actually, since we check NetInfo above, useOfflineStore.isOnline should be true.
+                    result = await createCreditSale(syncPayload);
+                } else {
+                    result = await createSale(syncPayload);
+                }
+
+                if (result.success || result.data?.id) { // Check for success
+                    removePendingSale(tempId);
+                    successCount++;
+                } else {
+                    console.error("Sync Failed for", tempId, result);
+                    failCount++;
+                }
+
+            } catch (error) {
+                console.error("Sync Error:", error);
+                failCount++;
+            }
+        }
+
+        setIsSyncing(false);
+        useOfflineStore.getState().setLastSyncTime(new Date().toISOString());
+
+        if (failCount === 0) {
+            Alert.alert("สำเร็จ ✅", `ส่งข้อมูล ${successCount} รายการเรียบร้อยแล้ว`);
+        } else {
+            Alert.alert("แจ้งเตือน", `ส่งสำเร็จ ${successCount} รายการ \nล้มเหลว ${failCount} รายการ (จะลองใหม่ภายหลัง)`);
+        }
+    };
 
     return (
         <SafeAreaView style={styles.container}>
@@ -25,68 +97,100 @@ export default function BackupScreen() {
                     <Ionicons name="arrow-back" size={24} color="#000" />
                 </TouchableOpacity>
                 <View>
-                    <Text style={styles.headerTitle}>การสำรองข้อมูล</Text>
-                    <Text style={styles.headerSubtitle}>จัดการและปกป้องข้อมูลของคุณ</Text>
+                    <Text style={styles.headerTitle}>สถานะการเชื่อมต่อ & ข้อมูล</Text>
+                    <Text style={styles.headerSubtitle}>จัดการข้อมูลแบบออฟไลน์</Text>
                 </View>
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
                 {/* Status Card */}
-                <View style={styles.statusCard}>
+                <View style={[styles.statusCard, !isOnline && { backgroundColor: '#333' }]}>
                     <View style={styles.statusHeader}>
-                        <View style={styles.statusIconBg}>
-                            <Ionicons name="shield-checkmark" size={24} color="#4CAF50" />
+                        <View style={[styles.statusIconBg, !isOnline && { backgroundColor: 'rgba(244, 67, 54, 0.15)', borderColor: 'rgba(244, 67, 54, 0.3)' }]}>
+                            <Ionicons name={isOnline ? "wifi" : "wifi-outline"} size={24} color={isOnline ? "#4CAF50" : "#F44336"} />
                         </View>
                         <View>
                             <View style={styles.secureTag}>
-                                <View style={styles.secureDot} />
-                                <Text style={styles.secureText}>ปลอดภัย</Text>
+                                <View style={[styles.secureDot, !isOnline && { backgroundColor: '#F44336' }]} />
+                                <Text style={[styles.secureText, !isOnline && { color: '#F44336' }]}>
+                                    {isOnline ? "ออนไลน์ (Online)" : "ออฟไลน์ (Offline)"}
+                                </Text>
                             </View>
-                            <Text style={styles.statusTitle}>ข้อมูลได้รับการป้องกัน</Text>
+                            <Text style={styles.statusTitle}>
+                                {isOnline ? "ระบบพร้อมใช้งาน" : "ทำงานด้วยข้อมูลในเครื่อง"}
+                            </Text>
                         </View>
                     </View>
 
                     <View style={styles.statusStatsRow}>
                         <View style={styles.statItem}>
                             <View style={styles.statIconCircle}>
-                                <Ionicons name="calendar-outline" size={16} color="#aaa" />
+                                <Ionicons name="cloud-upload-outline" size={16} color="#aaa" />
                             </View>
                             <View>
-                                <Text style={styles.statLabel}>สำรองล่าสุด</Text>
-                                <Text style={styles.statValue}>วันนี้, 14:30 น.</Text>
+                                <Text style={styles.statLabel}>รอส่งข้อมูล (Pending)</Text>
+                                <Text style={[styles.statValue, pendingSales.length > 0 && { color: '#FFC107' }]}>
+                                    {pendingSales.length} รายการ
+                                </Text>
                             </View>
                         </View>
                         <View style={styles.verticalDivider} />
                         <View style={styles.statItem}>
                             <View style={styles.statIconCircle}>
-                                <Ionicons name="server-outline" size={16} color="#aaa" />
+                                <Ionicons name="time-outline" size={16} color="#aaa" />
                             </View>
                             <View>
-                                <Text style={styles.statLabel}>ขนาดข้อมูล</Text>
-                                <Text style={styles.statValue}>12.5 MB</Text>
+                                <Text style={styles.statLabel}>อัปเดตล่าสุด</Text>
+                                <Text style={styles.statValue}>
+                                    {lastSyncTime ? new Date(lastSyncTime).toLocaleTimeString('th-TH') : '-'}
+                                </Text>
                             </View>
                         </View>
                     </View>
-
-                    {/* Decor */}
-                    <View style={styles.cardDecor} />
                 </View>
+
+                {/* Pending Items List (Preview) */}
+                {pendingSales.length > 0 && (
+                    <View style={styles.pendingList}>
+                        <Text style={styles.sectionHeader}>รายการรอส่ง ({pendingSales.length})</Text>
+                        {pendingSales.slice(0, 3).map((sale, index) => (
+                            <View key={sale.tempId || index} style={styles.historyItem}>
+                                <View style={styles.historyLeft}>
+                                    <View style={[styles.statusDot, { backgroundColor: '#FFAB00' }]}>
+                                        <Ionicons name="hourglass-outline" size={14} color="#fff" />
+                                    </View>
+                                    <View>
+                                        <Text style={styles.historyDate}>บิลยอด ฿{sale.totalAmount || 0}</Text>
+                                        <Text style={styles.historyDetail}>
+                                            {new Date(sale.created_at).toLocaleTimeString('th-TH')} • {sale.isCredit ? 'เครดิต' : 'เงินสด'}
+                                        </Text>
+                                    </View>
+                                </View>
+                            </View>
+                        ))}
+                        {pendingSales.length > 3 && (
+                            <Text style={{ textAlign: 'center', color: '#666', marginTop: 10 }}>
+                                และอีก {pendingSales.length - 3} รายการ...
+                            </Text>
+                        )}
+                    </View>
+                )}
 
                 {/* Actions */}
                 <View style={styles.actionRow}>
-                    <TouchableOpacity style={styles.backupButton} activeOpacity={0.8}>
+                    <TouchableOpacity
+                        style={[styles.backupButton, (pendingSales.length === 0 || isSyncing) && { backgroundColor: '#aaa' }]}
+                        activeOpacity={0.8}
+                        onPress={handleSync}
+                        disabled={pendingSales.length === 0 || isSyncing}
+                    >
                         <View style={styles.actionIconBg}>
-                            <Ionicons name="cloud-upload-outline" size={24} color="#fff" />
+                            <Ionicons name={isSyncing ? "refresh" : "cloud-upload"} size={24} color="#fff" />
                         </View>
-                        <Text style={styles.backupButtonText}>สำรองข้อมูล</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.restoreButton} activeOpacity={0.8}>
-                        <View style={[styles.actionIconBg, { backgroundColor: '#F5F5F5' }]}>
-                            <Ionicons name="cloud-download-outline" size={24} color="#666" />
-                        </View>
-                        <Text style={styles.restoreButtonText}>กู้คืนข้อมูล</Text>
+                        <Text style={styles.backupButtonText}>
+                            {isSyncing ? "กำลังส่งข้อมูล..." : "กดส่งข้อมูลเดี๋ยวนี้"}
+                        </Text>
                     </TouchableOpacity>
                 </View>
 
@@ -99,8 +203,8 @@ export default function BackupScreen() {
                                 <Ionicons name="sync-outline" size={22} color="#F37021" />
                             </View>
                             <View>
-                                <Text style={styles.settingTitle}>สำรองอัตโนมัติ</Text>
-                                <Text style={styles.settingSub}>ทุกวัน เวลา 00:00 น.</Text>
+                                <Text style={styles.settingTitle}>ส่งข้อมูลอัตโนมัติ</Text>
+                                <Text style={styles.settingSub}>เมื่อเน็ตมา จะส่งทันที</Text>
                             </View>
                         </View>
                         <Switch
@@ -111,83 +215,12 @@ export default function BackupScreen() {
                             value={autoBackup}
                         />
                     </View>
-
                     <View style={styles.divider} />
-
                     <View style={styles.settingItem}>
-                        <View style={styles.settingLeft}>
-                            <View style={styles.settingIconBox}>
-                                <Ionicons name="wifi-outline" size={22} color="#666" />
-                            </View>
-                            <View>
-                                <Text style={styles.settingTitle}>เฉพาะ WiFi</Text>
-                                <Text style={styles.settingSub}>สำรองเมื่อเชื่อมต่อ WiFi เท่านั้น</Text>
-                            </View>
-                        </View>
-                        <Switch
-                            trackColor={{ false: "#e0e0e0", true: "#4CAF50" }} // Different color for wifi maybe? or stick to theme
-                            thumbColor={"#fff"}
-                            ios_backgroundColor="#e0e0e0"
-                            onValueChange={setWifiOnly}
-                            value={wifiOnly}
-                        />
+                        <TouchableOpacity onPress={() => clearQueue()} style={{ padding: 10 }}>
+                            <Text style={{ color: 'red' }}>ล้างข้อมูลที่ค้างอยู่ (Debug)</Text>
+                        </TouchableOpacity>
                     </View>
-
-                    <View style={styles.divider} />
-
-                    <View style={styles.settingItem}>
-                        <View style={styles.settingLeft}>
-                            <View style={styles.settingIconBox}>
-                                <Ionicons name="notifications-outline" size={22} color="#666" />
-                            </View>
-                            <View>
-                                <Text style={styles.settingTitle}>การแจ้งเตือน</Text>
-                                <Text style={styles.settingSub}>แจ้งเตือนเมื่อสำรองเสร็จ</Text>
-                            </View>
-                        </View>
-                        <Switch
-                            trackColor={{ false: "#e0e0e0", true: "#4CAF50" }}
-                            thumbColor={"#fff"}
-                            ios_backgroundColor="#e0e0e0"
-                            onValueChange={setNotify}
-                            value={notify}
-                        />
-                    </View>
-                </View>
-
-                {/* History Section */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, marginBottom: 10 }}>
-                    <Text style={styles.sectionHeader}>ประวัติการสำรอง</Text>
-                    <TouchableOpacity>
-                        <Text style={{ color: '#F37021', fontSize: 13, fontWeight: '600' }}>ดูทั้งหมด</Text>
-                    </TouchableOpacity>
-                </View>
-
-                <View style={styles.historyList}>
-                    {historyData.map((item, index) => (
-                        <View key={item.id}>
-                            <View style={styles.historyItem}>
-                                <View style={styles.historyLeft}>
-                                    <View style={[styles.statusDot, { backgroundColor: item.status === 'success' ? '#4CAF50' : '#FF9800' }]}>
-                                        <Ionicons name={item.status === 'success' ? "checkmark" : "time"} size={12} color="#fff" />
-                                    </View>
-                                    <View>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                            <Text style={styles.historyDate}>{item.date}</Text>
-                                            <View style={styles.tagSuccess}>
-                                                <Text style={styles.tagText}>เต็มรูปแบบ</Text>
-                                            </View>
-                                        </View>
-                                        <Text style={styles.historyDetail}>{item.time} • {item.size}</Text>
-                                    </View>
-                                </View>
-                                <TouchableOpacity style={styles.miniRestoreBtn}>
-                                    <Text style={styles.miniRestoreText}>กู้คืน</Text>
-                                </TouchableOpacity>
-                            </View>
-                            {index < historyData.length - 1 && <View style={styles.divider} />}
-                        </View>
-                    ))}
                 </View>
 
             </ScrollView>

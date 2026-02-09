@@ -259,6 +259,7 @@ export const useProductStore = create(
                     const storeId = getCurrentStoreId();
                     const { data: { session } } = await supabase.auth.getSession();
                     const token = session?.access_token;
+                    const { products, weightProducts } = get();
 
                     const url = `${API_BASE_URL}/products/barcode/${barcode}`;
                     const response = await fetch(url, {
@@ -275,7 +276,32 @@ export const useProductStore = create(
                     }
                     return null;
                 } catch (error) {
-                    console.error('Scan error:', error);
+                    console.log('Scan offline/error, searching local:', error.message);
+                    // Offline Fallback: Search in memory (products + weightProducts)
+                    // Note: This relies on the product being previously loaded/cached.
+                    // For < 2GB RAM devices, we avoid loading the ENTIRE DB into memory.
+                    const { products, weightProducts } = get();
+
+                    // Helper to normalize barcode
+                    const clean = (b) => b?.toLowerCase().trim();
+                    const target = clean(barcode);
+
+                    // 1. Search Weight Products
+                    let found = weightProducts.find(p => clean(p.barcode) === target);
+
+                    // 2. Search Cached Normal Products
+                    if (!found) {
+                        found = products.find(p => clean(p.barcode) === target);
+                    }
+
+                    if (found) {
+                        // Return structured like API response
+                        return {
+                            ...found,
+                            // Ensure promotion is attached if it exists in local data
+                            promotion: found.promotion || null
+                        };
+                    }
                     return null;
                 }
             },
@@ -284,6 +310,7 @@ export const useProductStore = create(
             clearProducts: () => {
                 set({
                     products: [],
+                    weightProducts: [], // Also clear weight products
                     categories: [],
                     currentPage: 0,
                     hasMore: true,
@@ -295,7 +322,8 @@ export const useProductStore = create(
             name: 'product-store',
             storage: createJSONStorage(() => asyncStorageAdapter),
             partialize: (state) => ({
-                products: state.products,
+                products: state.products, // Persist loaded normal products
+                weightProducts: state.weightProducts, // Persist ALL weight products (critical for offline)
                 categories: state.categories,
                 lastFetch: state.lastFetch,
             }),

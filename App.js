@@ -11,6 +11,7 @@ import { enableScreens } from 'react-native-screens';
 import { StoreProvider } from './src/contexts/StoreContext';
 import { setCurrentStoreId, setCurrentUserId } from './src/services/api';
 import { supabase } from './src/services/supabase';
+import { initNetworkMonitoring } from './src/services/network';
 
 // Disable native screens to fix "expected dynamic type 'boolean', but had type 'string'" error on Expo 52
 enableScreens(false);
@@ -114,8 +115,11 @@ export default function App() {
     setCurrentScreen(screen);
   };
 
-  // Restore session on app launch
+  // Restore session & Init Network
   useEffect(() => {
+    // Start Network Monitoring
+    const unsubscribeNetwork = initNetworkMonitoring();
+
     const checkAuth = async () => {
       try {
         const storedAuth = await AsyncStorage.getItem('authData');
@@ -141,6 +145,10 @@ export default function App() {
       }
     };
     checkAuth();
+
+    return () => {
+      unsubscribeNetwork();
+    };
   }, []);
 
   const handleLogin = (data) => {
