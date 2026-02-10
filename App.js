@@ -35,6 +35,8 @@ import DeviceConnectScreen from './src/screens/DeviceConnectScreen';
 import BackupScreen from './src/screens/BackupScreen';
 import TransactionHistoryScreen from './src/screens/TransactionHistoryScreen';
 
+import AllTransactionsScreen from './src/screens/AllTransactionsScreen';
+
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
@@ -100,6 +102,7 @@ function MainStack({ onLogout, onGoToBranchList }) {
       <Stack.Screen name="DeviceConnect" component={DeviceConnectScreen} />
       <Stack.Screen name="Backup" component={BackupScreen} />
       <Stack.Screen name="TransactionHistory" component={TransactionHistoryScreen} />
+      <Stack.Screen name="AllTransactions" component={AllTransactionsScreen} />
     </Stack.Navigator>
   );
 }

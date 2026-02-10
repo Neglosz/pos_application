@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Dimensions, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { LineChart } from 'react-native-chart-kit';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
-import { getSalesSummary, getSalesChartData, getPaymentMethodStats, getRecentOrders } from '../services/api';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { getSalesSummary, getSalesChartData, getPaymentMethodStats, getOrders, getOrderDetails } from '../services/api';
+import ReceiptModal from '../components/payment/ReceiptModal';
 
 const { width } = Dimensions.get('window');
 
@@ -17,6 +18,7 @@ const periods = [
 
 export default function ReportScreen() {
     const insets = useSafeAreaInsets();
+    const navigation = useNavigation();
     const [period, setPeriod] = useState('today');
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -27,6 +29,10 @@ export default function ReportScreen() {
     const [paymentStats, setPaymentStats] = useState({ cash: {}, qr: {}, credit: {} });
     const [recentOrders, setRecentOrders] = useState([]);
 
+    // Modal State
+    const [receiptVisible, setReceiptVisible] = useState(false);
+    const [selectedTransaction, setSelectedTransaction] = useState(null);
+
     const fetchData = async () => {
         try {
             setLoading(true);
@@ -34,7 +40,7 @@ export default function ReportScreen() {
                 getSalesSummary(period),
                 getSalesChartData(period),
                 getPaymentMethodStats(period),
-                getRecentOrders() // Always recent 10
+                getOrders({ limit: 3 }) // Recent 3 orders
             ]);
 
             if (sumRes.success) setSummary(sumRes.data);
@@ -58,6 +64,20 @@ export default function ReportScreen() {
     const onRefresh = () => {
         setRefreshing(true);
         fetchData();
+    };
+
+    const handleTransactionPress = async (order) => {
+        try {
+            const res = await getOrderDetails(order.id);
+            if (res.success) {
+                setSelectedTransaction(res.data);
+                setReceiptVisible(true);
+            } else {
+                Alert.alert('Error', 'ไม่สามารถโหลดข้อมูลบิลได้');
+            }
+        } catch (error) {
+            Alert.alert('Error', 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
+        }
     };
 
     const renderHeader = () => (
@@ -258,22 +278,26 @@ export default function ReportScreen() {
         <View style={styles.sectionContainer}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
                 <Text style={styles.sectionTitle}>รายการล่าสุด</Text>
-                <TouchableOpacity>
+                <TouchableOpacity onPress={() => navigation.navigate('AllTransactions')}>
                     <Text style={styles.seeAllText}>ดูทั้งหมด <Ionicons name="arrow-forward" size={12} /></Text>
                 </TouchableOpacity>
             </View>
 
             {recentOrders.map((order, index) => (
-                <View key={order.id} style={styles.transactionRow}>
+                <TouchableOpacity key={order.id} style={styles.transactionRow} onPress={() => handleTransactionPress(order)}>
                     <View style={styles.transactionIcon}>
-                        <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                        <Ionicons 
+                            name={order.paymentStatus === 'paid' ? 'checkmark-circle' : 'time'} 
+                            size={24} 
+                            color={order.paymentStatus === 'paid' ? '#10B981' : '#FF9800'} 
+                        />
                     </View>
                     <View style={{ flex: 1, marginLeft: 12 }}>
                         <Text style={styles.transactionName}>{order.customer}</Text>
                         <Text style={styles.transactionTime}>{order.time}</Text>
                     </View>
                     <Text style={styles.transactionAmount}>฿{order.amount.toLocaleString()}</Text>
-                </View>
+                </TouchableOpacity>
             ))}
 
             {recentOrders.length === 0 && (
@@ -300,6 +324,17 @@ export default function ReportScreen() {
                 {renderChart()}
                 {renderRecentOrders()}
             </ScrollView>
+
+            <ReceiptModal
+                visible={receiptVisible}
+                transaction={selectedTransaction}
+                onClose={() => setReceiptVisible(false)}
+                onPrint={() => {
+                     // Implement print logic later if needed
+                     Alert.alert('Info', 'ฟังก์ชันพิมพ์ยังไม่เปิดใช้งานในหน้านี้');
+                }}
+                onNewTransaction={() => setReceiptVisible(false)}
+            />
         </View>
     );
 }

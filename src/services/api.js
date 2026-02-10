@@ -353,6 +353,15 @@ export const getRecentOrders = async () => {
     return apiRequest('/reports/recent-orders');
 };
 
+export const getOrders = async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return apiRequest(`/orders?${query}`);
+};
+
+export const getOrderDetails = async (id) => {
+    return apiRequest(`/orders/${id}`);
+};
+
 // Transactions / Expenses
 export const getTransactions = async (filters = {}) => {
     const queryParams = new URLSearchParams(filters).toString();

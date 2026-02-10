@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Vibration, ActivityIndicator, Dimensions, Image, TextInput, ScrollView, FlatList, Animated, Platform, Modal, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Vibration, ActivityIndicator, Dimensions, Image, TextInput, ScrollView, FlatList, Animated, Platform, Modal, TouchableWithoutFeedback, Keyboard, KeyboardAvoidingView } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -828,14 +828,22 @@ export default function ScanScreen({ navigation, route }) {
     // 7. RENDER ADD PRODUCT MODAL
     const renderAddProductModal = () => (
         <React.Fragment>
-            {showAddProductModal && (
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContainer}>
+            <Modal
+                visible={showAddProductModal}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setShowAddProductModal(false)}
+            >
+                <KeyboardAvoidingView 
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={styles.modalOverlay}
+                >
+                    <View style={[styles.modalContainer, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}>
                         {/* Header */}
                         <View style={styles.modalHeader}>
                             <Text style={styles.modalTitle}>เพิ่มสินค้าใหม่</Text>
                             <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowAddProductModal(false)}>
-                                <Ionicons name="close" size={20} color="#666" />
+                                <Ionicons name="close" size={24} color="#666" />
                             </TouchableOpacity>
                         </View>
                         <View style={styles.handleIndicator} />
@@ -999,13 +1007,23 @@ export default function ScanScreen({ navigation, route }) {
                         </ScrollView>
 
                         {/* Footer Action */}
-                        <TouchableOpacity style={styles.modalMainButton} onPress={handleAddProduct}>
-                            <Text style={styles.modalMainButtonText}>บันทึกสินค้า</Text>
-                        </TouchableOpacity>
+                        <View style={{ flexDirection: 'row', gap: 10, marginTop: 30 }}>
+                            <TouchableOpacity 
+                                style={[styles.modalMainButton, { backgroundColor: '#F5F5F5', flex: 1, marginTop: 0 }]} 
+                                onPress={() => setShowAddProductModal(false)}
+                            >
+                                <Text style={[styles.modalMainButtonText, { color: '#666' }]}>ยกเลิก</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={[styles.modalMainButton, { flex: 2, marginTop: 0 }]} 
+                                onPress={handleAddProduct}
+                            >
+                                <Text style={styles.modalMainButtonText}>บันทึกสินค้า</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
-                </View >
-            )
-            }
+                </KeyboardAvoidingView>
+            </Modal>
         </React.Fragment >
     );
 

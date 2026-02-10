@@ -558,16 +558,6 @@ export default function AIScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            {/* Main Header */}
-            <View style={styles.mainHeader}>
-                <View style={styles.headerIcon}>
-                    <Octicons name="sparkle" size={20} color="#fff" />
-                </View>
-                <View>
-                    <Text style={styles.headerTitle}>ผู้ช่วยร้านค้า</Text>
-                    <Text style={styles.headerSubtitle}>คำแนะนำจากข้อมูลจริงของร้านคุณ</Text>
-                </View>
-            </View>
 
             {/* Tab Bar */}
             <View style={styles.tabBar}>

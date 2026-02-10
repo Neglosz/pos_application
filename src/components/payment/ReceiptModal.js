@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -8,14 +8,16 @@ import {
     Animated,
     Dimensions,
     ScrollView,
+    ActivityIndicator
 } from 'react-native';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { getOrderDetails } from '../../services/api';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-// Mockup store info
-const STORE_INFO = {
+// Mockup store info (Default fallback)
+const DEFAULT_STORE = {
     name: 'เจเค ปาร์ค',
     address: '100 ถ.ทุ่งสลา อ.ศรีราชา จ.ชลบุรี',
     phone: '012-xxx-xxxx',
@@ -32,31 +34,19 @@ export default function ReceiptModal({
     const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
     const scaleAnim = useRef(new Animated.Value(0.9)).current;
 
-    // Default transaction data with null safety
-    const safeTransaction = transaction || {};
-    const {
-        receiptNo = 'TXHM123456',
-        date = new Date().toLocaleDateString('th-TH', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        }),
-        paymentMethod = 'เงินสด',
-        items = [],
-        total = 0,
-        received = 0,
-        change = 0,
-        store = {
-            name: 'เจเค ปาร์ค',
-            address: '100 ถ.ทุ่งสลา อ.ศรีราชา จ.ชลบุรี',
-            phone: '012-xxx-xxxx',
-        }
-    } = safeTransaction;
+    const [details, setDetails] = useState(transaction || {});
+    const [loadingDetails, setLoadingDetails] = useState(false);
 
     useEffect(() => {
         if (visible) {
+            // Reset to initial passed transaction
+            setDetails(transaction || {});
+            
+            // Check if we need to fetch full details (if items are missing)
+            if (transaction && transaction.id && (!transaction.items || transaction.items.length === 0)) {
+                fetchFullDetails(transaction.id);
+            }
+
             Animated.parallel([
                 Animated.timing(fadeAnim, {
                     toValue: 1,
@@ -95,7 +85,22 @@ export default function ReceiptModal({
                 }),
             ]).start();
         }
-    }, [visible]);
+    }, [visible, transaction]);
+
+    const fetchFullDetails = async (id) => {
+        setLoadingDetails(true);
+        try {
+            const res = await getOrderDetails(id);
+            if (res.success) {
+                // Merge new details with existing info (preserve ID, etc)
+                setDetails(prev => ({ ...prev, ...res.data }));
+            }
+        } catch (error) {
+            console.log("Failed to load receipt details", error);
+        } finally {
+            setLoadingDetails(false);
+        }
+    };
 
     const handleClose = () => {
         Animated.parallel([
@@ -113,6 +118,18 @@ export default function ReceiptModal({
             onClose?.();
         });
     };
+
+    // Safe destructuring with defaults
+    const {
+        receiptNo = 'TX...',
+        date = '',
+        paymentMethod = '',
+        items = [],
+        total = 0,
+        received = 0,
+        change = 0,
+        store = DEFAULT_STORE
+    } = details;
 
     return (
         <Modal
@@ -168,20 +185,20 @@ export default function ReceiptModal({
 
                     {/* Store Info */}
                     <View style={styles.storeInfo}>
-                        <Text style={styles.storeName}>{store.name}</Text>
-                        <Text style={styles.storeAddress}>{store.address}</Text>
-                        <Text style={styles.storePhone}>โทร : {store.phone}</Text>
+                        <Text style={styles.storeName}>{store?.name || DEFAULT_STORE.name}</Text>
+                        <Text style={styles.storeAddress}>{store?.address || DEFAULT_STORE.address}</Text>
+                        <Text style={styles.storePhone}>โทร : {store?.phone || DEFAULT_STORE.phone}</Text>
                     </View>
 
                     {/* Receipt Details */}
                     <View style={styles.receiptDetails}>
                         <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>เลขที่ :</Text>
-                            <Text style={styles.detailValue}>{receiptNo}</Text>
+                            <Text style={styles.detailValue}>{receiptNo || transaction?.orderNo}</Text>
                         </View>
                         <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>วันที่ :</Text>
-                            <Text style={styles.detailValue}>{date}</Text>
+                            <Text style={styles.detailValue}>{date || transaction?.date}</Text>
                         </View>
                         <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>วิธีชำระเงิน :</Text>
@@ -191,29 +208,36 @@ export default function ReceiptModal({
 
                     {/* Items */}
                     <View style={styles.itemsContainer}>
-                        <ScrollView style={styles.itemsList} nestedScrollEnabled>
-                            {items.map((item, index) => (
-                                <View key={index} style={styles.itemRow}>
-                                    <Text style={styles.itemName}>{item.name} x{item.quantity}</Text>
-                                    <Text style={styles.itemPrice}>฿{item.price.toFixed(2)}</Text>
-                                </View>
-                            ))}
-                        </ScrollView>
+                        {loadingDetails ? (
+                            <View style={{ padding: 20, alignItems: 'center' }}>
+                                <ActivityIndicator size="small" color="#F37021" />
+                                <Text style={{ color: '#999', fontSize: 12, marginTop: 5 }}>กำลังโหลดรายการ...</Text>
+                            </View>
+                        ) : (
+                            <ScrollView style={styles.itemsList} nestedScrollEnabled>
+                                {items.map((item, index) => (
+                                    <View key={index} style={styles.itemRow}>
+                                        <Text style={styles.itemName}>{item.name} x{item.quantity}</Text>
+                                        <Text style={styles.itemPrice}>฿{item.price.toFixed(2)}</Text>
+                                    </View>
+                                ))}
+                            </ScrollView>
+                        )}
                     </View>
 
                     {/* Totals */}
                     <View style={styles.totalsContainer}>
                         <View style={styles.totalRow}>
                             <Text style={styles.totalLabel}>รวมทั้งหมด</Text>
-                            <Text style={styles.totalValue}>฿{total.toFixed(2)}</Text>
+                            <Text style={styles.totalValue}>฿{(total || transaction?.amount || 0).toLocaleString()}</Text>
                         </View>
                         <View style={styles.totalRow}>
                             <Text style={styles.totalLabelSmall}>รับเงิน</Text>
-                            <Text style={styles.totalValueSmall}>฿{received.toFixed(2)}</Text>
+                            <Text style={styles.totalValueSmall}>฿{received.toLocaleString()}</Text>
                         </View>
                         <View style={styles.totalRow}>
                             <Text style={[styles.totalLabelSmall, { color: '#35E0AD' }]}>เงินทอน</Text>
-                            <Text style={[styles.totalValueSmall, { color: '#35E0AD' }]}>฿{change.toFixed(2)}</Text>
+                            <Text style={[styles.totalValueSmall, { color: '#35E0AD' }]}>฿{change.toLocaleString()}</Text>
                         </View>
                     </View>
 
