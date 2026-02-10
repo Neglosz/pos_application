@@ -6,11 +6,13 @@ import { supabase } from '../services/supabase';
 import { getUnreadNotificationCount } from '../services/api';
 import { useProductStore } from '../stores/useProductStore';
 import { useCartStore } from '../stores/useCartStore';
+import { useStore } from '../contexts/StoreContext';
 
-export default function TopBar({ onLogout }) {
+export default function TopBar({ onLogout, onGoToBranchList }) {
     const navigation = useNavigation();
     const [menuVisible, setMenuVisible] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
+    const { userProfile } = useStore();
 
     // Fetch unread count on mount and subscribe to Realtime
     React.useEffect(() => {
@@ -79,14 +81,14 @@ export default function TopBar({ onLogout }) {
     };
 
     const menuItems = [
-        {
-            icon: <FontAwesome5 name='user-cog' size={22} color="#4AB58E" />,
-            label: 'จัดการผู้ใช้',
+        ...(userProfile?.role === 'owner' ? [{
+            icon: <Ionicons name='git-branch' size={22} color="#4AB58E" />,
+            label: 'เลือกสาขา',
             onPress: () => {
                 setMenuVisible(false);
-                //navigation.navigate('ManagerManagement');
+                if (onGoToBranchList) onGoToBranchList();
             },
-        },
+        }] : []),
         {
             icon: <FontAwesome name='print' size={22} color="#52616B" />,
             label: 'เชื่อมต่ออุปกรณ์',

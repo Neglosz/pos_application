@@ -38,12 +38,12 @@ import TransactionHistoryScreen from './src/screens/TransactionHistoryScreen';
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-function MainTabs({ onLogout }) {
+function MainTabs({ onLogout, onGoToBranchList }) {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }} edges={['top']}>
       <Tab.Navigator
         screenOptions={{
-          header: () => <TopBar onLogout={onLogout} />,
+          header: () => <TopBar onLogout={onLogout} onGoToBranchList={onGoToBranchList} />,
           freezeOnBlur: false,
         }}
         tabBar={({ state, descriptors, navigation }) => {
@@ -67,7 +67,7 @@ function MainTabs({ onLogout }) {
   );
 }
 
-function MainStack({ onLogout }) {
+function MainStack({ onLogout, onGoToBranchList }) {
   return (
     <Stack.Navigator
       detachInactiveScreens={false}
@@ -77,7 +77,7 @@ function MainStack({ onLogout }) {
       }}
     >
       <Stack.Screen name="MainTabs">
-        {() => <MainTabs onLogout={onLogout} />}
+        {() => <MainTabs onLogout={onLogout} onGoToBranchList={onGoToBranchList} />}
       </Stack.Screen>
       <Stack.Screen
         name="StockScan"
@@ -201,6 +201,11 @@ export default function App() {
     setCurrentScreen('BranchList');
   };
 
+  const handleGoToBranchList = () => {
+    setIsLoggedIn(false);
+    setCurrentScreen('BranchList');
+    };
+
   // Show auth screens if not logged in
   const renderContent = () => {
     if (!isLoggedIn) {
@@ -261,7 +266,7 @@ export default function App() {
 
     return (
       <NavigationContainer>
-        <MainStack onLogout={handleLogout} />
+        <MainStack onLogout={handleLogout} onGoToBranchList={handleGoToBranchList} />
         <StatusBar style="dark" />
       </NavigationContainer>
     );
@@ -270,7 +275,7 @@ export default function App() {
   // Main app wrap
   return (
     <SafeAreaProvider>
-      <StoreProvider>
+      <StoreProvider profile={authData?.profile}>
         {renderContent()}
       </StoreProvider>
     </SafeAreaProvider>

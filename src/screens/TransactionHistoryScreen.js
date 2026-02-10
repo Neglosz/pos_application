@@ -70,7 +70,7 @@ export default function TransactionHistoryScreen({ navigation }) {
             </View>
             <View style={styles.info}>
                 <Text style={styles.category}>{item.category}</Text>
-                <Text style={styles.desc} numberOfLines={1}>{item.description || '-'}</Text>
+                <Text style={styles.desc} numberOfLines={1}>{item.description || ''}</Text>
                 <Text style={styles.date}>{new Date(item.trans_date).toLocaleDateString('th-TH')}</Text>
             </View>
             <View style={styles.amountContainer}>

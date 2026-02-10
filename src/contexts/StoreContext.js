@@ -4,11 +4,15 @@ import { useProductStore } from "../stores/useProductStore";
 
 const StoreContext = createContext();
 
-export function StoreProvider({ children }) {
+export function StoreProvider({ children, profile }) {
     const [currentStore, setCurrentStore] = useState(null);
     const [stores, setStores] = useState([]);
-    const [userProfile, setUserProfile] = useState(null);
+    const [userProfile, setUserProfile] = useState(profile);
     const prevStoreId = useRef(null);
+
+    useEffect(() => {
+        setUserProfile(profile);
+    }, [profile]);
 
     // Sync store ID to API service whenever currentStore changes
     // Also clear product cache when switching stores
@@ -31,6 +35,7 @@ export function StoreProvider({ children }) {
         stores,
         setStores,
         userProfile,
+        setUserProfile,
         isOwner: userProfile?.role === 'owner',
         isManager: userProfile?.role === 'manager',
     };
