@@ -834,11 +834,11 @@ export default function ScanScreen({ navigation, route }) {
                 transparent={true}
                 onRequestClose={() => setShowAddProductModal(false)}
             >
-                <KeyboardAvoidingView 
+                <KeyboardAvoidingView
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                     style={styles.modalOverlay}
                 >
-                    <View style={[styles.modalContainer, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}>
+                    <View style={[styles.modalContainer, { paddingBottom: Math.max(insets.bottom, 20) + 20, maxHeight: height * 0.9 }]}>
                         {/* Header */}
                         <View style={styles.modalHeader}>
                             <Text style={styles.modalTitle}>เพิ่มสินค้าใหม่</Text>
@@ -1008,14 +1008,14 @@ export default function ScanScreen({ navigation, route }) {
 
                         {/* Footer Action */}
                         <View style={{ flexDirection: 'row', gap: 10, marginTop: 30 }}>
-                            <TouchableOpacity 
-                                style={[styles.modalMainButton, { backgroundColor: '#F5F5F5', flex: 1, marginTop: 0 }]} 
+                            <TouchableOpacity
+                                style={[styles.modalMainButton, { backgroundColor: '#F5F5F5', flex: 1, marginTop: 0 }]}
                                 onPress={() => setShowAddProductModal(false)}
                             >
                                 <Text style={[styles.modalMainButtonText, { color: '#666' }]}>ยกเลิก</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity 
-                                style={[styles.modalMainButton, { flex: 2, marginTop: 0 }]} 
+                            <TouchableOpacity
+                                style={[styles.modalMainButton, { flex: 2, marginTop: 0 }]}
                                 onPress={handleAddProduct}
                             >
                                 <Text style={styles.modalMainButtonText}>บันทึกสินค้า</Text>
