@@ -9,7 +9,6 @@ export default function BranchListScreen({ userProfile, onSelectBranch, onLogout
     const [branches, setBranches] = useState([]);
     const [loading, setLoading] = useState(true);
     const [modalVisible, setModalVisible] = useState(false);
-    const [systemStatus, setSystemStatus] = useState('normal'); // normal, warning, error
 
     useEffect(() => {
         fetchBranches();

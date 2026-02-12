@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Modal, Animated, Dimensions, KeyboardAvoidingView, Platform, FlatList, Keyboard, TouchableWithoutFeedback, Image } from 'react-native';
-import { MaterialCommunityIcons, FontAwesome, AntDesign, Ionicons, Feather } from '@expo/vector-icons';
+import { AntDesign, Ionicons, Feather } from '@expo/vector-icons';
 import { PaymentMethodModal, QRPaymentModal, ReceiptModal } from '../components/payment';
 import { getCustomersWithDebt, createCreditPayment, getCustomerPendingBills } from '../services/api';
 import { useFocusEffect } from '@react-navigation/native';

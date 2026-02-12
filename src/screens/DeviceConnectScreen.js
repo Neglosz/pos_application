@@ -7,8 +7,6 @@ import {
     FlatList,
     Switch,
     Modal,
-    ActivityIndicator,
-    Image
 } from 'react-native';
 import { Ionicons, FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';

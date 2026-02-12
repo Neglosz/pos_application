@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Clipboard, TextInput, ScrollView, Switch } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, TextInput, ScrollView } from "react-native";
+import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../services/supabase";
 import { Buffer } from 'buffer';
 import { getStoreSettings, updateStoreSettings } from "../services/api";
-import { useStore } from "../contexts/StoreContext";
 
 const ENCRYPTION_KEY = 'yourpos-secret-key-2026';
 
@@ -164,8 +164,8 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
         }
     };
 
-    const copyToClipboard = (text, label) => {
-        Clipboard.setString(text);
+    const copyToClipboard = async (text, label) => {
+        await Clipboard.setStringAsync(text);
         Alert.alert('คัดลอกแล้ว', `${label} ถูกคัดลอกไปยังคลิปบอร์ด`);
     };
 

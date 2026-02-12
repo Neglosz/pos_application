@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, SafeAreaView, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, Linking, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, Linking, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
 import { getAIRecommendations, getRecommendationStats, getRecommendationHistory, takeRecommendationAction, sendAIChat, applyPromotion, disposeProduct } from '../services/api';
 

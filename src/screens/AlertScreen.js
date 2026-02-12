@@ -11,7 +11,7 @@ import {
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { getNotifications, deleteNotification, markNotificationAsRead, markNotificationsAsRead, runDailyCheck } from '../services/api';
 import { supabase } from '../services/supabase';
-import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Swipeable } from 'react-native-gesture-handler';
 
 const tabs = [
     { id: 'all', label: 'ทั้งหมด' },
