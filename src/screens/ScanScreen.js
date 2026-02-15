@@ -807,11 +807,17 @@ export default function ScanScreen({ navigation, route }) {
                                 onPress={() => {
                                     const product = { ...selectedItem, unit: selectedUnit.label, isWeight: true };
                                     // In real app, you might map this to a real DB product
+                                    const pricePerUnit = selectedItem.price * selectedUnit.multiplier;
+
                                     addToCart({
                                         ...product,
-                                        id: `weight-${product.id}`, // Unique ID for cart
+                                        id: `weight-${product.id}-${Date.now()}`, // Unique cart ID per entry
+                                        product_id: product.id, // Real UUID for backend
                                         image: null,
-                                        unit_type: selectedUnit.label
+                                        price: pricePerUnit, // Adjusted price per unit (per g, per khid, etc.)
+                                        unit: selectedUnit.label, // "กรัม", "ขีด", "กิโลกรัม"
+                                        unit_code: selectedUnit.value, // "g", "h", "kg"
+                                        unit_type: selectedUnit.label // Legacy/Compat
                                     }, parseFloat(weightInput));
                                     Alert.alert('สำเร็จ', 'เพิ่มรายการชั่งน้ำหนักแล้ว');
                                 }}
