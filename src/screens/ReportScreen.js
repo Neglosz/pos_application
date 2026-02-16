@@ -4,7 +4,7 @@ import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-ico
 import { LineChart } from 'react-native-chart-kit';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { getSalesSummary, getSalesChartData, getPaymentMethodStats, getOrders, getOrderDetails } from '../services/api';
+import { getSalesSummary, getSalesChartData, getPaymentMethodStats, getOrders, getOrderDetails, getRecommendationStats } from '../services/api';
 import ReceiptModal from '../components/payment/ReceiptModal';
 
 const { width } = Dimensions.get('window');
@@ -28,6 +28,7 @@ export default function ReportScreen() {
     const [chartData, setChartData] = useState({ labels: [], values: [], peakTime: '-', peakAmount: 0 });
     const [paymentStats, setPaymentStats] = useState({ cash: {}, qr: {}, credit: {} });
     const [recentOrders, setRecentOrders] = useState([]);
+    const [aiStats, setAiStats] = useState(null);
 
     // Modal State
     const [receiptVisible, setReceiptVisible] = useState(false);
@@ -36,17 +37,19 @@ export default function ReportScreen() {
     const fetchData = async () => {
         try {
             setLoading(true);
-            const [sumRes, chartRes, payRes, recentRes] = await Promise.all([
+            const [sumRes, chartRes, payRes, recentRes, aiStatsRes] = await Promise.all([
                 getSalesSummary(period),
                 getSalesChartData(period),
                 getPaymentMethodStats(period),
-                getOrders({ limit: 3 }) // Recent 3 orders
+                getOrders({ limit: 3 }), // Recent 3 orders
+                getRecommendationStats()
             ]);
 
             if (sumRes.success) setSummary(sumRes.data);
             if (chartRes.success) setChartData(chartRes.data);
             if (payRes.success) setPaymentStats(payRes.data);
             if (recentRes.success) setRecentOrders(recentRes.data);
+            if (aiStatsRes.success) setAiStats(aiStatsRes.data);
         } catch (error) {
             console.error('Fetch Report Error:', error);
         } finally {
@@ -286,10 +289,10 @@ export default function ReportScreen() {
             {recentOrders.map((order, index) => (
                 <TouchableOpacity key={order.id} style={styles.transactionRow} onPress={() => handleTransactionPress(order)}>
                     <View style={styles.transactionIcon}>
-                        <Ionicons 
-                            name={order.paymentStatus === 'paid' ? 'checkmark-circle' : 'time'} 
-                            size={24} 
-                            color={order.paymentStatus === 'paid' ? '#10B981' : '#FF9800'} 
+                        <Ionicons
+                            name={order.paymentStatus === 'paid' ? 'checkmark-circle' : 'time'}
+                            size={24}
+                            color={order.paymentStatus === 'paid' ? '#10B981' : '#FF9800'}
                         />
                     </View>
                     <View style={{ flex: 1, marginLeft: 12 }}>
@@ -323,6 +326,53 @@ export default function ReportScreen() {
                 {renderPaymentBreakdown()}
                 {renderChart()}
                 {renderRecentOrders()}
+
+                {/* AI Weekly Summary */}
+                {aiStats && (
+                    <View style={styles.aiSummaryCard}>
+                        <View style={styles.aiSummaryHeader}>
+                            <View style={styles.aiSummaryDot} />
+                            <Text style={styles.aiSummaryLabel}>สรุปสัปดาห์ที่ {aiStats.weekNumber || 1}</Text>
+                        </View>
+
+                        <View style={styles.aiSummaryMain}>
+                            <Text style={styles.aiSummaryAmount}>
+                                {(aiStats.moneyEarned || 0).toLocaleString()} <Text style={styles.aiSummaryUnit}>บาท</Text>
+                            </Text>
+                        </View>
+                        <Text style={styles.aiSummarySubtitle}>เงินที่ได้เพิ่มจากการทำตาม AI</Text>
+
+                        <View style={styles.aiProgressSection}>
+                            <View style={styles.aiProgressBarContainer}>
+                                <View style={[styles.aiProgressFill, { width: `${aiStats.followedPercent || 0}%` }]} />
+                            </View>
+                            <View style={styles.aiProgressLabels}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Ionicons name="checkmark-circle" size={14} color="#4CAF50" />
+                                    <Text style={styles.aiProgressText}> ทำตามแล้ว {aiStats.followedCount || 0}/{aiStats.totalRecommendations || 0}</Text>
+                                </View>
+                                <Text style={styles.aiProgressPercent}>{aiStats.followedPercent || 0}%</Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.aiStatsRow}>
+                            <View style={styles.aiStatItem}>
+                                <Text style={styles.aiStatValue}>{aiStats.byType?.expiry || 0}</Text>
+                                <Text style={styles.aiStatLabel}>ลดของเสีย</Text>
+                            </View>
+                            <View style={styles.aiStatDivider} />
+                            <View style={styles.aiStatItem}>
+                                <Text style={styles.aiStatValue}>{aiStats.byType?.debt || 0}</Text>
+                                <Text style={styles.aiStatLabel}>เก็บหนี้ได้</Text>
+                            </View>
+                            <View style={styles.aiStatDivider} />
+                            <View style={styles.aiStatItem}>
+                                <Text style={styles.aiStatValue}>{aiStats.byType?.stock || 0}</Text>
+                                <Text style={styles.aiStatLabel}>สต็อกไม่ขาด</Text>
+                            </View>
+                        </View>
+                    </View>
+                )}
             </ScrollView>
 
             <ReceiptModal
@@ -330,8 +380,8 @@ export default function ReportScreen() {
                 transaction={selectedTransaction}
                 onClose={() => setReceiptVisible(false)}
                 onPrint={() => {
-                     // Implement print logic later if needed
-                     Alert.alert('Info', 'ฟังก์ชันพิมพ์ยังไม่เปิดใช้งานในหน้านี้');
+                    // Implement print logic later if needed
+                    Alert.alert('Info', 'ฟังก์ชันพิมพ์ยังไม่เปิดใช้งานในหน้านี้');
                 }}
                 onNewTransaction={() => setReceiptVisible(false)}
             />
@@ -610,5 +660,105 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
         color: '#111',
+    },
+
+    // AI Summary Card
+    aiSummaryCard: {
+        backgroundColor: '#FFF3E0',
+        borderRadius: 20,
+        padding: 20,
+        marginHorizontal: 20,
+        marginBottom: 25,
+        borderWidth: 1,
+        borderColor: '#FFE0B2',
+    },
+    aiSummaryHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    aiSummaryDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#4CAF50',
+        marginRight: 8,
+    },
+    aiSummaryLabel: {
+        flex: 1,
+        fontSize: 14,
+        color: '#666',
+        fontWeight: '500',
+    },
+    aiSummaryMain: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+    },
+    aiSummaryAmount: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#E65100',
+    },
+    aiSummaryUnit: {
+        fontSize: 18,
+        fontWeight: 'normal',
+    },
+    aiSummarySubtitle: {
+        fontSize: 12,
+        color: '#888',
+        marginTop: 4,
+        marginBottom: 15,
+    },
+    aiProgressSection: {
+        marginBottom: 15,
+    },
+    aiProgressBarContainer: {
+        height: 8,
+        backgroundColor: '#fff',
+        borderRadius: 4,
+        overflow: 'hidden',
+    },
+    aiProgressFill: {
+        height: '100%',
+        backgroundColor: '#4CAF50',
+        borderRadius: 4,
+    },
+    aiProgressLabels: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 8,
+    },
+    aiProgressText: {
+        fontSize: 12,
+        color: '#666',
+    },
+    aiProgressPercent: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: '#4CAF50',
+    },
+    aiStatsRow: {
+        flexDirection: 'row',
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+    },
+    aiStatItem: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    aiStatValue: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#222',
+    },
+    aiStatLabel: {
+        fontSize: 11,
+        color: '#888',
+    },
+    aiStatDivider: {
+        width: 1,
+        backgroundColor: '#eee',
     },
 });

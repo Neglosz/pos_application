@@ -70,14 +70,28 @@ export default function StockScanScreen({ navigation }) {
         };
     }, []);
 
+    // Valid barcode types for products
+    const VALID_BARCODE_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'codabar'];
+
     const handleBarCodeScanned = ({ type, data }) => {
         if (!scanned) {
-            Vibration.vibrate(); // Haptic feedback
-            playSound(); // Play beep sound
+            // Filter out non-barcode types (e.g. QR codes)
+            const barcodeType = type?.toString().toLowerCase().replace(/[-.]/g, '_');
+            if (!VALID_BARCODE_TYPES.some(t => barcodeType.includes(t))) {
+                setScanned(true);
+                Alert.alert(
+                    'ไม่ใช่บาร์โค้ดสินค้า',
+                    'สิ่งที่สแกนได้เป็น QR Code ไม่ใช่บาร์โค้ดสินค้า กรุณาสแกนบาร์โค้ดที่อยู่บนตัวสินค้า',
+                    [{ text: 'ตกลง', onPress: () => setScanned(false) }]
+                );
+                return;
+            }
+
+            Vibration.vibrate();
+            playSound();
             setScanned(true);
             setScannedCode(data);
             setModalVisible(true);
-            // setTorchOn(false); // Removed to keep torch on
         }
     };
 
@@ -129,7 +143,7 @@ export default function StockScanScreen({ navigation }) {
                 facing="back"
                 onBarcodeScanned={handleBarCodeScanned}
                 barcodeScannerSettings={{
-                    barcodeTypes: ["qr", "ean13", "ean8"],
+                    barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e", "code128", "code39", "codabar"],
                 }}
                 autofocus={focusMode}
                 enableTorch={torchOn}

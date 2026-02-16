@@ -26,6 +26,7 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [loading, setLoading] = useState(false);
     const [showCategoryModal, setShowCategoryModal] = useState(false);
+    const [fieldErrors, setFieldErrors] = useState({});
 
     // Data
     const [categories, setCategories] = useState([]);
@@ -74,6 +75,7 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
         setImage(null);
         setUnitType('ชิ้น');
         setExpireDate(new Date());
+        setFieldErrors({});
     };
 
     const loadCategories = async () => {
@@ -134,11 +136,36 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
     };
 
     const handleConfirmNew = async () => {
-        if (!name || !quantity) {
-            alert('กรุณากรอกชื่อและจำนวนสินค้า');
+        // Validate required fields with red borders
+        const errors = {};
+        if (!name) errors.name = true;
+        if (!quantity) errors.quantity = true;
+        if (!costPrice) errors.costPrice = true;
+        if (!salePrice) errors.salePrice = true;
+        if (!lowStockThreshold) errors.lowStockThreshold = true;
+        if (Object.keys(errors).length > 0) {
+            setFieldErrors(errors);
+            return;
+        }
+        setFieldErrors({});
+
+        // Confirm if no image
+        if (!image) {
+            Alert.alert(
+                'ไม่มีรูปสินค้า',
+                'ไม่ต้องการเพิ่มรูปภาพใช่ไหม?',
+                [
+                    { text: 'กลับไปเพิ่มรูป', style: 'cancel' },
+                    { text: 'ไม่ใส่รูป', onPress: () => doConfirmNew() }
+                ]
+            );
             return;
         }
 
+        doConfirmNew();
+    };
+
+    const doConfirmNew = async () => {
         setLoading(true);
         try {
             let imageUrl = null;
@@ -233,9 +260,15 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
     };
 
     const onDateChange = (event, selectedDate) => {
-        const currentDate = selectedDate || expireDate;
-        setShowDatePicker(Platform.OS === 'ios');
-        setExpireDate(currentDate);
+        if (Platform.OS === 'android') {
+            setShowDatePicker(false);
+            if (event.type === 'set' && selectedDate) {
+                setExpireDate(selectedDate);
+            }
+        } else {
+            // iOS: update live, dismiss via confirm button
+            if (selectedDate) setExpireDate(selectedDate);
+        }
     };
 
     const renderLoading = () => (
@@ -310,12 +343,13 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
                     <Text style={styles.dateText}>{expireDate.toLocaleDateString('th-TH')}</Text>
                     <Ionicons name="calendar-outline" size={20} color="#666" />
                 </TouchableOpacity>
-                {showDatePicker && (
+                {showDatePicker && Platform.OS === 'android' && (
                     <DateTimePicker
                         value={expireDate}
                         mode="date"
                         display="default"
                         onChange={onDateChange}
+                        locale="th-TH"
                     />
                 )}
             </View>
@@ -357,8 +391,8 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
                         <Image source={{ uri: image }} style={styles.image} />
                     ) : (
                         <View style={styles.placeholderImage}>
-                            <Ionicons name="image-outline" size={40} color="#ccc" />
-                            <Ionicons name="add-circle" size={24} color="#ccc" style={styles.addIcon} />
+                            <Ionicons name="camera-outline" size={32} color="#999" />
+                            <Text style={styles.imagePickerLabel}>เพิ่มรูป</Text>
                         </View>
                     )}
                 </TouchableOpacity>
@@ -373,11 +407,11 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
                         />
                     </View>
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>ชื่อสินค้า *</Text>
+                        <Text style={[styles.label, fieldErrors.name && styles.errorLabel]}>ชื่อสินค้า *</Text>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, fieldErrors.name && styles.errorInput]}
                             value={name}
-                            onChangeText={setName}
+                            onChangeText={(text) => { setName(text); setFieldErrors(prev => ({ ...prev, name: false })); }}
                             placeholder="ชื่อสินค้า"
                         />
                     </View>
@@ -409,11 +443,11 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
                     />
                 </View>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                    <Text style={styles.label}>จำนวน *</Text>
+                    <Text style={[styles.label, fieldErrors.quantity && styles.errorLabel]}>จำนวน *</Text>
                     <TextInput
-                        style={styles.input}
+                        style={[styles.input, fieldErrors.quantity && styles.errorInput]}
                         value={quantity}
-                        onChangeText={setQuantity}
+                        onChangeText={(text) => { setQuantity(text); setFieldErrors(prev => ({ ...prev, quantity: false })); }}
                         keyboardType="numeric"
                         placeholder="0"
                     />
@@ -434,21 +468,21 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
             {/* Row 3: Cost & Sale Price */}
             <View style={styles.row}>
                 <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
-                    <Text style={styles.label}>ราคาทุน</Text>
+                    <Text style={[styles.label, fieldErrors.costPrice && styles.errorLabel]}>ราคาทุน *</Text>
                     <TextInput
-                        style={styles.input}
+                        style={[styles.input, fieldErrors.costPrice && styles.errorInput]}
                         value={costPrice}
-                        onChangeText={setCostPrice}
+                        onChangeText={(text) => { setCostPrice(text); setFieldErrors(prev => ({ ...prev, costPrice: false })); }}
                         keyboardType="numeric"
                         placeholder="0.00"
                     />
                 </View>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                    <Text style={styles.label}>ราคาขาย</Text>
+                    <Text style={[styles.label, fieldErrors.salePrice && styles.errorLabel]}>ราคาขาย *</Text>
                     <TextInput
-                        style={styles.input}
+                        style={[styles.input, fieldErrors.salePrice && styles.errorInput]}
                         value={salePrice}
-                        onChangeText={setSalePrice}
+                        onChangeText={(text) => { setSalePrice(text); setFieldErrors(prev => ({ ...prev, salePrice: false })); }}
                         keyboardType="numeric"
                         placeholder="0.00"
                     />
@@ -462,23 +496,24 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
                     <Text style={styles.dateText}>{expireDate.toLocaleDateString('th-TH')}</Text>
                     <Ionicons name="calendar-outline" size={20} color="#666" />
                 </TouchableOpacity>
-                {showDatePicker && (
+                {showDatePicker && Platform.OS === 'android' && (
                     <DateTimePicker
                         value={expireDate}
                         mode="date"
                         display="default"
                         onChange={onDateChange}
+                        locale="th-TH"
                     />
                 )}
             </View>
 
             {/* Row 5: Low Stock Threshold */}
             <View style={styles.inputGroup}>
-                <Text style={styles.label}>แจ้งเตือนเมื่อสต็อกต่ำกว่า</Text>
+                <Text style={[styles.label, fieldErrors.lowStockThreshold && styles.errorLabel]}>แจ้งเตือนเมื่อสต็อกต่ำกว่า *</Text>
                 <TextInput
-                    style={styles.input}
+                    style={[styles.input, fieldErrors.lowStockThreshold && styles.errorInput]}
                     value={lowStockThreshold}
-                    onChangeText={setLowStockThreshold}
+                    onChangeText={(text) => { setLowStockThreshold(text); setFieldErrors(prev => ({ ...prev, lowStockThreshold: false })); }}
                     keyboardType="numeric"
                     placeholder="เช่น 10 (ชิ้น)"
                 />
@@ -531,6 +566,36 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
                     </TouchableWithoutFeedback>
                 </View>
             </TouchableWithoutFeedback>
+
+            {/* iOS Date Picker Overlay (inside main modal) */}
+            {Platform.OS === 'ios' && showDatePicker && (
+                <TouchableWithoutFeedback onPress={() => setShowDatePicker(false)}>
+                    <View style={styles.datePickerOverlay}>
+                        <TouchableWithoutFeedback>
+                            <View style={styles.datePickerContainer}>
+                                <View style={styles.datePickerHeader}>
+                                    <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                                        <Text style={styles.datePickerCancel}>ยกเลิก</Text>
+                                    </TouchableOpacity>
+                                    <Text style={styles.datePickerTitle}>เลือกวันหมดอายุ</Text>
+                                    <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                                        <Text style={styles.datePickerDone}>ตกลง</Text>
+                                    </TouchableOpacity>
+                                </View>
+                                <DateTimePicker
+                                    value={expireDate}
+                                    mode="date"
+                                    display="spinner"
+                                    onChange={onDateChange}
+                                    locale="th-TH"
+                                    textColor="#333"
+                                    style={{ height: 200 }}
+                                />
+                            </View>
+                        </TouchableWithoutFeedback>
+                    </View>
+                </TouchableWithoutFeedback>
+            )}
         </Modal>
     );
 }
@@ -643,20 +708,24 @@ const styles = StyleSheet.create({
     imagePicker: {
         width: 100,
         height: 100,
-        backgroundColor: '#f0f0f0',
+        backgroundColor: '#f8f8f8',
         borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 15,
         overflow: 'hidden',
+        borderWidth: 1.5,
+        borderColor: '#ddd',
+        borderStyle: 'dashed',
     },
     placeholderImage: {
         alignItems: 'center',
+        justifyContent: 'center',
     },
-    addIcon: {
-        position: 'absolute',
-        bottom: -5,
-        right: -5,
+    imagePickerLabel: {
+        fontSize: 12,
+        color: '#999',
+        marginTop: 4,
     },
     image: {
         width: '100%',
@@ -680,6 +749,15 @@ const styles = StyleSheet.create({
         padding: 10,
         fontSize: 16,
         color: '#333',
+        borderWidth: 1,
+        borderColor: 'transparent',
+    },
+    errorInput: {
+        borderColor: '#EF5350',
+        backgroundColor: '#FFF5F5',
+    },
+    errorLabel: {
+        color: '#EF5350',
     },
     readOnlyInput: {
         color: '#666',
@@ -729,5 +807,45 @@ const styles = StyleSheet.create({
         color: 'white',
         fontWeight: 'bold',
         fontSize: 18,
+    },
+
+    // Date Picker Modal (iOS)
+    datePickerOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        justifyContent: 'flex-end',
+        backgroundColor: 'rgba(0,0,0,0.4)',
+    },
+    datePickerContainer: {
+        backgroundColor: '#fff',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        paddingBottom: 30,
+    },
+    datePickerHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+    },
+    datePickerTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#333',
+    },
+    datePickerCancel: {
+        fontSize: 16,
+        color: '#888',
+    },
+    datePickerDone: {
+        fontSize: 16,
+        color: '#007AFF',
+        fontWeight: '600',
     },
 });

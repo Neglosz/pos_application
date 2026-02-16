@@ -14,11 +14,12 @@ export default function AIScreen() {
     const [chatHistory, setChatHistory] = useState([]);
     const [loading, setLoading] = useState(false);
     const [chatLoading, setChatLoading] = useState(false);
-    const [expandedCard, setExpandedCard] = useState(null);
+
 
     // Modal states
     const [productModalVisible, setProductModalVisible] = useState(false);
     const [debtModalVisible, setDebtModalVisible] = useState(false);
+    const [detailModalVisible, setDetailModalVisible] = useState(false);
     const [selectedItem, setSelectedItem] = useState(null);
     const [discountPrice, setDiscountPrice] = useState('');
     const [actionType, setActionType] = useState('discount'); // 'discount' or 'dispose'
@@ -220,6 +221,7 @@ export default function AIScreen() {
             debt: { icon: 'person-outline', color: '#4CAF50', bg: '#E8F5E9', label: 'แนะนำ' },
             stock: { icon: 'cube-outline', color: '#FF9800', bg: '#FFF3E0', label: 'แนะนำ' },
             price: { icon: 'trending-up-outline', color: '#2196F3', bg: '#E3F2FD', label: 'แนะนำ' },
+            promotion: { icon: 'megaphone-outline', color: '#7B1FA2', bg: '#F3E5F5', label: 'โปรโมชั่น' },
         };
         return configs[type] || configs.stock;
     };
@@ -229,84 +231,18 @@ export default function AIScreen() {
 
         return (
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-                {/* Summary Card */}
-                <View style={styles.summaryCard}>
-                    <View style={styles.summaryHeader}>
-                        <View style={styles.summaryDot} />
-                        <Text style={styles.summaryLabel}>สรุปสัปดาห์ที่ {stats?.weekNumber || 1}</Text>
-                        <TouchableOpacity style={styles.seeAllBtn}>
-                            <Text style={styles.seeAllText}>ดูทั้งหมด</Text>
-                            <Ionicons name="chevron-forward" size={12} color="#888" />
-                        </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.summaryMain}>
-                        <Text style={styles.summaryAmount}>
-                            {(stats?.moneyEarned || 0).toLocaleString()} <Text style={styles.summaryUnit}>บาท</Text>
+                {/* Mini Status Bar */}
+                <View style={styles.miniStatusBar}>
+                    <View style={styles.miniStatusLeft}>
+                        <Ionicons name="list-outline" size={16} color="#E65100" />
+                        <Text style={styles.miniStatusText}>
+                            ทำแล้ว {stats?.followedCount || 0}/{stats?.totalRecommendations || 0}
                         </Text>
-                        {stats?.moneyEarned > 0 && (
-                            <View style={styles.growthBadge}>
-                                <Ionicons name="trending-up" size={12} color="#4CAF50" />
-                                <Text style={styles.growthText}>+12%</Text>
-                            </View>
-                        )}
                     </View>
-                    <Text style={styles.summarySubtitle}>เงินที่ได้เพิ่มจากการทำตาม AI</Text>
-
-                    {/* Progress Bar */}
-                    <View style={styles.progressSection}>
-                        <View style={styles.progressBarContainer}>
-                            <View style={[styles.progressFill, { width: `${stats?.followedPercent || 0}%` }]} />
-                        </View>
-                        <View style={styles.progressLabels}>
-                            <View style={styles.progressLabelLeft}>
-                                <Ionicons name="checkmark-circle" size={14} color="#4CAF50" />
-                                <Text style={styles.progressText}> ทำตามแล้ว {stats?.followedCount || 0}/{stats?.totalRecommendations || 0} คำแนะนำ</Text>
-                            </View>
-                            <Text style={styles.progressPercent}>{stats?.followedPercent || 0}%</Text>
-                        </View>
+                    <View style={styles.miniProgressBarBg}>
+                        <View style={[styles.miniProgressBarFill, { width: `${stats?.followedPercent || 0}%` }]} />
                     </View>
-
-                    {/* Stats Row */}
-                    <View style={styles.statsRow}>
-                        <View style={styles.statItem}>
-                            <Text style={styles.statValue}>{stats?.byType?.expiry || 0}</Text>
-                            <Text style={styles.statLabel}>ลดของเสีย</Text>
-                        </View>
-                        <View style={styles.statDivider} />
-                        <View style={styles.statItem}>
-                            <Text style={styles.statValue}>{stats?.byType?.debt || 0}</Text>
-                            <Text style={styles.statLabel}>เก็บหนี้ได้</Text>
-                        </View>
-                        <View style={styles.statDivider} />
-                        <View style={styles.statItem}>
-                            <Text style={styles.statValue}>{stats?.byType?.stock || 0}</Text>
-                            <Text style={styles.statLabel}>สต็อกไม่ขาด</Text>
-                        </View>
-                    </View>
-                </View>
-
-                {/* Daily Progress Card */}
-                <View style={styles.dailyCard}>
-                    <View style={styles.dailyRow}>
-                        <View style={styles.dailyLeft}>
-                            <View style={styles.dailyIconBg}>
-                                <Ionicons name="trending-up" size={18} color="#4CAF50" />
-                            </View>
-                            <View style={styles.dailyInfo}>
-                                <Text style={styles.dailyLabel}>เดือนนี้ทำตามแล้ว</Text>
-                                <Text style={styles.dailyAmount}>{(stats?.moneyEarned || 0).toLocaleString()} บาท</Text>
-                            </View>
-                        </View>
-                        <View style={styles.dailyRight}>
-                            <Text style={styles.dailyRightLabel}>คำแนะนำที่ทำตาม</Text>
-                            <Text style={styles.dailyRightValue}>{stats?.followedCount || 0}/{stats?.totalRecommendations || 0}</Text>
-                        </View>
-                    </View>
-                    <View style={styles.cheerRow}>
-                        <Ionicons name="checkmark-circle" size={14} color="#4CAF50" />
-                        <Text style={styles.cheerText}> เยี่ยมมาก! ทำต่อไปเรื่อยๆ</Text>
-                    </View>
+                    <Text style={styles.miniStatusPercent}>{stats?.followedPercent || 0}%</Text>
                 </View>
 
                 {/* Section Header */}
@@ -316,7 +252,7 @@ export default function AIScreen() {
                         <Text style={styles.sectionTitle}> คำแนะนำวันนี้</Text>
                     </View>
                     <View style={styles.countBadge}>
-                        <Text style={styles.countText}>{pendingRecs.length}/3 รายการ</Text>
+                        <Text style={styles.countText}>{pendingRecs.length} รายการ</Text>
                     </View>
                 </View>
 
@@ -331,15 +267,22 @@ export default function AIScreen() {
                 ) : (
                     pendingRecs.map((item) => {
                         const config = getTypeConfig(item.type);
-                        const isExpanded = expandedCard === item.id;
 
                         return (
-                            <View key={item.id} style={styles.recCard}>
-                                {/* Card Content */}
+                            <TouchableOpacity
+                                key={item.id}
+                                style={styles.recCard}
+                                activeOpacity={0.7}
+                                onPress={() => {
+                                    setSelectedItem(item);
+                                    setDetailModalVisible(true);
+                                }}
+                            >
+                                {/* Card Top */}
                                 <View style={styles.recContent}>
                                     <View style={styles.recHeader}>
                                         <View style={[styles.iconBox, { backgroundColor: config.bg }]}>
-                                            <Ionicons name={config.icon} size={24} color={config.color} />
+                                            <Ionicons name={config.icon} size={26} color={config.color} />
                                         </View>
                                         <View style={styles.recInfo}>
                                             <View style={[styles.tag, { backgroundColor: item.type === 'expiry' ? '#FFEBEE' : '#E8F5E9' }]}>
@@ -347,33 +290,15 @@ export default function AIScreen() {
                                                     {item.type === 'expiry' ? 'ด่วน' : 'แนะนำ'}
                                                 </Text>
                                             </View>
-                                            <Text style={styles.recTitle}>{item.title}</Text>
-                                            <Text style={styles.recDetail}>{item.detail}</Text>
+                                            <Text style={styles.recTitle} numberOfLines={2}>{item.title}</Text>
                                         </View>
                                     </View>
 
-                                    {/* Impact Box */}
+                                    {/* Impact Badge */}
                                     {item.expected_impact && (
                                         <View style={styles.impactBox}>
                                             <Octicons name="sparkle" size={16} color="#43A047" />
                                             <Text style={styles.impactText}> {item.expected_impact}</Text>
-                                        </View>
-                                    )}
-
-                                    {/* Why Recommend */}
-                                    <TouchableOpacity
-                                        style={styles.whyBtn}
-                                        onPress={() => setExpandedCard(isExpanded ? null : item.id)}
-                                    >
-                                        <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={16} color="#888" />
-                                        <Text style={styles.whyText}>ทำไมถึงแนะนำ?</Text>
-                                    </TouchableOpacity>
-
-                                    {isExpanded && (
-                                        <View style={styles.whyContent}>
-                                            <Text style={styles.whyContentText}>
-                                                {item.payload?.reason || item.detail || 'คำแนะนำนี้มาจากการวิเคราะห์ข้อมูลจริงของร้านคุณ'}
-                                            </Text>
                                         </View>
                                     )}
                                 </View>
@@ -382,20 +307,26 @@ export default function AIScreen() {
                                 <View style={styles.actionFooter}>
                                     <TouchableOpacity
                                         style={styles.skipBtn}
-                                        onPress={() => handleAction(item, 'skipped')}
+                                        onPress={(e) => {
+                                            e.stopPropagation();
+                                            handleAction(item, 'skipped');
+                                        }}
                                     >
                                         <Ionicons name="close" size={16} color="#666" />
                                         <Text style={styles.skipText}> ข้าม</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                         style={[styles.actionBtn, { backgroundColor: config.color }]}
-                                        onPress={() => handleAcceptAction(item)}
+                                        onPress={(e) => {
+                                            e.stopPropagation();
+                                            handleAcceptAction(item);
+                                        }}
                                     >
                                         <Ionicons name="checkmark" size={18} color="#fff" />
                                         <Text style={styles.actionText}> {item.action_label || 'ตกลง'}</Text>
                                     </TouchableOpacity>
                                 </View>
-                            </View>
+                            </TouchableOpacity>
                         );
                     })
                 )}
@@ -802,6 +733,127 @@ export default function AIScreen() {
                     </View>
                 </View>
             </Modal>
+
+            {/* Detail Modal */}
+            <Modal
+                visible={detailModalVisible}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setDetailModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>รายละเอียด</Text>
+                            <TouchableOpacity onPress={() => setDetailModalVisible(false)}>
+                                <Ionicons name="close" size={24} color="#666" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {selectedItem && (() => {
+                            const config = getTypeConfig(selectedItem.type);
+                            return (
+                                <ScrollView style={styles.modalScrollContent} showsVerticalScrollIndicator={false} bounces={false}>
+                                    <View style={styles.detailTopRow}>
+                                        <View style={[styles.iconBox, { backgroundColor: config.bg }]}>
+                                            <Ionicons name={config.icon} size={28} color={config.color} />
+                                        </View>
+                                        <View style={{ flex: 1, marginLeft: 12 }}>
+                                            <View style={[styles.tag, { backgroundColor: selectedItem.type === 'expiry' ? '#FFEBEE' : '#E8F5E9' }]}>
+                                                <Text style={[styles.tagText, { color: selectedItem.type === 'expiry' ? '#D32F2F' : '#43A047' }]}>
+                                                    {selectedItem.type === 'expiry' ? 'ด่วน' : 'แนะนำ'}
+                                                </Text>
+                                            </View>
+                                            <Text style={styles.detailTitle}>{selectedItem.title}</Text>
+                                        </View>
+                                    </View>
+
+                                    <Text style={styles.detailDescription}>{selectedItem.detail}</Text>
+
+                                    {selectedItem.expected_impact && (
+                                        <View style={styles.detailImpact}>
+                                            <Octicons name="sparkle" size={16} color="#43A047" />
+                                            <Text style={styles.detailImpactText}> {selectedItem.expected_impact}</Text>
+                                        </View>
+                                    )}
+
+                                    <View style={styles.detailReasonBox}>
+                                        <View style={styles.detailReasonHeader}>
+                                            <Ionicons name="bulb-outline" size={18} color="#F57C00" />
+                                            <Text style={styles.detailReasonTitle}>ทำไมถึงแนะนำ?</Text>
+                                        </View>
+                                        {(() => {
+                                            const reason = selectedItem.payload?.reason || selectedItem.detail || 'คำแนะนำนี้มาจากการวิเคราะห์ข้อมูลจริงของร้านคุณ';
+                                            // Split on newlines first, then strip leading "1." etc.
+                                            const bullets = reason
+                                                .split('\n')
+                                                .map(s => s.replace(/^\d+[\.\)]\s*/, '').trim())
+                                                .filter(s => s.length > 0);
+                                            return bullets.map((bullet, idx) => (
+                                                <View key={idx} style={styles.reasonBullet}>
+                                                    <Text style={styles.reasonBulletIcon}>
+                                                        {idx === 0 ? '📌' : idx === bullets.length - 1 ? '✅' : '📊'}
+                                                    </Text>
+                                                    <Text style={styles.reasonBulletText}>{bullet}</Text>
+                                                </View>
+                                            ));
+                                        })()}
+                                    </View>
+
+                                    {/* Discount Recommendation Highlight */}
+                                    {selectedItem.payload?.recommended_discount && (
+                                        <View style={styles.discountHighlight}>
+                                            <View style={styles.discountHeader}>
+                                                <Ionicons name="pricetag" size={16} color="#E65100" />
+                                                <Text style={styles.discountTitle}>โปรโมชั่นที่แนะนำ</Text>
+                                            </View>
+                                            {selectedItem.payload.recommended_discount.promotion_type === 'buy_1_get_1' ? (
+                                                <Text style={styles.discountDetail}>🎁 ซื้อ 1 แถม 1</Text>
+                                            ) : (
+                                                <Text style={styles.discountDetail}>
+                                                    🏷️ ลด {selectedItem.payload.recommended_discount.percent}%
+                                                    {selectedItem.payload.recommended_discount.price_after_discount
+                                                        ? ` → ราคา ฿${selectedItem.payload.recommended_discount.price_after_discount}`
+                                                        : ''}
+                                                </Text>
+                                            )}
+                                            {selectedItem.payload.recommended_discount.total_recovery > 0 && (
+                                                <Text style={styles.discountRecovery}>
+                                                    💰 คืนทุนได้ ฿{selectedItem.payload.recommended_discount.total_recovery.toLocaleString()}
+                                                    {selectedItem.payload.recommended_discount.vs_total_loss
+                                                        ? ` (ปกติเสีย ฿${selectedItem.payload.recommended_discount.vs_total_loss.toLocaleString()})`
+                                                        : ''}
+                                                </Text>
+                                            )}
+                                        </View>
+                                    )}
+                                </ScrollView>
+                            );
+                        })()}
+
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity
+                                style={styles.modalCancelBtn}
+                                onPress={() => {
+                                    if (selectedItem) handleAction(selectedItem, 'skipped');
+                                    setDetailModalVisible(false);
+                                }}
+                            >
+                                <Text style={styles.modalCancelText}>ข้าม</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.modalConfirmBtn}
+                                onPress={() => {
+                                    setDetailModalVisible(false);
+                                    if (selectedItem) handleAcceptAction(selectedItem);
+                                }}
+                            >
+                                <Text style={styles.modalConfirmText}>{selectedItem?.action_label || 'ตกลง'}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView >
     );
 }
@@ -843,6 +895,7 @@ const styles = StyleSheet.create({
         borderRadius: 25,
         padding: 4,
         marginBottom: 10,
+        marginTop: -60,
     },
     tabItem: {
         flex: 1,
@@ -877,14 +930,48 @@ const styles = StyleSheet.create({
         paddingTop: 5,
     },
 
-    // Summary Card
-    summaryCard: {
+    // Summary Card (removed - moved to ReportScreen)
+    // Mini Status Bar
+    miniStatusBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
         backgroundColor: '#FFF3E0',
-        borderRadius: 20,
-        padding: 20,
-        marginBottom: 15,
+        borderRadius: 14,
+        padding: 12,
+        paddingHorizontal: 16,
+        marginBottom: 18,
         borderWidth: 1,
         borderColor: '#FFE0B2',
+    },
+    miniStatusLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    miniStatusText: {
+        fontSize: 13,
+        color: '#E65100',
+        fontWeight: '600',
+        marginLeft: 6,
+    },
+    miniProgressBarBg: {
+        flex: 1,
+        height: 6,
+        backgroundColor: '#FFE0B2',
+        borderRadius: 3,
+        marginHorizontal: 12,
+        overflow: 'hidden',
+    },
+    miniProgressBarFill: {
+        height: '100%',
+        backgroundColor: '#4CAF50',
+        borderRadius: 3,
+    },
+    miniStatusPercent: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: '#4CAF50',
+        minWidth: 30,
+        textAlign: 'right',
     },
     summaryHeader: {
         flexDirection: 'row',
@@ -1704,5 +1791,104 @@ const styles = StyleSheet.create({
         fontSize: 13,
         color: '#2E7D32',
         marginBottom: 4,
+    },
+
+    // Detail Modal Styles
+    detailTopRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        marginBottom: 16,
+    },
+    detailTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#222',
+        marginTop: 4,
+    },
+    detailDescription: {
+        fontSize: 14,
+        color: '#555',
+        lineHeight: 22,
+        marginBottom: 16,
+    },
+    detailImpact: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#E8F5E9',
+        borderRadius: 16,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        marginBottom: 16,
+    },
+    detailImpactText: {
+        fontSize: 15,
+        color: '#2E7D32',
+        fontWeight: '600',
+    },
+    detailReasonBox: {
+        backgroundColor: '#FFFBF0',
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 10,
+        borderLeftWidth: 3,
+        borderLeftColor: '#F57C00',
+    },
+    detailReasonHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    detailReasonTitle: {
+        fontSize: 15,
+        fontWeight: 'bold',
+        color: '#E65100',
+        marginLeft: 6,
+    },
+    reasonBullet: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        marginBottom: 8,
+        paddingLeft: 2,
+    },
+    reasonBulletIcon: {
+        fontSize: 14,
+        marginRight: 8,
+        marginTop: 1,
+    },
+    reasonBulletText: {
+        fontSize: 14,
+        color: '#444',
+        lineHeight: 22,
+        flex: 1,
+    },
+    discountHighlight: {
+        backgroundColor: '#FFF3E0',
+        borderRadius: 12,
+        padding: 14,
+        marginBottom: 10,
+        borderWidth: 1,
+        borderColor: '#FFB74D',
+    },
+    discountHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    discountTitle: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#E65100',
+        marginLeft: 6,
+    },
+    discountDetail: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#BF360C',
+        marginBottom: 4,
+    },
+    discountRecovery: {
+        fontSize: 13,
+        color: '#2E7D32',
+        fontWeight: '600',
     },
 });
