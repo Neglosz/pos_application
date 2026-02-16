@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, TextInput, ScrollView } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, TextInput, ScrollView, Platform } from "react-native";
 import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -8,9 +8,10 @@ import { Buffer } from 'buffer';
 import { getStoreSettings, updateStoreSettings } from "../services/api";
 
 const ENCRYPTION_KEY = 'yourpos-secret-key-2026';
+const THEME_COLOR = '#FF9500'; // Orange
+const BG_COLOR = '#F8F9FA'; // Light Gray Background
 
 export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
-    // const { isOwner } = useStore(); // Context might not be ready
     const [isOwner, setIsOwner] = useState(false);
     const [credentials, setCredentials] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -22,7 +23,7 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
     const [ppName, setPpName] = useState('');
     const [ppLoading, setPpLoading] = useState(false);
     const [ppFetching, setPpFetching] = useState(true);
-    const [isEditingPromptPay, setIsEditingPromptPay] = useState(false); // NEW: Toggle edit mode
+    const [isEditingPromptPay, setIsEditingPromptPay] = useState(false);
 
     // Edit Branch State
     const [isEditing, setIsEditing] = useState(false);
@@ -30,6 +31,8 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
     const [editAddress, setEditAddress] = useState('');
     const [editPhone, setEditPhone] = useState('');
     const [savingBranch, setSavingBranch] = useState(false);
+
+    const [deleting, setDeleting] = useState(false);
 
     useEffect(() => {
         checkOwnerStatus();
@@ -42,30 +45,21 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
     }, [branch?.id]);
 
     const checkOwnerStatus = async () => {
-        if (!branch) {
-            console.log('BranchDetail: No branch data');
-            return;
-        }
+        if (!branch) return;
         try {
             const { data: { user }, error } = await supabase.auth.getUser();
-            if (error || !user) {
-                console.log('BranchDetail: User not found', error);
-                return;
-            }
+            if (error || !user) return;
 
             if (branch.owner_id === user.id) {
                 setIsOwner(true);
             } else {
-                // Fetch store owner from DB just in case branch prop is incomplete
                 const { data, error: storeError } = await supabase
                     .from('stores')
                     .select('owner_id')
                     .eq('id', branch.id)
                     .single();
 
-                if (storeError) {
-                    console.error('Fetch store error:', storeError);
-                } else if (data) {
+                if (data) {
                     setIsOwner(data.owner_id === user.id);
                 }
             }
@@ -107,13 +101,13 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
 
             if (res.success) {
                 Alert.alert('สำเร็จ', 'บันทึกข้อมูลพร้อมเพย์เรียบร้อยแล้ว');
-                fetchPromptPaySettings(); // Refresh to see masked data if needed
+                fetchPromptPaySettings(); // Refresh
+                setIsEditingPromptPay(false);
             } else {
                 Alert.alert('ผิดพลาด', res.error || 'ไม่สามารถบันทึกข้อมูลได้');
             }
         } catch (error) {
-            console.error('Update PromptPay Error:', error);
-            Alert.alert('ผิดพลาด', `เกิดข้อผิดพลาดในการเชื่อมต่อ: ${error.message}`);
+            Alert.alert('ผิดพลาด', `เกิดข้อผิดพลาด: ${error.message}`);
         } finally {
             setPpLoading(false);
         }
@@ -121,7 +115,6 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
 
     const fetchCredentials = async () => {
         if (!branch?.id) return;
-
         try {
             const { data, error } = await supabase
                 .from('store_credentials')
@@ -131,12 +124,7 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
                 .limit(1)
                 .single();
 
-            if (error && error.code !== 'PGRST116') { // PGRST116 = no rows
-                throw error;
-            }
-
             if (data) {
-                // Decrypt password
                 const decryptedPassword = decryptPassword(data.password_encrypted);
                 setCredentials({
                     email: data.email,
@@ -150,7 +138,6 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
         }
     };
 
-    // XOR decryption matching AddBranchModal encryption
     const decryptPassword = (encryptedPassword) => {
         try {
             const encrypted = Buffer.from(encryptedPassword, 'base64').toString('binary');
@@ -170,22 +157,8 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
     };
 
     const handleResetCredentials = () => {
-        Alert.alert(
-            'รีเซ็ตข้อมูลเข้าสู่ระบบ',
-            'ต้องการสร้าง Email และรหัสผ่านใหม่หรือไม่? ข้อมูลเดิมจะใช้งานไม่ได้อีกต่อไป',
-            [
-                { text: 'ยกเลิก', style: 'cancel' },
-                { text: 'รีเซ็ต', style: 'destructive', onPress: resetCredentials },
-            ]
-        );
-    };
-
-    const resetCredentials = async () => {
-        // TODO: Implement credential reset
         Alert.alert('แจ้งเตือน', 'ฟีเจอร์นี้กำลังพัฒนา');
     };
-
-    const [deleting, setDeleting] = useState(false);
 
     const handleDeleteBranch = () => {
         Alert.alert(
@@ -193,21 +166,15 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
             `คุณต้องการลบสาขา "${branch?.name}" หรือไม่?\n\nการลบจะรวมถึง:\n• ข้อมูลร้านค้าทั้งหมด\n• บัญชีผู้จัดการ\n• การตั้งค่าทั้งหมด\n\nการดำเนินการนี้ไม่สามารถยกเลิกได้!`,
             [
                 { text: 'ยกเลิก', style: 'cancel' },
-                {
-                    text: 'ลบสาขา',
-                    style: 'destructive',
-                    onPress: deleteBranch
-                },
+                { text: 'ลบสาขา', style: 'destructive', onPress: deleteBranch },
             ]
         );
     };
 
     const deleteBranch = async () => {
         if (!branch?.id) return;
-
         setDeleting(true);
         try {
-            // Get session for authorization
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) throw new Error('Session หมดอายุ กรุณา login ใหม่');
 
@@ -222,17 +189,13 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
             });
 
             const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error || 'ไม่สามารถลบสาขาได้');
-            }
+            if (!response.ok) throw new Error(result.error || 'ไม่สามารถลบสาขาได้');
 
             Alert.alert('สำเร็จ', 'ลบสาขาเรียบร้อยแล้ว', [
                 { text: 'ตกลง', onPress: () => onBack && onBack() }
             ]);
 
         } catch (error) {
-            console.error('Delete branch error:', error);
             Alert.alert('ผิดพลาด', error.message);
         } finally {
             setDeleting(false);
@@ -258,7 +221,7 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
 
             if (error) throw error;
 
-            // Update local branch object
+            // Optimistic update
             branch.name = editName.trim();
             branch.address = editAddress.trim();
             branch.phone = editPhone.trim();
@@ -267,340 +230,286 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
             Alert.alert('สำเร็จ', 'บันทึกข้อมูลสาขาเรียบร้อยแล้ว');
 
         } catch (error) {
-            console.error('Save branch error:', error);
             Alert.alert('ผิดพลาด', error.message || 'ไม่สามารถบันทึกข้อมูลได้');
         } finally {
             setSavingBranch(false);
         }
     };
 
+    // --- Sub-Components for cleaner code ---
+
+    const InfoRow = ({ icon, label, value, onCopy }) => (
+        <View style={styles.infoRow}>
+            <View style={styles.infoRowIcon}>
+                <Ionicons name={icon} size={20} color="#666" />
+            </View>
+            <View style={{ flex: 1 }}>
+                <Text style={styles.infoRowLabel}>{label}</Text>
+                <Text style={styles.infoRowValue}>{value || '-'}</Text>
+            </View>
+            {onCopy && (
+                <TouchableOpacity onPress={onCopy} style={styles.iconBtn}>
+                    <Ionicons name="copy-outline" size={20} color={THEME_COLOR} />
+                </TouchableOpacity>
+            )}
+        </View>
+    );
+
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
-            <ScrollView showsVerticalScrollIndicator={false}>
-                {/* Header */}
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-                        <Ionicons name="arrow-back" size={24} color="#333" />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>ข้อมูลสาขา</Text>
-                    <TouchableOpacity style={styles.menuBtn}>
-                    </TouchableOpacity>
-                </View>
+            <View style={styles.header}>
+                <TouchableOpacity onPress={onBack} style={styles.backBtn}>
+                    <Ionicons name="arrow-back" size={24} color="#333" />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>รายละเอียดสาขา</Text>
+                <View style={{ width: 40 }} />
+            </View>
 
-                {/* Branch Info Card */}
-                <View style={styles.infoCard}>
-                    <View style={styles.branchIcon}>
-                        <Ionicons name="storefront" size={40} color="#52616B" />
+            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+
+                {/* 1. Hero / Main Info Section */}
+                <View style={styles.heroSection}>
+                    <View style={styles.storeIconContainer}>
+                        <Ionicons name="storefront" size={40} color={THEME_COLOR} />
                     </View>
 
                     {isEditing ? (
-                        <View style={styles.editContainer}>
-                            <View style={styles.editInputGroup}>
-                                <Text style={styles.editLabel}>ชื่อสาขา</Text>
-                                <TextInput
-                                    style={styles.editInput}
-                                    value={editName}
-                                    onChangeText={setEditName}
-                                    placeholder="ชื่อสาขา"
-                                    placeholderTextColor="#999"
-                                />
-                            </View>
-                            <View style={styles.editInputGroup}>
-                                <Text style={styles.editLabel}>ที่อยู่</Text>
-                                <TextInput
-                                    style={[styles.editInput, styles.editInputMultiline]}
-                                    value={editAddress}
-                                    onChangeText={setEditAddress}
-                                    placeholder="ที่อยู่สาขา"
-                                    placeholderTextColor="#999"
-                                    multiline
-                                    numberOfLines={2}
-                                />
-                            </View>
-                            <View style={styles.editInputGroup}>
-                                <Text style={styles.editLabel}>เบอร์โทรศัพท์</Text>
-                                <TextInput
-                                    style={styles.editInput}
-                                    value={editPhone}
-                                    onChangeText={setEditPhone}
-                                    placeholder="0xx-xxx-xxxx"
-                                    placeholderTextColor="#999"
-                                    keyboardType="phone-pad"
-                                />
-                            </View>
+                        <View style={styles.editForm}>
+                            <Text style={styles.inputLabel}>ชื่อสาขา</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={editName}
+                                onChangeText={setEditName}
+                                placeholder="ชื่อร้านของคุณ"
+                            />
+                            <Text style={styles.inputLabel}>เบอร์โทร</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={editPhone}
+                                onChangeText={setEditPhone}
+                                placeholder="เบอร์โทรติดต่อ"
+                                keyboardType="phone-pad"
+                            />
+                            <Text style={styles.inputLabel}>ที่อยู่</Text>
+                            <TextInput
+                                style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
+                                value={editAddress}
+                                onChangeText={setEditAddress}
+                                placeholder="ที่อยู่ร้าน"
+                                multiline
+                            />
                             <View style={styles.editActions}>
                                 <TouchableOpacity
-                                    style={styles.cancelEditBtn}
-                                    onPress={() => {
-                                        setIsEditing(false);
-                                        setEditName(branch?.name || '');
-                                        setEditAddress(branch?.address || '');
-                                        setEditPhone(branch?.phone || '');
-                                    }}
+                                    style={styles.cancelBtn}
+                                    onPress={() => setIsEditing(false)}
                                 >
-                                    <Text style={styles.cancelEditBtnText}>ยกเลิก</Text>
+                                    <Text style={styles.cancelBtnText}>ยกเลิก</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity
-                                    style={[styles.saveEditBtn, savingBranch && styles.saveEditBtnDisabled]}
+                                    style={styles.saveBtn}
                                     onPress={handleSaveBranchInfo}
                                     disabled={savingBranch}
                                 >
-                                    {savingBranch ? (
-                                        <ActivityIndicator size="small" color="#fff" />
-                                    ) : (
-                                        <Text style={styles.saveEditBtnText}>บันทึก</Text>
-                                    )}
+                                    {savingBranch ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>บันทึก</Text>}
                                 </TouchableOpacity>
                             </View>
                         </View>
                     ) : (
                         <>
-                            <Text style={styles.branchName}>{branch?.name}</Text>
-                            {branch?.address && (
-                                <Text style={styles.branchAddress}>{branch.address}</Text>
-                            )}
+                            <Text style={styles.storeName}>{branch?.name}</Text>
+                            <Text style={styles.storeAddress}>{branch?.address || 'ไม่มีที่อยู่'}</Text>
+                            {branch?.phone && <Text style={styles.storePhone}>{branch.phone}</Text>}
+
                             {isOwner && (
-                                <TouchableOpacity
-                                    style={styles.editBranchBtn}
-                                    onPress={() => setIsEditing(true)}
-                                >
-                                    <Ionicons name="pencil" size={16} color="#007AFF" />
-                                    <Text style={styles.editBranchBtnText}>แก้ไขข้อมูล</Text>
+                                <TouchableOpacity style={styles.editLinkBtn} onPress={() => setIsEditing(true)}>
+                                    <Ionicons name="create-outline" size={16} color={THEME_COLOR} />
+                                    <Text style={styles.editLinkText}>แก้ไขข้อมูล</Text>
                                 </TouchableOpacity>
                             )}
                         </>
                     )}
                 </View>
 
-                {/* Store Access Section */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Ionicons name="desktop-outline" size={20} color="#666" />
-                        <Text style={styles.sectionLabel}>STORE ACCESS</Text>
-                    </View>
-
+                {/* 2. Primary Action Button */}
+                {!isEditing && (
                     <TouchableOpacity
-                        style={styles.accessButton}
+                        style={styles.primaryActionBtn}
                         onPress={() => onEnterPOS && onEnterPOS(branch)}
                     >
-                        <Text style={styles.accessButtonText}>จัดการระบบภายใน</Text>
-                        <Ionicons name="open-outline" size={20} color="#007AFF" />
+                        <View style={styles.primaryActionIcon}>
+                            <Ionicons name="cart" size={32} color="#fff" />
+                        </View>
+                        <View>
+                            <Text style={styles.primaryActionTitle}>เข้าสู่ระบบขายหน้าร้าน</Text>
+                            <Text style={styles.primaryActionSubtitle}>กดเพื่อเริ่มขายทันที</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={24} color="#fff" style={{ marginLeft: 'auto' }} />
                     </TouchableOpacity>
-                </View>
+                )}
 
-                {/* PromptPay Settings Section */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <MaterialCommunityIcons name="qrcode-scan" size={20} color="#666" />
-                        <Text style={styles.sectionLabel}>ตั้งค่าพร้อมเพย์ (รับเงิน QR)</Text>
+                {/* 3. Settings Cards */}
+                <Text style={styles.sectionHeader}>การตั้งค่า</Text>
+
+                {/* PromptPay Card */}
+                <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                        <View style={[styles.cardIcon, { backgroundColor: '#E3F2FD' }]}>
+                            <MaterialCommunityIcons name="qrcode-scan" size={24} color="#2196F3" />
+                        </View>
+                        <Text style={styles.cardTitle}>PromptPay (รับเงิน QR)</Text>
                     </View>
 
                     {ppFetching ? (
-                        <ActivityIndicator size="small" color="#666" />
+                        <ActivityIndicator />
+                    ) : isEditingPromptPay ? (
+                        <View style={styles.cardContent}>
+                            <Text style={styles.inputLabel}>ชื่อบัญชี / ชื่อร้าน</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={ppName}
+                                onChangeText={setPpName}
+                                placeholder="เช่น นายสมชาย ขายดี"
+                            />
+                            <Text style={styles.inputLabel}>เลขพร้อมเพย์ / เบอร์โทร</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={ppId}
+                                onChangeText={setPpId}
+                                placeholder="เช่น 0812345678"
+                                keyboardType="number-pad"
+                            />
+                            <View style={styles.typeSelector}>
+                                <TouchableOpacity
+                                    style={[styles.typeBtn, ppType === 'phone' && styles.typeBtnActive]}
+                                    onPress={() => setPpType('phone')}
+                                >
+                                    <Text style={[styles.typeBtnText, ppType === 'phone' && styles.typeBtnTextActive]}>เบอร์โทร</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.typeBtn, ppType === 'id_card' && styles.typeBtnActive]}
+                                    onPress={() => setPpType('id_card')}
+                                >
+                                    <Text style={[styles.typeBtnText, ppType === 'id_card' && styles.typeBtnTextActive]}>เลขบัตร ปชช.</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={styles.editActions}>
+                                <TouchableOpacity
+                                    style={styles.cancelBtn}
+                                    onPress={() => setIsEditingPromptPay(false)}
+                                >
+                                    <Text style={styles.cancelBtnText}>ยกเลิก</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.saveBtn}
+                                    onPress={handleUpdatePromptPay}
+                                    disabled={ppLoading}
+                                >
+                                    {ppLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>บันทึก</Text>}
+                                </TouchableOpacity>
+                            </View>
+                        </View>
                     ) : (
-                        <View style={styles.promptpayContainer}>
-                            {/* Read-Only View */}
-                            {!isEditingPromptPay && ppId ? (
-                                <View>
-                                    <View style={styles.inputGroup}>
-                                        <Text style={styles.inputLabel}>ชื่อบัญชี</Text>
-                                        <Text style={{ fontSize: 16, color: '#333', paddingVertical: 8 }}>{ppName}</Text>
-                                    </View>
-                                    <View style={styles.inputGroup}>
-                                        <Text style={styles.inputLabel}>เลขที่บัญชี ({ppType === 'phone' ? 'เบอร์โทรศัพท์' : 'เลขบัตรประชาชน'})</Text>
-                                        <Text style={{ fontSize: 16, color: '#333', paddingVertical: 8 }}>{ppId}</Text>
-                                    </View>
-                                    {isOwner && (
-                                        <TouchableOpacity
-                                            style={[styles.saveBtn, { backgroundColor: '#52616B', marginTop: 10 }]}
-                                            onPress={() => setIsEditingPromptPay(true)}
-                                        >
-                                            <Text style={styles.saveBtnText}>แก้ไขข้อมูล</Text>
-                                        </TouchableOpacity>
-                                    )}
-                                </View>
-                            ) : (
-                                /* Edit Form */
-                                <View>
-                                    <View style={styles.inputGroup}>
-                                        <Text style={styles.inputLabel}>ชื่อบัญชี</Text>
-                                        <TextInput
-                                            style={[styles.input, !isOwner && styles.inputDisabled]}
-                                            value={ppName}
-                                            onChangeText={setPpName}
-                                            placeholder="ชื่อ-นามสกุล"
-                                            editable={isOwner}
-                                        />
-                                    </View>
-
-                                    <View style={styles.inputGroup}>
-                                        <Text style={styles.inputLabel}>เลขที่บัญชี (เบอร์โทร/เลขบัตร ปชช.)</Text>
-                                        <TextInput
-                                            style={[styles.input, !isOwner && styles.inputDisabled]}
-                                            value={ppId}
-                                            onChangeText={setPpId}
-                                            placeholder="08x-xxx-xxxx"
-                                            keyboardType="numeric"
-                                            editable={isOwner}
-                                        />
-                                        {!isOwner && <Text style={styles.helperText}>* เฉพาะเจ้าของร้านเท่านั้นที่แก้ไขได้</Text>}
-                                    </View>
-
-                                    <View style={styles.typeSelector}>
-                                        <TouchableOpacity
-                                            style={[styles.typeBtn, ppType === 'phone' && styles.typeBtnActive]}
-                                            onPress={() => isOwner && setPpType('phone')}
-                                            disabled={!isOwner}
-                                        >
-                                            <Text style={[styles.typeBtnText, ppType === 'phone' && styles.typeBtnTextActive]}>เบอร์โทรศัพท์</Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            style={[styles.typeBtn, ppType === 'id_card' && styles.typeBtnActive]}
-                                            onPress={() => isOwner && setPpType('id_card')}
-                                            disabled={!isOwner}
-                                        >
-                                            <Text style={[styles.typeBtnText, ppType === 'id_card' && styles.typeBtnTextActive]}>เลขบัตรประชาชน</Text>
-                                        </TouchableOpacity>
-                                    </View>
-
-                                    {isOwner && (
-                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
-                                            {ppId ? (
-                                                <TouchableOpacity
-                                                    style={[styles.saveBtn, { flex: 1, marginRight: 8, backgroundColor: '#999' }]}
-                                                    onPress={() => {
-                                                        setIsEditingPromptPay(false);
-                                                        fetchPromptPaySettings(); // Reset changes
-                                                    }}
-                                                    disabled={ppLoading}
-                                                >
-                                                    <Text style={styles.saveBtnText}>ยกเลิก</Text>
-                                                </TouchableOpacity>
-                                            ) : null}
-
-                                            <TouchableOpacity
-                                                style={[styles.saveBtn, { flex: 1, marginLeft: ppId ? 8 : 0 }, ppLoading && styles.saveBtnDisabled]}
-                                                onPress={async () => {
-                                                    await handleUpdatePromptPay();
-                                                    setIsEditingPromptPay(false);
-                                                }}
-                                                disabled={ppLoading}
-                                            >
-                                                {ppLoading ? (
-                                                    <ActivityIndicator size="small" color="#fff" />
-                                                ) : (
-                                                    <Text style={styles.saveBtnText}>บันทึก</Text>
-                                                )}
-                                            </TouchableOpacity>
-                                        </View>
-                                    )}
-                                </View>
+                        <View style={styles.cardContent}>
+                            <InfoRow
+                                icon="person-outline"
+                                label="ชื่อบัญชี"
+                                value={ppName || 'ยังไม่ตั้งค่า'}
+                            />
+                            <InfoRow
+                                icon={ppType === 'phone' ? 'call-outline' : 'card-outline'}
+                                label={ppType === 'phone' ? 'เบอร์โทรศัพท์' : 'เลขบัตร ปชช.'}
+                                value={ppId || 'ยังไม่ตั้งค่า'}
+                            />
+                            {isOwner && (
+                                <TouchableOpacity style={styles.cardActionBtn} onPress={() => setIsEditingPromptPay(true)}>
+                                    <Text style={styles.cardActionText}>ตั้งค่า PromptPay</Text>
+                                </TouchableOpacity>
                             )}
                         </View>
                     )}
                 </View>
 
-                {/* Credentials Section */}
-                <View style={styles.section}>
-                    <Text style={styles.credentialsTitle}>บัญชีผู้จัดการ (Manager Account)</Text>
+                {/* Manager Account Card */}
+                <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                        <View style={[styles.cardIcon, { backgroundColor: '#FFF3E0' }]}>
+                            <Ionicons name="key-outline" size={24} color={THEME_COLOR} />
+                        </View>
+                        <Text style={styles.cardTitle}>บัญชีผู้จัดการ</Text>
+                    </View>
 
                     {loading ? (
-                        <ActivityIndicator size="small" color="#666" style={{ marginTop: 20 }} />
+                        <ActivityIndicator />
                     ) : credentials ? (
-                        <>
-                            <View style={styles.credentialRow}>
-                                <Text style={styles.credentialLabel}>Email ผู้จัดการ</Text>
-                                <View style={styles.credentialValue}>
-                                    <Text style={styles.credentialText}>{credentials.email}</Text>
-                                    <TouchableOpacity
-                                        onPress={() => copyToClipboard(credentials.email, 'Email')}
-                                        style={styles.copyBtn}
-                                    >
-                                        <Ionicons name="copy-outline" size={20} color="#007AFF" />
-                                    </TouchableOpacity>
+                        <View style={styles.cardContent}>
+                            <InfoRow
+                                icon="mail-outline"
+                                label="Email"
+                                value={credentials.email}
+                                onCopy={() => copyToClipboard(credentials.email, 'Email')}
+                            />
+                            <View style={styles.infoRow}>
+                                <View style={styles.infoRowIcon}>
+                                    <Ionicons name="lock-closed-outline" size={20} color="#666" />
                                 </View>
-                            </View>
-
-                            <View style={styles.credentialRow}>
-                                <Text style={styles.credentialLabel}>รหัสผ่าน</Text>
-                                <View style={styles.credentialValue}>
-                                    <Text style={styles.credentialText}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.infoRowLabel}>รหัสผ่าน</Text>
+                                    <Text style={styles.infoRowValue}>
                                         {showPassword ? credentials.password : '••••••••••'}
                                     </Text>
-                                    <TouchableOpacity
-                                        onPress={() => setShowPassword(!showPassword)}
-                                        style={styles.copyBtn}
-                                    >
-                                        <Ionicons
-                                            name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                                            size={20}
-                                            color="#666"
-                                        />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        onPress={() => copyToClipboard(credentials.password, 'รหัสผ่าน')}
-                                        style={styles.copyBtn}
-                                    >
-                                        <Ionicons name="copy-outline" size={20} color="#007AFF" />
-                                    </TouchableOpacity>
                                 </View>
+                                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.iconBtn}>
+                                    <Ionicons
+                                        name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                                        size={20}
+                                        color={THEME_COLOR}
+                                    />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => copyToClipboard(credentials.password, 'รหัสผ่าน')} style={styles.iconBtn}>
+                                    <Ionicons name="copy-outline" size={20} color={THEME_COLOR} />
+                                </TouchableOpacity>
                             </View>
 
                             {isOwner && (
-                                <TouchableOpacity
-                                    style={styles.resetBtn}
-                                    onPress={handleResetCredentials}
-                                >
-                                    <Ionicons name="refresh-outline" size={18} color="#FF3B30" />
-                                    <Text style={styles.resetBtnText}>รีเซ็ตข้อมูลเข้าสู่ระบบ</Text>
+                                <TouchableOpacity style={styles.textActionBtn} onPress={handleResetCredentials}>
+                                    <Text style={[styles.textActionLabel, { color: '#FF3B30' }]}>รีเซ็ตรหัสผ่าน</Text>
                                 </TouchableOpacity>
                             )}
-                        </>
+                        </View>
                     ) : (
-                        <View style={styles.noCredentials}>
-                            <Ionicons name="alert-circle-outline" size={40} color="#999" />
-                            <Text style={styles.noCredentialsText}>ยังไม่มีข้อมูลผู้จัดการ</Text>
+                        <View style={styles.cardContent}>
+                            <Text style={styles.emptyText}>ยังไม่มีข้อมูลบัญชีผู้จัดการ</Text>
                         </View>
                     )}
                 </View>
 
-                {/* Delete Branch Section - Owner Only */}
+                {/* Danger Zone */}
                 {isOwner && (
-                    <View style={styles.dangerSection}>
-                        <View style={styles.sectionHeader}>
-                            <Ionicons name="warning-outline" size={20} color="#FF3B30" />
-                            <Text style={[styles.sectionLabel, { color: '#FF3B30' }]}>DANGER ZONE</Text>
-                        </View>
-                        <TouchableOpacity
-                            style={[styles.deleteBtn, deleting && styles.deleteBtnDisabled]}
-                            onPress={handleDeleteBranch}
-                            disabled={deleting}
-                        >
-                            {deleting ? (
-                                <ActivityIndicator size="small" color="#fff" />
-                            ) : (
-                                <>
-                                    <Ionicons name="trash-outline" size={20} color="#fff" />
-                                    <Text style={styles.deleteBtnText}>ลบสาขานี้</Text>
-                                </>
-                            )}
-                        </TouchableOpacity>
-                        <Text style={styles.deleteWarning}>
-                            การลบสาขาจะลบข้อมูลทั้งหมดอย่างถาวร รวมถึงสินค้า, ออเดอร์, และบัญชีผู้จัดการ
-                        </Text>
-                    </View>
+                    <TouchableOpacity
+                        style={styles.deleteLink}
+                        onPress={handleDeleteBranch}
+                        disabled={deleting}
+                    >
+                        {deleting ? <ActivityIndicator color="#FF3B30" /> : (
+                            <>
+                                <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                                <Text style={styles.deleteLinkText}>ลบสาขานี้</Text>
+                            </>
+                        )}
+                    </TouchableOpacity>
                 )}
 
                 <View style={{ height: 40 }} />
             </ScrollView>
-        </SafeAreaView >
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: BG_COLOR,
     },
     header: {
         flexDirection: 'row',
@@ -616,293 +525,295 @@ const styles = StyleSheet.create({
         padding: 8,
     },
     headerTitle: {
-        fontSize: 17,
-        fontWeight: '600',
-        color: '#333',
-    },
-    menuBtn: {
-        padding: 8,
-    },
-    infoCard: {
-        backgroundColor: '#fff',
-        alignItems: 'center',
-        paddingVertical: 30,
-        paddingHorizontal: 20,
-    },
-    branchIcon: {
-        width: 80,
-        height: 80,
-        borderRadius: 20,
-        backgroundColor: '#f0f0f0',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    branchName: {
-        fontSize: 22,
+        fontSize: 18,
         fontWeight: 'bold',
-        color: '#1E2022',
-    },
-    branchAddress: {
-        fontSize: 14,
-        color: '#666',
-        marginTop: 6,
-        textAlign: 'center',
-    },
-    section: {
-        backgroundColor: '#fff',
-        marginTop: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 16,
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    sectionLabel: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#666',
-        marginLeft: 8,
-        letterSpacing: 0.5,
-    },
-    accessButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#f5f5f5',
-        padding: 16,
-        borderRadius: 10,
-    },
-    accessButtonText: {
-        fontSize: 16,
-        fontWeight: '500',
         color: '#333',
     },
-    credentialsTitle: {
-        fontSize: 13,
-        color: '#999',
-        marginBottom: 16,
+    scrollContent: {
+        padding: 16,
     },
-    credentialRow: {
+    // Hero Section
+    heroSection: {
+        alignItems: 'center',
         marginBottom: 20,
     },
-    credentialLabel: {
-        fontSize: 13,
-        color: '#666',
-        marginBottom: 8,
+    storeIconContainer: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: '#fff',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#eee',
+        // Shadow
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
     },
-    credentialValue: {
+    storeName: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: '#333',
+        textAlign: 'center',
+        marginBottom: 4,
+    },
+    storeAddress: {
+        fontSize: 14,
+        color: '#666',
+        textAlign: 'center',
+        maxWidth: '80%',
+        lineHeight: 20,
+    },
+    storePhone: {
+        fontSize: 14,
+        color: '#666',
+        textAlign: 'center',
+        marginTop: 4,
+    },
+    editLinkBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#f5f5f5',
-        padding: 14,
-        borderRadius: 10,
+        marginTop: 10,
+        backgroundColor: '#fff',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#eee',
     },
-    credentialText: {
-        flex: 1,
+    editLinkText: {
+        marginLeft: 4,
+        color: THEME_COLOR,
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    // Primary Action
+    primaryActionBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: THEME_COLOR,
+        borderRadius: 16,
+        padding: 20,
+        marginBottom: 24,
+        shadowColor: THEME_COLOR,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 6,
+    },
+    primaryActionIcon: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 16,
+    },
+    primaryActionTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#fff',
+        marginBottom: 4,
+    },
+    primaryActionSubtitle: {
+        fontSize: 14,
+        color: 'rgba(255,255,255,0.9)',
+    },
+    // Section Headers
+    sectionHeader: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#333',
+        marginBottom: 12,
+        marginLeft: 4,
+    },
+    // Cards
+    card: {
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        marginBottom: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+        overflow: 'hidden',
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f0f0f0',
+    },
+    cardIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    cardTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#333',
+    },
+    cardContent: {
+        padding: 16,
+    },
+    // Info Rows
+    infoRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    infoRowIcon: {
+        width: 30,
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    infoRowLabel: {
+        fontSize: 12,
+        color: '#999',
+        marginBottom: 2,
+    },
+    infoRowValue: {
         fontSize: 15,
         color: '#333',
     },
-    copyBtn: {
-        padding: 6,
-        marginLeft: 8,
+    iconBtn: {
+        padding: 8,
     },
-    resetBtn: {
-        flexDirection: 'row',
+    cardActionBtn: {
+        backgroundColor: '#fff',
+        borderWidth: 1,
+        borderColor: THEME_COLOR,
+        paddingVertical: 12,
+        borderRadius: 10,
         alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 14,
-        marginTop: 10,
+        marginTop: 8,
     },
-    resetBtnText: {
+    cardActionText: {
+        color: THEME_COLOR,
         fontSize: 14,
-        color: '#FF3B30',
-        marginLeft: 8,
+        fontWeight: '600',
     },
-    noCredentials: {
+    textActionBtn: {
         alignItems: 'center',
-        paddingVertical: 30,
+        paddingVertical: 8,
     },
-    noCredentialsText: {
+    textActionLabel: {
         fontSize: 14,
+        fontWeight: '600',
+    },
+    emptyText: {
+        textAlign: 'center',
         color: '#999',
-        marginTop: 12,
+        fontStyle: 'italic',
+        paddingVertical: 10,
     },
-    // PromptPay Styles
-    promptpayContainer: {
-        marginTop: 5,
-    },
-    inputGroup: {
-        marginBottom: 15,
+    // Forms
+    editForm: {
+        width: '100%',
+        backgroundColor: '#fff',
+        padding: 20,
+        borderRadius: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
     },
     inputLabel: {
         fontSize: 13,
         color: '#666',
-        marginBottom: 6,
+        marginBottom: 8,
+        fontWeight: '500',
     },
     input: {
-        backgroundColor: '#f5f5f5',
-        padding: 12,
+        backgroundColor: '#F5F5F5',
         borderRadius: 10,
-        fontSize: 15,
+        padding: 12,
+        fontSize: 16,
         color: '#333',
+        marginBottom: 16,
         borderWidth: 1,
         borderColor: '#eee',
     },
-    inputDisabled: {
-        color: '#999',
-        backgroundColor: '#fafafa',
+    editActions: {
+        flexDirection: 'row',
+        gap: 12,
+        marginTop: 8,
     },
-    helperText: {
-        fontSize: 11,
-        color: '#FF9500',
-        marginTop: 4,
+    cancelBtn: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: 10,
+        backgroundColor: '#f0f0f0',
+        alignItems: 'center',
+    },
+    cancelBtnText: {
+        color: '#666',
+        fontWeight: '600',
+    },
+    saveBtn: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: 10,
+        backgroundColor: THEME_COLOR,
+        alignItems: 'center',
+    },
+    saveBtnText: {
+        color: '#fff',
+        fontWeight: '600',
     },
     typeSelector: {
         flexDirection: 'row',
-        gap: 10,
-        marginBottom: 20,
+        marginBottom: 16,
+        backgroundColor: '#f5f5f5',
+        borderRadius: 10,
+        padding: 4,
     },
     typeBtn: {
         flex: 1,
-        paddingVertical: 10,
+        paddingVertical: 8,
         alignItems: 'center',
-        backgroundColor: '#f5f5f5',
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: '#eee',
+        borderRadius: 8,
     },
     typeBtnActive: {
-        backgroundColor: '#E3F2FD',
-        borderColor: '#2196F3',
+        backgroundColor: '#fff',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 1,
     },
     typeBtnText: {
         fontSize: 13,
         color: '#666',
     },
     typeBtnTextActive: {
-        color: '#2196F3',
-        fontWeight: 'bold',
+        color: THEME_COLOR,
+        fontWeight: '600',
     },
-    saveBtn: {
-        backgroundColor: '#2196F3',
-        paddingVertical: 15,
-        borderRadius: 12,
-        alignItems: 'center',
-        shadowColor: '#2196F3',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 5,
-        elevation: 3,
-    },
-    saveBtnDisabled: {
-        backgroundColor: '#B0BEC5',
-    },
-    saveBtnText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-    // Danger Section Styles
-    dangerSection: {
-        backgroundColor: '#fff',
-        marginTop: 24,
-        paddingHorizontal: 16,
-        paddingVertical: 16,
-        borderTopWidth: 1,
-        borderTopColor: '#FFE0E0',
-    },
-    deleteBtn: {
+    // Danger Zone
+    deleteLink: {
         flexDirection: 'row',
-        alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#FF3B30',
+        alignItems: 'center',
+        marginTop: 20,
         padding: 16,
-        borderRadius: 12,
-        gap: 8,
     },
-    deleteBtnDisabled: {
-        backgroundColor: '#FFB0AB',
-    },
-    deleteBtnText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    deleteWarning: {
-        fontSize: 12,
-        color: '#999',
-        textAlign: 'center',
-        marginTop: 12,
-        lineHeight: 18,
-    },
-    // Edit Branch Styles
-    editContainer: {
-        width: '100%',
-        paddingHorizontal: 10,
-    },
-    editInputGroup: {
-        marginBottom: 12,
-    },
-    editLabel: {
-        fontSize: 13,
-        color: '#666',
-        marginBottom: 6,
-    },
-    editInput: {
-        backgroundColor: '#f5f5f5',
-        borderRadius: 10,
-        padding: 12,
-        fontSize: 15,
-        color: '#333',
-        borderWidth: 1,
-        borderColor: '#e0e0e0',
-    },
-    editInputMultiline: {
-        minHeight: 60,
-        textAlignVertical: 'top',
-    },
-    editActions: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        gap: 12,
-        marginTop: 8,
-    },
-    cancelEditBtn: {
-        paddingVertical: 12,
-        paddingHorizontal: 24,
-        borderRadius: 10,
-        backgroundColor: '#f0f0f0',
-    },
-    cancelEditBtnText: {
-        color: '#666',
-        fontSize: 15,
-        fontWeight: '500',
-    },
-    saveEditBtn: {
-        paddingVertical: 12,
-        paddingHorizontal: 24,
-        borderRadius: 10,
-        backgroundColor: '#007AFF',
-    },
-    saveEditBtnDisabled: {
-        backgroundColor: '#B0C4DE',
-    },
-    saveEditBtnText: {
-        color: '#fff',
-        fontSize: 15,
-        fontWeight: '600',
-    },
-    editBranchBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 12,
-        gap: 6,
-    },
-    editBranchBtnText: {
-        color: '#007AFF',
+    deleteLinkText: {
+        color: '#FF3B30',
+        marginLeft: 8,
         fontSize: 14,
+        fontWeight: '500',
     },
 });

@@ -278,7 +278,7 @@ export default function App() {
   // Main app wrap
   return (
     <SafeAreaProvider>
-      <StoreProvider profile={authData?.profile}>
+      <StoreProvider profile={authData?.profile} store={selectedBranch}>
         {renderContent()}
       </StoreProvider>
     </SafeAreaProvider>

@@ -7,8 +7,8 @@ import { useNotificationStore } from "../stores/useNotificationStore";
 
 const StoreContext = createContext();
 
-export function StoreProvider({ children, profile }) {
-    const [currentStore, setCurrentStore] = useState(null);
+export function StoreProvider({ children, profile, store }) {
+    const [currentStore, setCurrentStore] = useState(store);
     const [stores, setStores] = useState([]);
     const [userProfile, setUserProfile] = useState(profile);
     const prevStoreId = useRef(null);
@@ -16,6 +16,13 @@ export function StoreProvider({ children, profile }) {
     useEffect(() => {
         setUserProfile(profile);
     }, [profile]);
+
+    // Sync internal state when prop changes
+    useEffect(() => {
+        if (store) {
+            setCurrentStore(store);
+        }
+    }, [store]);
 
     // Sync store ID to API service whenever currentStore changes
     // Also clear all relevant caches when switching stores
