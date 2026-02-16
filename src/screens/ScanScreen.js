@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Vibration, ActivityIndicator, Dimensions, Image, TextInput, ScrollView, FlatList, Animated, Platform, Modal, TouchableWithoutFeedback, Keyboard, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Vibration, ActivityIndicator, Dimensions, Image, TextInput, ScrollView, FlatList, Animated, Platform, Modal, TouchableWithoutFeedback, Keyboard, KeyboardAvoidingView, PanResponder } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Audio } from 'expo-av';
 import { Ionicons, FontAwesome5, MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 
 // Stores
@@ -27,11 +27,11 @@ const { width, height } = Dimensions.get('window');
 // Weight Data (Mock from SaleScreen)
 // Weight Data (Fixed Categories per user request)
 const FIXED_WEIGHT_CATEGORIES = [
-    { id: 'meats', name: 'เนื้อสัตว์', keywords: ['เนื้อ', 'หมู', 'ไก่', 'เป็ด', 'เครื่องใน', 'ลูกชิ้น', 'ไส้กรอก'] },
-    { id: 'seafood', name: 'ทะเล', keywords: ['ทะเล', 'กุ้ง', 'หมึก', 'ปลา', 'หอย', 'ปู'] },
-    { id: 'veg', name: 'ผัก', keywords: ['ผัก'] },
-    { id: 'fruit', name: 'ผลไม้', keywords: ['ผลไม้'] },
-    { id: 'dried', name: 'ของแห้ง/อื่นๆ', keywords: ['แห้ง', 'ข้าว', 'ธัญพืช', 'กระเทียม', 'หอม', 'พริก', 'กะปิ', 'อาหารสัตว์'] },
+    { id: 'meats', name: 'เนื้อสัตว์', emoji: '🥩', keywords: ['เนื้อ', 'หมู', 'ไก่', 'เป็ด', 'เครื่องใน', 'ลูกชิ้น', 'ไส้กรอก'] },
+    { id: 'seafood', name: 'ทะเล', emoji: '🦐', keywords: ['ทะเล', 'กุ้ง', 'หมึก', 'ปลา', 'หอย', 'ปู'] },
+    { id: 'veg', name: 'ผัก', emoji: '🥬', keywords: ['ผัก'] },
+    { id: 'fruit', name: 'ผลไม้', emoji: '🍎', keywords: ['ผลไม้'] },
+    { id: 'dried', name: 'อื่นๆ', emoji: '🌾', keywords: ['แห้ง', 'ข้าว', 'ธัญพืช', 'กระเทียม', 'หอม', 'พริก', 'กะปิ', 'อาหารสัตว์'] },
 ];
 
 const WEIGHT_UNITS = [
@@ -105,6 +105,7 @@ export default function ScanScreen({ navigation, route }) {
     const [selectedItem, setSelectedItem] = useState(null);
     const [weightInput, setWeightInput] = useState('1.0');
     const [selectedUnit, setSelectedUnit] = useState(WEIGHT_UNITS[0]);
+    const [showWeightInputModal, setShowWeightInputModal] = useState(false);
 
     // Computed Weight Categories
     const weightCategories = useMemo(() => {
@@ -143,12 +144,12 @@ export default function ScanScreen({ navigation, route }) {
         }
     }, [activeTab]);
 
-    // Auto-select first item when category changes or products load
+    // Clear selected item only if it's not in the current category
     useEffect(() => {
         if (currentWeightCategory && currentWeightCategory.items && currentWeightCategory.items.length > 0) {
-            // Only auto-select if no item selected or current item not in category
-            if (!selectedItem || !currentWeightCategory.items.find(i => i.id === selectedItem.id)) {
-                setSelectedItem(currentWeightCategory.items[0]);
+            // If current selected item is NOT in this category, clear it
+            if (selectedItem && !currentWeightCategory.items.find(i => i.id === selectedItem.id)) {
+                setSelectedItem(null);
             }
         } else {
             setSelectedItem(null);
@@ -158,6 +159,61 @@ export default function ScanScreen({ navigation, route }) {
     // --- State: Modals ---
     const [quantityModalVisible, setQuantityModalVisible] = useState(false);
     const [selectedProductToAdd, setSelectedProductToAdd] = useState(null);
+    const [showCartModal, setShowCartModal] = useState(false); // New: Cart Modal Visibility
+
+    // --- Draggable FAB ---
+    const fabPan = useRef(new Animated.ValueXY({ x: width - 80, y: height - 300 })).current;
+    const fabPanOffset = useRef({ x: width - 80, y: height - 300 });
+    const isDraggingFab = useRef(false);
+
+    const fabPanResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: (_, gestureState) => {
+                return Math.abs(gestureState.dx) > 5 || Math.abs(gestureState.dy) > 5;
+            },
+            onPanResponderGrant: () => {
+                isDraggingFab.current = false;
+                fabPan.setOffset({
+                    x: fabPanOffset.current.x,
+                    y: fabPanOffset.current.y,
+                });
+                fabPan.setValue({ x: 0, y: 0 });
+            },
+            onPanResponderMove: (_, gestureState) => {
+                if (Math.abs(gestureState.dx) > 5 || Math.abs(gestureState.dy) > 5) {
+                    isDraggingFab.current = true;
+                }
+                const newX = fabPanOffset.current.x + gestureState.dx;
+                const newY = fabPanOffset.current.y + gestureState.dy;
+                const clampedX = Math.max(10, Math.min(newX, width - 70));
+                const clampedY = Math.max(60, Math.min(newY, height - 200));
+                fabPan.setValue({
+                    x: clampedX - fabPanOffset.current.x,
+                    y: clampedY - fabPanOffset.current.y,
+                });
+            },
+            onPanResponderRelease: (_, gestureState) => {
+                fabPan.flattenOffset();
+                const currentX = fabPanOffset.current.x + gestureState.dx;
+                const currentY = fabPanOffset.current.y + gestureState.dy;
+                const clampedY = Math.max(60, Math.min(currentY, height - 200));
+                // Snap to nearest edge
+                const snapX = currentX < width / 2 ? 10 : width - 70;
+                fabPanOffset.current = { x: snapX, y: clampedY };
+                Animated.spring(fabPan, {
+                    toValue: { x: snapX, y: clampedY },
+                    useNativeDriver: false,
+                    friction: 7,
+                    tension: 40,
+                }).start();
+                // If not dragged, treat as tap
+                if (!isDraggingFab.current) {
+                    setShowCartModal(true);
+                }
+            },
+        })
+    ).current;
 
     // --- State: Add Product Modal ---
     const [showAddProductModal, setShowAddProductModal] = useState(false);
@@ -608,7 +664,7 @@ export default function ScanScreen({ navigation, route }) {
                 data={products}
                 keyExtractor={item => item.id}
                 style={styles.cartList}
-                contentContainerStyle={{ padding: 15, paddingBottom: 100 }}
+                contentContainerStyle={{ padding: 15, paddingBottom: 180 }}
                 ListEmptyComponent={
                     <View style={styles.emptyCart}>
                         <Text style={{ color: '#aaa' }}>ยังไม่มีสินค้าในตะกร้า</Text>
@@ -686,7 +742,7 @@ export default function ScanScreen({ navigation, route }) {
                     data={displayProducts}
                     numColumns={2}
                     keyExtractor={item => item.id}
-                    contentContainerStyle={{ padding: 10, paddingBottom: 100 }}
+                    contentContainerStyle={{ padding: 10, paddingBottom: 180 }}
                     columnWrapperStyle={{ justifyContent: 'space-between' }}
                     onEndReached={handleLoadMore}
                     renderItem={({ item }) => (
@@ -704,130 +760,212 @@ export default function ScanScreen({ navigation, route }) {
         );
     };
 
-    // 6. WEIGHT VIEW
+    // 6. WEIGHT VIEW — Clean UX Redesign
     const renderWeightView = () => {
         if (activeTab !== 'weight') return null;
-        const total = (parseFloat(weightInput) || 0) * selectedUnit.multiplier * (selectedItem?.price || 0);
+
+        const renderProductCard = (item) => {
+            const isSelected = selectedItem?.id === item.id;
+            return (
+                <TouchableOpacity
+                    key={item.id}
+                    style={[styles.wProductCard, isSelected && styles.wProductCardSelected]}
+                    onPress={() => {
+                        setSelectedItem(item);
+                        setWeightInput('1.0');
+                        setSelectedUnit(WEIGHT_UNITS[0]);
+                        setShowWeightInputModal(true);
+                    }}
+                    activeOpacity={0.7}
+                >
+                    <View style={styles.wCardImageWrap}>
+                        {item.image_url ? (
+                            <Image source={{ uri: item.image_url }} style={styles.wCardImage} />
+                        ) : (
+                            <View style={styles.wCardImagePlaceholder}>
+                                <Ionicons name="cube-outline" size={28} color="#ccc" />
+                            </View>
+                        )}
+                    </View>
+                    <Text style={styles.wCardName} numberOfLines={1}>{item.name}</Text>
+                    <Text style={styles.wCardPrice}>฿{item.price}<Text style={styles.wCardUnit}>/กก.</Text></Text>
+                </TouchableOpacity>
+            );
+        };
 
         return (
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-                <View style={{ flex: 1, padding: 20 }}>
-                    {/* Header with Add Product Button */}
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
-                        <Text style={{ fontSize: 18, fontWeight: 'bold' }}>รายการชั่งน้ำหนัก</Text>
-                        <TouchableOpacity
-                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F37021', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}
-                            onPress={() => setShowAddProductModal(true)}
-                        >
-                            <Ionicons name="add" size={16} color="#fff" style={{ marginRight: 4 }} />
-                            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 12 }}>เพิ่มสินค้า</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Categories */}
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 15 }}>
+            <View style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
+                {/* Category Bar — Horizontal Scroll */}
+                <View style={styles.wCategoryBar}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
                         {weightCategories?.map(cat => (
                             <TouchableOpacity
                                 key={cat.id}
-                                style={[styles.categoryPill, currentWeightCategory?.id === cat.id && styles.activeCategoryPill]}
-                                onPress={() => { setSelectedWeightCategory(cat); }}
+                                style={[styles.wCategoryChip, currentWeightCategory?.id === cat.id && styles.wCategoryChipActive]}
+                                onPress={() => setSelectedWeightCategory(cat)}
+                                activeOpacity={0.7}
                             >
-                                <Text style={[styles.categoryText, currentWeightCategory?.id === cat.id && styles.activeCategoryText]}>{cat.name}</Text>
+                                <Text style={styles.wCategoryEmoji}>{cat.emoji}</Text>
+                                <Text style={[styles.wCategoryLabel, currentWeightCategory?.id === cat.id && styles.wCategoryLabelActive]}>{cat.name}</Text>
                             </TouchableOpacity>
                         ))}
-                    </View>
-                    {/* Items */}
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 20 }}>
-                        {currentWeightCategory?.items?.map(item => (
-                            <TouchableOpacity
-                                key={item.id}
-                                style={[styles.itemPill, selectedItem?.id === item.id && styles.activeItemPill]}
-                                onPress={() => setSelectedItem(item)}
-                            >
-                                <Text style={[styles.itemText, selectedItem?.id === item.id && styles.activeItemText]}>{item.name}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
+                    </ScrollView>
+                </View>
 
-                    {/* Card */}
-                    {selectedItem && (
-                        <View style={styles.unifiedCard}>
-                            <Text style={styles.unifiedProductName}>{selectedItem.name}</Text>
-                            {selectedItem.is_promotion && selectedItem.original_price > selectedItem.price ? (
-                                <View style={{ alignItems: 'center', marginBottom: 15 }}>
-                                    <Text style={{ color: '#999', textDecorationLine: 'line-through', fontSize: 14 }}>
-                                        ฿{selectedItem.original_price}
-                                    </Text>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <Text style={{ color: '#F37021', fontWeight: 'bold', fontSize: 18 }}>
-                                            ฿{selectedItem.price}
-                                        </Text>
-                                        <Text style={{ color: '#666', fontSize: 14 }}> / {selectedUnit.label}</Text>
-                                    </View>
-                                    {selectedItem.promotion?.name && (
-                                        <Text style={{ color: '#F37021', fontSize: 12 }}>{selectedItem.promotion.name}</Text>
-                                    )}
-                                </View>
-                            ) : (
-                                <Text style={{ textAlign: 'center', color: '#666', marginBottom: 15 }}>฿{selectedItem.price} / {selectedUnit.label}</Text>
-                            )}
-                            <TextInput
-                                style={styles.unifiedInput}
-                                value={weightInput}
-                                onChangeText={setWeightInput}
-                                keyboardType="decimal-pad"
-                                textAlign="center"
-                            />
-                            <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 15, gap: 10 }}>
-                                {WEIGHT_UNITS.map(unit => (
-                                    <TouchableOpacity
-                                        key={unit.value}
-                                        style={[styles.unitQuickButton, selectedUnit.value === unit.value && styles.activeUnitQuickButton]}
-                                        onPress={() => setSelectedUnit(unit)}
-                                    >
-                                        <Text style={[styles.unitQuickText, selectedUnit.value === unit.value && styles.activeUnitQuickText]}>{unit.label}</Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
+                {/* Section Header */}
+                <View style={styles.wSectionHeader}>
+                    <Text style={styles.wSectionTitle}>{currentWeightCategory?.emoji} {currentWeightCategory?.name}</Text>
+                    <TouchableOpacity
+                        style={styles.wAddBtn}
+                        onPress={() => setShowAddProductModal(true)}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="add" size={18} color="#F37021" />
+                        <Text style={styles.wAddBtnText}>เพิ่ม</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Product Grid — 2 columns */}
+                {currentWeightCategory?.items?.length > 0 ? (
+                    <ScrollView
+                        contentContainerStyle={{ paddingBottom: 120 }}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        <View style={styles.wGridContainer}>
+                            {currentWeightCategory.items.map(item => renderProductCard(item))}
                         </View>
-                    )}
-                    {
-                        !selectedItem && (
-                            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                                <Text style={{ color: '#aaa' }}>กรุณาเลือกสินค้า หรือเพิ่มสินค้าใหม่</Text>
-                            </View>
-                        )
-                    }
+                    </ScrollView>
+                ) : (
+                    <View style={styles.wEmptyState}>
+                        <Ionicons name="basket-outline" size={48} color="#ddd" />
+                        <Text style={styles.wEmptyText}>ยังไม่มีสินค้าในหมวดนี้</Text>
+                        <TouchableOpacity
+                            style={styles.wEmptyAddBtn}
+                            onPress={() => setShowAddProductModal(true)}
+                        >
+                            <Ionicons name="add" size={16} color="#fff" />
+                            <Text style={styles.wEmptyAddText}>เพิ่มสินค้าตัวแรก</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+            </View>
+        );
+    };
 
-                    {/* Add Button */}
-                    {
-                        selectedItem && (
-                            <TouchableOpacity
-                                style={styles.addButtonData}
-                                onPress={() => {
-                                    const product = { ...selectedItem, unit: selectedUnit.label, isWeight: true };
-                                    // In real app, you might map this to a real DB product
-                                    const pricePerUnit = selectedItem.price * selectedUnit.multiplier;
+    // 6.5 WEIGHT INPUT MODAL
+    const renderWeightInputModal = () => {
+        if (!selectedItem) return null;
+        const total = (parseFloat(weightInput) || 0) * selectedUnit.multiplier * (selectedItem?.price || 0);
 
-                                    addToCart({
-                                        ...product,
-                                        id: `weight-${product.id}-${Date.now()}`, // Unique cart ID per entry
-                                        product_id: product.id, // Real UUID for backend
-                                        image: null,
-                                        price: pricePerUnit, // Adjusted price per unit (per g, per khid, etc.)
-                                        unit: selectedUnit.label, // "กรัม", "ขีด", "กิโลกรัม"
-                                        unit_code: selectedUnit.value, // "g", "h", "kg"
-                                        unit_type: selectedUnit.label // Legacy/Compat
-                                    }, parseFloat(weightInput));
-                                    Alert.alert('สำเร็จ', 'เพิ่มรายการชั่งน้ำหนักแล้ว');
-                                }}
+        return (
+            <Modal
+                visible={showWeightInputModal}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setShowWeightInputModal(false)}
+            >
+                <TouchableWithoutFeedback onPress={() => setShowWeightInputModal(false)}>
+                    <View style={styles.wModalOverlay}>
+                        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                            <KeyboardAvoidingView
+                                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                             >
-                                <Text style={styles.addButtonDataText}>เพิ่มใส่ตะกร้า • ฿{total.toFixed(0)}</Text>
-                            </TouchableOpacity>
-                        )
-                    }
-                </View >
-            </TouchableWithoutFeedback>
+                                <SafeAreaView edges={['bottom']} style={styles.wModalContent}>
+                                    {/* Handle indicator */}
+                                    <View style={styles.wModalHandle} />
+
+                                    {/* Product info header */}
+                                    <View style={styles.wModalHeader}>
+                                        <View style={styles.wModalImageWrap}>
+                                            {selectedItem.image_url ? (
+                                                <Image source={{ uri: selectedItem.image_url }} style={styles.wModalImage} />
+                                            ) : (
+                                                <View style={[styles.wModalImage, { backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }]}>
+                                                    <Ionicons name="cube-outline" size={24} color="#ccc" />
+                                                </View>
+                                            )}
+                                        </View>
+                                        <View style={{ flex: 1, marginLeft: 14 }}>
+                                            <Text style={styles.wModalName}>{selectedItem.name}</Text>
+                                            {selectedItem.is_promotion && selectedItem.original_price > selectedItem.price ? (
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                    <Text style={{ color: '#999', textDecorationLine: 'line-through', fontSize: 13 }}>฿{selectedItem.original_price}</Text>
+                                                    <Text style={styles.wModalPrice}>฿{selectedItem.price}<Text style={{ color: '#999', fontWeight: 'normal', fontSize: 13 }}> /{selectedUnit.label}</Text></Text>
+                                                </View>
+                                            ) : (
+                                                <Text style={styles.wModalPrice}>฿{selectedItem.price}<Text style={{ color: '#999', fontWeight: 'normal', fontSize: 13 }}> /{selectedUnit.label}</Text></Text>
+                                            )}
+                                        </View>
+                                        <TouchableOpacity onPress={() => setShowWeightInputModal(false)} style={styles.wModalCloseBtn}>
+                                            <Ionicons name="close" size={20} color="#999" />
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    {/* Weight Input */}
+                                    <View style={styles.wInputFieldWrap}>
+                                        <Ionicons name="scale-outline" size={20} color="#bbb" style={{ marginRight: 8 }} />
+                                        <TextInput
+                                            style={styles.wInputField}
+                                            value={weightInput}
+                                            onChangeText={setWeightInput}
+                                            keyboardType="decimal-pad"
+                                            placeholder="0.0"
+                                            placeholderTextColor="#ccc"
+                                            autoFocus={true}
+                                        />
+                                        <Text style={styles.wInputUnitLabel}>{selectedUnit.label}</Text>
+                                    </View>
+
+                                    {/* Unit Selector */}
+                                    <View style={styles.wUnitRow}>
+                                        {WEIGHT_UNITS.map(unit => (
+                                            <TouchableOpacity
+                                                key={unit.value}
+                                                style={[styles.wUnitBtn, selectedUnit.value === unit.value && styles.wUnitBtnActive]}
+                                                onPress={() => setSelectedUnit(unit)}
+                                            >
+                                                <Text style={[styles.wUnitBtnText, selectedUnit.value === unit.value && styles.wUnitBtnTextActive]}>{unit.label}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+
+                                    {/* Total + Add to Cart */}
+                                    <View style={styles.wModalTotal}>
+                                        <Text style={styles.wModalTotalLabel}>รวม</Text>
+                                        <Text style={styles.wModalTotalAmount}>฿{total.toFixed(0)}</Text>
+                                    </View>
+
+                                    <TouchableOpacity
+                                        style={styles.wCartBtn}
+                                        onPress={() => {
+                                            const product = { ...selectedItem, unit: selectedUnit.label, isWeight: true };
+                                            const pricePerUnit = selectedItem.price * selectedUnit.multiplier;
+                                            addToCart({
+                                                ...product,
+                                                id: `weight-${product.id}-${Date.now()}`,
+                                                product_id: product.id,
+                                                image: selectedItem.image_url || null,
+                                                image_url: selectedItem.image_url || null,
+                                                price: pricePerUnit,
+                                                unit: selectedUnit.label,
+                                                unit_code: selectedUnit.value,
+                                                unit_type: selectedUnit.label,
+                                            }, parseFloat(weightInput));
+                                            setShowWeightInputModal(false);
+                                            setSelectedItem(null);
+                                            Alert.alert('สำเร็จ', `เพิ่ม ${selectedItem.name} ${weightInput} ${selectedUnit.label} แล้ว`);
+                                        }}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Ionicons name="cart-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+                                        <Text style={styles.wCartBtnText}>เพิ่มใส่ตะกร้า</Text>
+                                    </TouchableOpacity>
+                                </SafeAreaView>
+                            </KeyboardAvoidingView>
+                        </TouchableWithoutFeedback>
+                    </View>
+                </TouchableWithoutFeedback>
+            </Modal>
         );
     };
 
@@ -1034,9 +1172,97 @@ export default function ScanScreen({ navigation, route }) {
     );
 
 
-    // 7. FOOTER (PAYMENT)
+    // 7. CART MODAL & FAB
+    const renderCartModal = () => (
+        <Modal
+            visible={showCartModal}
+            animationType="slide"
+            transparent={true}
+            onRequestClose={() => setShowCartModal(false)}
+        >
+            <View style={styles.modalOverlay}>
+                <View style={[styles.modalContainer, { maxHeight: height * 0.8 }]}>
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>ตะกร้าสินค้า ({products.length})</Text>
+                        <TouchableOpacity onPress={() => setShowCartModal(false)} style={styles.modalCloseButton}>
+                            <Ionicons name="close" size={24} color="#666" />
+                        </TouchableOpacity>
+                    </View>
+                    <FlatList
+                        data={products}
+                        keyExtractor={item => item.id}
+                        style={{ marginTop: 10 }}
+                        contentContainerStyle={{ paddingBottom: 20 }}
+                        ListEmptyComponent={<Text style={{ textAlign: 'center', color: '#999', marginTop: 20 }}>ไม่มีสินค้าในตะกร้า</Text>}
+                        renderItem={({ item }) => (
+                            <View style={styles.cartItem}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                                    <Image source={{ uri: item.image_url || item.image || 'https://via.placeholder.com/50' }} style={styles.cartItemImage} />
+                                    <View style={{ marginLeft: 10, flex: 1 }}>
+                                        <Text style={styles.cartItemName} numberOfLines={1}>{item.name}</Text>
+                                        <Text style={styles.cartItemPrice}>฿{item.price}</Text>
+                                    </View>
+                                </View>
+                                <View style={styles.qtyContainer}>
+                                    <TouchableOpacity onPress={() => handleDecreaseQty(item)} style={styles.qtyBtn}>
+                                        <Ionicons name={item.quantity > 1 ? "remove" : "trash"} size={16} color={item.quantity > 1 ? "#555" : "#FF3B30"} />
+                                    </TouchableOpacity>
+                                    <Text style={styles.qtyText}>{item.quantity}</Text>
+                                    <TouchableOpacity onPress={() => addToCart(item, 1)} style={styles.qtyBtn}><Ionicons name="add" size={16} color="#555" /></TouchableOpacity>
+                                </View>
+                            </View>
+                        )}
+                    />
+                    <View style={{ marginTop: 20, borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 15 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 }}>
+                            <Text style={{ fontSize: 18, fontWeight: 'bold' }}>รวมทั้งสิ้น</Text>
+                            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#F37021' }}>฿{totalAmount.toLocaleString()}</Text>
+                        </View>
+                        <TouchableOpacity
+                            style={[styles.payButton, { borderRadius: 12 }]}
+                            onPress={() => {
+                                setShowCartModal(false);
+                                setShowPaymentModal(true);
+                            }}
+                        >
+                            <Text style={[styles.payButtonText, { flex: 1, textAlign: 'center' }]}>ชำระเงิน</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        </Modal>
+    );
+
+    const renderFloatingCartButton = () => {
+        if (activeTab === 'scan') return null;
+        return (
+            <Animated.View
+                style={[
+                    styles.fab,
+                    {
+                        transform: fabPan.getTranslateTransform(),
+                        position: 'absolute',
+                        zIndex: 999,
+                    },
+                ]}
+                {...fabPanResponder.panHandlers}
+            >
+                {products.length > 0 && (
+                    <View style={styles.fabBadge}>
+                        <Text style={styles.fabBadgeText}>{products.length}</Text>
+                    </View>
+                )}
+                <Ionicons name="cart" size={24} color="#fff" />
+                {products.length > 0 && (
+                    <Text style={styles.fabAmountText}>฿{totalAmount.toLocaleString()}</Text>
+                )}
+            </Animated.View>
+        );
+    };
+
+    // 8. FOOTER (PAYMENT)
     const renderFooter = () => (
-        <View style={[styles.footer, { bottom: Platform.OS === 'ios' ? 50 : 50 }]}>
+        <View style={[styles.footer]}>
             <TouchableOpacity
                 style={styles.payButton}
                 onPress={() => setShowPaymentModal(true)}
@@ -1115,6 +1341,15 @@ export default function ScanScreen({ navigation, route }) {
 
             {/* Add Product Modal */}
             {renderAddProductModal()}
+
+            {/* Weight Input Modal */}
+            {renderWeightInputModal()}
+
+            {/* Cart Modal (New) */}
+            {renderCartModal()}
+
+            {/* Floating Cart Button (New) */}
+            {renderFloatingCartButton()}
         </View>
     );
 }
@@ -1131,7 +1366,7 @@ const styles = StyleSheet.create({
     activeTabText: { color: '#fff', fontWeight: 'bold' },
 
     // Camera (Middle 1)
-    cameraSection: { height: height * 0.25, backgroundColor: '#000', position: 'relative' },
+    cameraSection: { height: height * 0.20, backgroundColor: '#000', position: 'relative' },
     camera: { flex: 1 },
     cameraOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
     cameraOffView: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#222' },
@@ -1159,21 +1394,21 @@ const styles = StyleSheet.create({
     qtyText: { paddingHorizontal: 8, fontSize: 14, fontWeight: '600' },
 
     // Footer
-    footer: { position: 'absolute', bottom: 20, left: 0, right: 0, paddingHorizontal: 15, backgroundColor: 'transparent' },
+    footer: { position: 'absolute', bottom: 55, left: 0, right: 0, paddingHorizontal: 15, backgroundColor: 'transparent' },
     payButton: {
         backgroundColor: '#F37021',
         borderRadius: 50,
-        paddingVertical: 15,
-        paddingHorizontal: 20,
+        paddingVertical: 11,
+        paddingHorizontal: 16,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         shadowColor: '#F37021', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5
     },
-    itemCountBadge: { backgroundColor: '#fff', width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-    itemCountText: { color: '#F37021', fontWeight: 'bold', fontSize: 14 },
-    payButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-    payTotalText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+    itemCountBadge: { backgroundColor: '#fff', width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+    itemCountText: { color: '#F37021', fontWeight: 'bold', fontSize: 12 },
+    payButtonText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
+    payTotalText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
 
     // Search & Grid Styles (Simplified)
     searchHeader: { padding: 15, backgroundColor: '#fff' },
@@ -1185,26 +1420,78 @@ const styles = StyleSheet.create({
     gridPrice: { color: '#F37021', fontWeight: 'bold' },
     addButton: { marginTop: 5, backgroundColor: '#F37021', borderRadius: 20, padding: 5 },
 
-    // Weight Styles (Simplified)
+    // Weight Styles — Clean UX
+    // Category bar
+    wCategoryBar: { backgroundColor: '#fff', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+    wCategoryChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F5F5F5' },
+    wCategoryChipActive: { backgroundColor: '#FFF3E0', borderWidth: 1.5, borderColor: '#F37021' },
+    wCategoryEmoji: { fontSize: 16, marginRight: 5 },
+    wCategoryLabel: { fontSize: 13, color: '#777', fontWeight: '500' },
+    wCategoryLabelActive: { color: '#F37021', fontWeight: '700' },
+
+    // Section header
+    wSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 18, paddingTop: 16, paddingBottom: 8 },
+    wSectionTitle: { fontSize: 16, fontWeight: '700', color: '#333' },
+    wAddBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 16, backgroundColor: '#FFF3E0' },
+    wAddBtnText: { fontSize: 13, color: '#F37021', fontWeight: '600', marginLeft: 2 },
+
+    // Product grid
+    wGridContainer: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 14, gap: 10 },
+    wProductCard: { width: (width - 38) / 2, backgroundColor: '#fff', borderRadius: 16, padding: 10, alignItems: 'center', borderWidth: 1.5, borderColor: '#F0F0F0' },
+    wProductCardSelected: { borderColor: '#F37021', backgroundColor: '#FFFBF7', shadowColor: '#F37021', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 4 },
+    wCardCheck: { position: 'absolute', top: 8, right: 8, width: 22, height: 22, borderRadius: 11, backgroundColor: '#F37021', justifyContent: 'center', alignItems: 'center', zIndex: 2 },
+    wCardImageWrap: { width: '100%', aspectRatio: 1.3, borderRadius: 12, overflow: 'hidden', backgroundColor: '#F9FAFB', marginBottom: 8 },
+    wCardImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+    wCardImagePlaceholder: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', backgroundColor: '#F5F5F5' },
+    wCardName: { fontSize: 13, fontWeight: '600', color: '#333', textAlign: 'center', marginBottom: 3 },
+    wCardPrice: { fontSize: 15, fontWeight: '700', color: '#F37021' },
+    wCardUnit: { fontSize: 11, fontWeight: '400', color: '#999' },
+
+    // Empty state
+    wEmptyState: { alignItems: 'center', paddingVertical: 40 },
+    wEmptyText: { color: '#bbb', fontSize: 14, marginTop: 10, marginBottom: 16 },
+    wEmptyAddBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F37021', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, gap: 4 },
+    wEmptyAddText: { color: '#fff', fontWeight: '600', fontSize: 13 },
+
+    // Weight input section
+    wInputSection: { margin: 16, backgroundColor: '#fff', borderRadius: 20, padding: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 10, elevation: 3 },
+    wInputHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+    wInputImageWrap: { width: 48, height: 48, borderRadius: 12, overflow: 'hidden' },
+    wInputImage: { width: 48, height: 48, borderRadius: 12 },
+    wInputName: { fontSize: 16, fontWeight: '700', color: '#222', marginBottom: 2 },
+    wInputPrice: { fontSize: 15, fontWeight: '700', color: '#F37021' },
+    wInputFieldWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F9FAFB', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 4, borderWidth: 1.5, borderColor: '#F0F0F0' },
+    wInputField: { flex: 1, fontSize: 32, fontWeight: '700', color: '#333', textAlign: 'center', paddingVertical: 8 },
+    wInputUnitLabel: { fontSize: 14, color: '#999', fontWeight: '500' },
+    wUnitRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 12, gap: 8 },
+    wUnitBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, backgroundColor: '#F5F5F5' },
+    wUnitBtnActive: { backgroundColor: '#F37021' },
+    wUnitBtnText: { fontSize: 13, color: '#777', fontWeight: '600' },
+    wUnitBtnTextActive: { color: '#fff' },
+    wCartBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F37021', borderRadius: 14, paddingVertical: 14, marginTop: 16 },
+    wCartBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+    wCartBtnPrice: { backgroundColor: 'rgba(255,255,255,0.25)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10, marginLeft: 10 },
+    wCartBtnPriceText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+
+    // Weight Input Modal styles
+    wModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+    wModalContent: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingBottom: 10, paddingTop: 12 },
+    wModalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#DDD', alignSelf: 'center', marginBottom: 16 },
+    wModalHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+    wModalImageWrap: { width: 56, height: 56, borderRadius: 14, overflow: 'hidden', backgroundColor: '#F3F4F6' },
+    wModalImage: { width: 56, height: 56, borderRadius: 14 },
+    wModalName: { fontSize: 17, fontWeight: '700', color: '#222', marginBottom: 3 },
+    wModalPrice: { fontSize: 16, fontWeight: '700', color: '#F37021' },
+    wModalCloseBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center' },
+    wModalTotal: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 4, borderTopWidth: 1, borderTopColor: '#F0F0F0', marginTop: 12 },
+    wModalTotalLabel: { fontSize: 15, color: '#999', fontWeight: '500' },
+    wModalTotalAmount: { fontSize: 24, fontWeight: '800', color: '#F37021' },
+
+    // Legacy weight styles (keep for add product modal)
     categoryPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, backgroundColor: '#fff', marginRight: 6, marginBottom: 8, borderWidth: 1, borderColor: '#eee' },
     activeCategoryPill: { backgroundColor: '#F37021', borderColor: '#F37021' },
     categoryText: { color: '#666', fontSize: 13 },
     activeCategoryText: { color: '#fff', fontWeight: 'bold' },
-    itemPill: { width: '31%', paddingVertical: 12, borderRadius: 8, backgroundColor: '#fff', marginRight: '2%', marginBottom: 8, alignItems: 'center', borderWidth: 1, borderColor: '#f0f0f0' },
-    activeItemPill: { backgroundColor: '#FFF3E0', borderColor: '#F37021', borderWidth: 1 },
-    itemText: { fontSize: 13, color: '#444' },
-    activeItemText: { color: '#F37021', fontWeight: 'bold' },
-    unifiedCard: { backgroundColor: '#fff', borderRadius: 20, padding: 20, alignItems: 'center', marginBottom: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-    unifiedProductName: { fontSize: 22, fontWeight: 'bold', marginBottom: 5, color: '#333' },
-    unifiedInput: { fontSize: 48, fontWeight: 'bold', color: '#F37021', width: '100%', marginVertical: 10 },
-    unitQuickButton: { paddingHorizontal: 15, paddingVertical: 8, borderRadius: 12, backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#eee' },
-    activeUnitQuickButton: { backgroundColor: '#F37021', borderColor: '#F37021' },
-    unitQuickText: { color: '#666' },
-    activeUnitQuickText: { color: '#fff' },
-    unitQuickText: { color: '#666' },
-    activeUnitQuickText: { color: '#fff' },
-    addButtonData: { backgroundColor: '#F37021', padding: 15, borderRadius: 15, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' },
-    addButtonDataText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
     imagePickerButton: { width: '100%', height: 150, backgroundColor: '#f0f0f0', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 15, borderStyle: 'dashed', borderWidth: 1, borderColor: '#ccc' },
 
     // Modal Styles
@@ -1224,4 +1511,10 @@ const styles = StyleSheet.create({
     activeUnitOptionText: { color: '#fff' },
     modalMainButton: { backgroundColor: '#F37021', padding: 16, borderRadius: 16, alignItems: 'center', marginTop: 30 },
     modalMainButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+
+    // FAB — Draggable
+    fab: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#F37021', justifyContent: 'center', alignItems: 'center', shadowColor: '#F37021', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 },
+    fabBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#FF3B30', borderRadius: 10, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4, borderWidth: 1.5, borderColor: '#fff', zIndex: 3 },
+    fabBadgeText: { color: '#fff', fontSize: 9, fontWeight: 'bold' },
+    fabAmountText: { color: '#fff', fontSize: 8, fontWeight: '600', marginTop: 1 },
 });
