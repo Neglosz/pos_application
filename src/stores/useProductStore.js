@@ -315,8 +315,8 @@ export const useProductStore = create(
                 }
             },
 
-            // Clear all cached products
-            clearProducts: () => {
+            // Clear all cached data
+            reset: () => {
                 set({
                     products: [],
                     weightProducts: [], // Also clear weight products

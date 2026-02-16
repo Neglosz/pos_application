@@ -28,7 +28,7 @@ export const useCustomerStore = create(
                 ).slice(0, 20); // Limit results
             },
 
-            clearCustomers: () => set({ customers: [] }),
+            reset: () => set({ customers: [] }),
         }),
         {
             name: 'customer-store',

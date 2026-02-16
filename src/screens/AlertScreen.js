@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -12,6 +12,9 @@ import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-ico
 import { getNotifications, deleteNotification, markNotificationAsRead, markNotificationsAsRead, runDailyCheck } from '../services/api';
 import { supabase } from '../services/supabase';
 import { Swipeable } from 'react-native-gesture-handler';
+import { useNotificationStore } from '../stores/useNotificationStore';
+import { useStore } from '../contexts/StoreContext';
+import { useFocusEffect } from '@react-navigation/native';
 
 const tabs = [
     { id: 'all', label: 'ทั้งหมด' },
@@ -22,9 +25,9 @@ const tabs = [
 
 export default function AlertScreen({ navigation }) {
     const [activeTab, setActiveTab] = useState('all');
-    const [notifications, setNotifications] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const { notifications, setNotifications, isLoading: loading, fetchNotifications } = useNotificationStore();
     const [checking, setChecking] = useState(false);
+    const { currentStore } = useStore();
 
     // Function to run daily check and refresh notifications
     const handleCheckNotifications = async () => {
@@ -39,25 +42,14 @@ export default function AlertScreen({ navigation }) {
         }
     };
 
-    const fetchNotifications = async () => {
-        try {
-            setLoading(true);
-            // Just fetch existing notifications - no more auto-check!
-            // Notifications are now created by database triggers & daily cron
-            const response = await getNotifications();
-            if (response.success) {
-                setNotifications(response.data);
-            }
-        } catch (err) {
-            console.error('Error:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
+    // Refetch when screen is focused
+    useFocusEffect(
+        useCallback(() => {
+            fetchNotifications();
+        }, [])
+    );
 
     useEffect(() => {
-        fetchNotifications();
-
         // Subscribe to realtime updates
         const channel = supabase
             .channel('alert-screen-notifications')
@@ -65,16 +57,22 @@ export default function AlertScreen({ navigation }) {
                 event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
                 schema: 'public',
                 table: 'notifications'
-            }, () => {
-                // Refetch when any change happens
-                fetchNotifications();
+            }, (payload) => {
+                // Check if the change belongs to the current store
+                const newStoreId = payload.new?.store_id;
+                const oldStoreId = payload.old?.store_id;
+                
+                if ((newStoreId && newStoreId === currentStore?.id) || 
+                    (oldStoreId && oldStoreId === currentStore?.id)) {
+                    fetchNotifications();
+                }
             })
             .subscribe();
 
         return () => {
             supabase.removeChannel(channel);
         };
-    }, []);
+    }, [currentStore?.id]);
 
     const handleBack = () => {
         navigation?.goBack();

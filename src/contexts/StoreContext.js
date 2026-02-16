@@ -1,6 +1,9 @@
 import { createContext, useContext, useState, useEffect, useRef } from "react";
 import { setCurrentStoreId as setApiStoreId } from "../services/api";
 import { useProductStore } from "../stores/useProductStore";
+import { useCartStore } from "../stores/useCartStore";
+import { useCustomerStore } from "../stores/useCustomerStore";
+import { useNotificationStore } from "../stores/useNotificationStore";
 
 const StoreContext = createContext();
 
@@ -15,15 +18,18 @@ export function StoreProvider({ children, profile }) {
     }, [profile]);
 
     // Sync store ID to API service whenever currentStore changes
-    // Also clear product cache when switching stores
+    // Also clear all relevant caches when switching stores
     useEffect(() => {
         if (currentStore?.id) {
             setApiStoreId(currentStore.id);
 
-            // Clear product cache when store actually changes (not on initial load)
+            // When store actually changes (not on initial load), reset all relevant stores.
             if (prevStoreId.current && prevStoreId.current !== currentStore.id) {
-                console.log('Store changed, clearing product cache...');
-                useProductStore.getState().clearProducts();
+                console.log('Store changed, resetting caches...');
+                useProductStore.getState().reset();
+                useCartStore.getState().reset();
+                useCustomerStore.getState().reset();
+                useNotificationStore.getState().reset();
             }
             prevStoreId.current = currentStore.id;
         }

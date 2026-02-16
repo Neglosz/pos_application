@@ -49,7 +49,7 @@ export const useCartStore = create((set, get) => ({
     },
 
     // Clear cart
-    clearCart: () => {
+    reset: () => {
         set({ cart: [] });
     },
 

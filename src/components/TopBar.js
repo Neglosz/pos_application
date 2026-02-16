@@ -6,27 +6,18 @@ import { supabase } from '../services/supabase';
 import { getUnreadNotificationCount } from '../services/api';
 import { useProductStore } from '../stores/useProductStore';
 import { useCartStore } from '../stores/useCartStore';
+import { useCustomerStore } from '../stores/useCustomerStore';
+import { useNotificationStore } from '../stores/useNotificationStore';
 import { useStore } from '../contexts/StoreContext';
 
 export default function TopBar({ onLogout, onGoToBranchList }) {
     const navigation = useNavigation();
     const [menuVisible, setMenuVisible] = useState(false);
-    const [unreadCount, setUnreadCount] = useState(0);
-    const { userProfile } = useStore();
+    const { unreadCount, setUnreadCount, fetchUnreadCount, incrementUnreadCount } = useNotificationStore();
+    const { userProfile, currentStore } = useStore();
 
     // Fetch unread count on mount and subscribe to Realtime
     React.useEffect(() => {
-        const fetchUnreadCount = async () => {
-            try {
-                const response = await getUnreadNotificationCount();
-                if (response.success) {
-                    setUnreadCount(response.count);
-                }
-            } catch (error) {
-                console.log('Error fetching unread count:', error);
-            }
-        };
-
         // Initial fetch
         fetchUnreadCount();
 
@@ -38,24 +29,30 @@ export default function TopBar({ onLogout, onGoToBranchList }) {
                 schema: 'public',
                 table: 'notifications'
             }, (payload) => {
-                // New notification arrived, increment count
-                setUnreadCount(prev => prev + 1);
+                // Only increment if it belongs to current store
+                if (payload.new?.store_id === currentStore?.id) {
+                    incrementUnreadCount();
+                }
             })
             .on('postgres_changes', {
                 event: 'UPDATE',
                 schema: 'public',
                 table: 'notifications'
-            }, () => {
-                // Notification updated (e.g., marked as read), refetch count
-                fetchUnreadCount();
+            }, (payload) => {
+                // Only refetch if it belongs to current store
+                if (payload.new?.store_id === currentStore?.id || payload.old?.store_id === currentStore?.id) {
+                    fetchUnreadCount();
+                }
             })
             .on('postgres_changes', {
                 event: 'DELETE',
                 schema: 'public',
                 table: 'notifications'
-            }, () => {
-                // Notification deleted, refetch count
-                fetchUnreadCount();
+            }, (payload) => {
+                // Only refetch if it belonged to current store
+                if (payload.old?.store_id === currentStore?.id) {
+                    fetchUnreadCount();
+                }
             })
             .subscribe();
 
@@ -66,15 +63,17 @@ export default function TopBar({ onLogout, onGoToBranchList }) {
             supabase.removeChannel(channel);
             unsubscribe();
         };
-    }, [navigation]);
+    }, [navigation, currentStore?.id]);
 
     const handleLogout = async () => {
         setMenuVisible(false);
 
         // Clear all cached data to prevent data leakage between accounts
-        console.log('Logging out, clearing all caches...');
-        useProductStore.getState().clearProducts();
-        useCartStore.getState().clearCart();
+        console.log('Logging out, resetting all stores...');
+        useProductStore.getState().reset();
+        useCartStore.getState().reset();
+        useCustomerStore.getState().reset();
+        useNotificationStore.getState().reset();
 
         await supabase.auth.signOut();
         if (onLogout) onLogout();

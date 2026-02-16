@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, Linking, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
 import { getAIRecommendations, getRecommendationStats, getRecommendationHistory, takeRecommendationAction, sendAIChat, applyPromotion, disposeProduct } from '../services/api';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function AIScreen() {
     const [activeTab, setActiveTab] = useState('today'); // today, history, chat
@@ -27,13 +28,16 @@ export default function AIScreen() {
     // Mock GPS (Bangkok) - In production, use expo-location
     const MOCK_LOCATION = { lat: 13.7563, lon: 100.5018 };
 
-    useEffect(() => {
-        if (activeTab === 'today') {
-            loadTodayData();
-        } else if (activeTab === 'history') {
-            loadHistoryData();
-        }
-    }, [activeTab]);
+    // Auto-refresh when screen is focused or tab changes
+    useFocusEffect(
+        useCallback(() => {
+            if (activeTab === 'today') {
+                loadTodayData();
+            } else if (activeTab === 'history') {
+                loadHistoryData();
+            }
+        }, [activeTab])
+    );
 
     const loadTodayData = async () => {
         try {
