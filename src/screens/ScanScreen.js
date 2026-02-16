@@ -664,7 +664,7 @@ export default function ScanScreen({ navigation, route }) {
                 data={products}
                 keyExtractor={item => item.id}
                 style={styles.cartList}
-                contentContainerStyle={{ padding: 15, paddingBottom: 180 }}
+                contentContainerStyle={{ padding: 15, paddingBottom: 20 }}
                 ListEmptyComponent={
                     <View style={styles.emptyCart}>
                         <Text style={{ color: '#aaa' }}>ยังไม่มีสินค้าในตะกร้า</Text>
@@ -1300,14 +1300,12 @@ export default function ScanScreen({ navigation, route }) {
                     {renderCameraSection()}
                     {renderScanModes()}
                     {renderCartList()}
+                    {renderFooter()}
                 </View>
             ) : (
                 /* Full View for Search/Weight */
                 activeTab === 'search' ? renderSearchView() : renderWeightView()
             )}
-
-            {/* Footer only for Scan Tab */}
-            {activeTab === 'scan' && renderFooter()}
 
             {/* Modals */}
             <PaymentMethodModal
@@ -1350,7 +1348,7 @@ export default function ScanScreen({ navigation, route }) {
 
             {/* Floating Cart Button (New) */}
             {renderFloatingCartButton()}
-        </View>
+        </View >
     );
 }
 
@@ -1394,7 +1392,7 @@ const styles = StyleSheet.create({
     qtyText: { paddingHorizontal: 8, fontSize: 14, fontWeight: '600' },
 
     // Footer
-    footer: { position: 'absolute', bottom: 55, left: 0, right: 0, paddingHorizontal: 15, backgroundColor: 'transparent' },
+    footer: { padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#eee', paddingBottom: Platform.OS === 'ios' ? 34 : 16 },
     payButton: {
         backgroundColor: '#F37021',
         borderRadius: 50,

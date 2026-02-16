@@ -207,7 +207,7 @@ export default function App() {
   const handleGoToBranchList = () => {
     setIsLoggedIn(false);
     setCurrentScreen('BranchList');
-    };
+  };
 
   // Show auth screens if not logged in
   const renderContent = () => {
