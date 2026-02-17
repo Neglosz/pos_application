@@ -45,10 +45,11 @@ export default function AddBranchModal({ visible, onClose, onSuccess }) {
         if (!name.trim()) return;
 
         // Convert Thai/English name to slug
+        // Remove non-ASCII characters to ensure valid email format
         const slug = name
             .toLowerCase()
             .replace(/\s+/g, '-')
-            .replace(/[^a-z0-9ก-๙-]/g, '')
+            .replace(/[^a-z0-9-]/g, '') // Only keep a-z, 0-9, -
             .substring(0, 30);
 
         // Add random suffix to ensure uniqueness

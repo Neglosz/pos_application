@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, TextInput, ScrollView, Platform } from "react-native";
+import * as ImagePicker from 'expo-image-picker'
+import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, TextInput, ScrollView, Platform, Image } from "react-native";
 import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../services/supabase";
 import { Buffer } from 'buffer';
 import { getStoreSettings, updateStoreSettings } from "../services/api";
+
 
 const ENCRYPTION_KEY = 'yourpos-secret-key-2026';
 const THEME_COLOR = '#FF9500'; // Orange
@@ -33,6 +35,61 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
     const [savingBranch, setSavingBranch] = useState(false);
 
     const [deleting, setDeleting] = useState(false);
+    const [uploadingImage, setUploadingImage] = useState(false);
+    const handlePickAndUploadImage = async () => {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('ต้องการสิทธิ์', 'ขอสิทธิ์เข้าถึงคลังรูปภาพเพื่อเปลี่ยนรูปร้าน');
+            return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+        });
+
+        if (!result.canceled) {
+            uploadStorageImage(result.assets[0].uri);
+        }
+    };
+
+    const uploadStorageImage = async (imageUri) => {
+        if (!branch?.id) return;
+        setUploadingImage(true);
+
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) throw new Error('กรุณาเข้าสู่ระบบใหม่');
+
+            const formData = new FormData();
+            formData.append('store_id', branch.id);
+            formData.append('image', {
+                uri: imageUri,
+                name: 'store_image.jpg',
+                type: 'image/jpeg',
+            });
+
+            const { API_BASE_URL } = require('../config');
+            const response = await fetch(`${API_BASE_URL}/branches/upload-image`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Content-Type': `${session.access_token}`,
+                },
+                body: formData,
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'อัปโหลดไม่สำเร็จ');
+            branch.image_url = result.imageUrl;
+            Alert.alert('สำเร็จ', 'เปลี่ยนรูปเรียบร้อยแล้ว');
+        } catch (error) {
+            Alert.alert('ผิดพลาด', 'อัปโหลดรูปไม่สำเร็จ: ' + error.message);
+        } finally {
+            setUploadingImage(false);
+        }
+    };
 
     useEffect(() => {
         checkOwnerStatus();
@@ -269,9 +326,25 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
 
                 {/* 1. Hero / Main Info Section */}
                 <View style={styles.heroSection}>
-                    <View style={styles.storeIconContainer}>
-                        <Ionicons name="storefront" size={40} color={THEME_COLOR} />
-                    </View>
+                    <TouchableOpacity
+                        style={styles.storeIconContainer}
+                        onPress={isOwner ? handlePickAndUploadImage : null}
+                        disabled={uploadingImage}
+                    >
+                        {uploadingImage ? (
+                            <ActivityIndicator color={THEME_COLOR} />
+                        ) : branch?.image_url ? (
+                            <Image source={{ uri: branch.image_url }} style={{ width: '100%', height: '100%', borderRadius: 40 }} />
+                        ) : (
+                            <Ionicons name="storefront" size={40} color={THEME_COLOR} />
+                        )}
+                        {isOwner && !uploadingImage && (
+                            <View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: '#fff', borderRadius: 10, padding: 4, borderWidth: 1, borderColor: '#eee' }}>
+                                <Ionicons name="camera" size={12} color="#666" />
+
+                            </View>
+                        )}
+                    </TouchableOpacity>
 
                     {isEditing ? (
                         <View style={styles.editForm}>

@@ -46,7 +46,7 @@ export default function ScanScreen({ navigation, route }) {
     const insets = useSafeAreaInsets();
     const isFocused = useIsFocused(); // Track if screen is focused
     const { getProductByBarcode, products: storeProducts, weightProducts, categories, fetchProducts, fetchWeightProducts, fetchCategories, addProduct, refreshProducts, setSearchQuery, selectedCategoryId, setSelectedCategory, isLoading, hasMore } = useProductStore();
-    const { cart: products, addToCart, removeFromCart, updateQuantity, clearCart } = useCartStore();
+    const { cart: products, addToCart, removeFromCart, updateQuantity, reset: clearCart } = useCartStore();
 
     // Enable real-time sync for products across devices
     useRealtimeSync();

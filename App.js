@@ -6,7 +6,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator, TransitionPresets } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { Alert } from 'react-native';
+import { Alert, Linking } from 'react-native';
 import { enableScreens } from 'react-native-screens';
 import { StoreProvider } from './src/contexts/StoreContext';
 import { setCurrentStoreId, setCurrentUserId } from './src/services/api';
@@ -26,6 +26,7 @@ import ReportScreen from './src/screens/ReportScreen';
 import SignInScreen from './src/screens/SignInScreen';
 import SignUpScreen from './src/screens/SignUpScreen';
 import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
+import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
 import AlertScreen from './src/screens/AlertScreen';
 import TopBar from './src/components/TopBar';
 import BottomNav from './src/components/BottomNav';
@@ -117,6 +118,82 @@ export default function App() {
   const navigateTo = (screen) => {
     setCurrentScreen(screen);
   };
+
+  // Handle Deep Linking
+  useEffect(() => {
+    const handleDeepLink = async (event) => {
+      const url = event.url;
+      if (!url) return;
+
+      // Extract fragment (hash) or query params
+      // Supabase Implicit Flow puts tokens in the hash (#access_token=...)
+      // But sometimes configured for query params (?access_token=...)
+      // We'll check both.
+
+      const extractParam = (paramName) => {
+        const regex = new RegExp(`[#?&]${paramName}=([^&]+)`);
+        const match = url.match(regex);
+        return match ? decodeURIComponent(match[1]) : null;
+      };
+
+      const accessToken = extractParam('access_token');
+      const refreshToken = extractParam('refresh_token');
+      const type = extractParam('type');
+
+      if (accessToken && refreshToken) {
+        try {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (error) throw error;
+          
+          // If it's a recovery link, the auth state change listener will pick it up
+          if (type === 'recovery') {
+            setCurrentScreen('ResetPassword');
+          }
+        } catch (e) {
+          console.log('Deep link session error (ignored):', e.message);
+          // Alert.alert('Error', 'Invalid or expired link'); 
+        }
+      }
+    };
+
+    // 1. Listen for incoming links while app is open
+    const subscription = Linking.addEventListener('url', handleDeepLink);
+
+    // 2. Check if app was opened via a link (cold start)
+    Linking.getInitialURL().then((url) => {
+      if (url) handleDeepLink({ url });
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  // Listen for Supabase Auth State Changes
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        const storedAuth = await AsyncStorage.getItem('authData');
+        if (!storedAuth) {
+          setCurrentScreen('ResetPassword');
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setIsLoggedIn(false);
+        setAuthData(null);
+        setSelectedBranch(null);
+        setCurrentScreen('SignIn');
+      }
+    });
+
+    return () => {
+      subscription?.unsubscribe();
+    };
+  }, []);
+
 
   // Restore session & Init Network
   useEffect(() => {
@@ -237,6 +314,15 @@ export default function App() {
         return (
           <>
             <ForgotPasswordScreen
+              onNavigateToSignIn={() => navigateTo('SignIn')}
+            />
+            <StatusBar style="light" />
+          </>
+        );
+      } else if (currentScreen === 'ResetPassword') {
+        return (
+          <>
+            <ResetPasswordScreen
               onNavigateToSignIn={() => navigateTo('SignIn')}
             />
             <StatusBar style="light" />

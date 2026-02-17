@@ -220,10 +220,12 @@ export default function DebtPaymentModal({
             allowsEditing: true,
             aspect: [1, 1],
             quality: 0.5,
+            base64: true, // Request base64
         });
 
         if (!result.canceled) {
-            setCustomerImage(result.assets[0].uri);
+            // Set as Data URI
+            setCustomerImage(`data:image/jpeg;base64,${result.assets[0].base64}`);
         }
     };
 
@@ -239,10 +241,12 @@ export default function DebtPaymentModal({
             allowsEditing: true,
             aspect: [1, 1],
             quality: 0.5,
+            base64: true, // Request base64
         });
 
         if (!result.canceled) {
-            setCustomerImage(result.assets[0].uri);
+            // Set as Data URI
+            setCustomerImage(`data:image/jpeg;base64,${result.assets[0].base64}`);
         }
     };
 
@@ -297,25 +301,14 @@ export default function DebtPaymentModal({
     };
 
     const submitForm = async (isNewCustomer) => {
-        let finalImageUrl = customerImage;
-
         try {
-            // Upload image to Supabase if it's a new local image
-            if (customerImage && isLocalUri(customerImage)) {
-                const storeId = getCurrentStoreId();
-                if (storeId) {
-                    const uploadResult = await uploadCustomerImage(customerImage, storeId);
-                    if (uploadResult.success) {
-                        finalImageUrl = uploadResult.url;
-                    }
-                }
-            }
-
+            // Pass the image data (URL or Base64 Data URI) directly to backend
+            // The backend will handle the upload to Storage if it's a Base64 string
             const dataToSend = {
                 customerId: selectedCustomer?.id || null,
                 customerName,
                 customerPhone,
-                customerImage: finalImageUrl,
+                customerImage: customerImage, 
                 dueDate,
                 amount,
                 isNewCustomer,
