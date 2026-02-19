@@ -1,15 +1,19 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import * as Location from 'expo-location';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, Linking, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
-import { getAIRecommendations, getRecommendationStats, getRecommendationHistory, takeRecommendationAction, sendAIChat, applyPromotion, disposeProduct } from '../services/api';
+import { getAIRecommendations, getRecommendationStats, getRecommendationHistory, takeRecommendationAction, sendAIChat, applyPromotion, disposeProduct, getActivePromotions, deactivatePromotion } from '../services/api';
 import { useFocusEffect } from '@react-navigation/native';
+import { useProductStore } from '../stores/useProductStore'
+import { useStore } from 'zustand';
 
 export default function AIScreen() {
     const [activeTab, setActiveTab] = useState('today'); // today, history, chat
     const [chatMessage, setChatMessage] = useState('');
     const [recommendations, setRecommendations] = useState([]);
     const [stats, setStats] = useState(null);
+    const [promotions, setPromotions] = useState([]);
     const [history, setHistory] = useState({});
     const [chatHistory, setChatHistory] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -23,11 +27,23 @@ export default function AIScreen() {
     const [selectedItem, setSelectedItem] = useState(null);
     const [discountPrice, setDiscountPrice] = useState('');
     const [actionType, setActionType] = useState('discount'); // 'discount' or 'dispose'
+    const [daysValid, setDaysValid] = useState('3');
+    const [actionLoading, setActionLoading] = useState(false);
 
     const scrollViewRef = useRef();
 
     // Mock GPS (Bangkok) - In production, use expo-location
-    const MOCK_LOCATION = { lat: 13.7563, lon: 100.5018 };
+    const [location, setLocation] = useState({ lat: 13.7563, lon: 100.5018 });
+
+    useEffect(() => {
+        (async () => {
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status === 'granted') {
+                const loc = await Location.getCurrentPositionAsync({});
+                setLocation({ lat: loc.coords.latitude, lon: loc.coords.longitude });
+            }
+        })();
+    }, []);
 
     // Auto-refresh when screen is focused or tab changes
     useFocusEffect(
@@ -36,6 +52,8 @@ export default function AIScreen() {
                 loadTodayData();
             } else if (activeTab === 'history') {
                 loadHistoryData();
+            } else if (activeTab === 'promos') {
+                loadPromotions();
             }
         }, [activeTab])
     );
@@ -44,7 +62,7 @@ export default function AIScreen() {
         try {
             setLoading(true);
             const [recResponse, statsResponse] = await Promise.all([
-                getAIRecommendations(MOCK_LOCATION.lat, MOCK_LOCATION.lon),
+                getAIRecommendations(location.lat, location.lon),
                 getRecommendationStats()
             ]);
 
@@ -75,6 +93,45 @@ export default function AIScreen() {
         }
     };
 
+    const loadPromotions = async () => {
+        try {
+            setLoading(true);
+            const response = await getActivePromotions();
+            if (response.success) {
+                setPromotions(response.data || []);
+            }
+        } catch (error) {
+            console.error('Fetch romotions Error:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleDeactivatePromo = (promo) => {
+        Alert.alert(
+            'ปิดโปรโมชั่น',
+            `ต้องการปิด "${promo.name}" ใช่ไหม`,
+            [
+                { text: 'ยกเลิก', style: 'cancel' },
+                {
+                    text: 'ปิดโปรโมชั่น', style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            const result = await deactivatePromotion(promo.id);
+                            if (result.success) {
+                                setPromotions(prev => prev.filter(p => p.id !== promo.id));
+                                useProductStore.getState().refreshProducts();
+                                Alert.alert('สำเร็จ', 'ปิดโปรโมชั่นแล้ว');
+                            }
+                        } catch (error) {
+                            Alert.alert('ผิดพลาด', error.message);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const handleAction = async (item, action) => {
         try {
             const response = await takeRecommendationAction(item.id, action);
@@ -94,7 +151,7 @@ export default function AIScreen() {
     const handleAcceptAction = (item) => {
         setSelectedItem(item);
 
-        if (item.type === 'expiry' || item.type === 'stock') {
+        if (item.type === 'expiry' || item.type === 'stock' || item.type === 'promotion') {
             // Check if AI recommends dispose (expired product)
             const aiDiscount = item.payload?.recommended_discount;
             if (aiDiscount?.action === 'dispose' || aiDiscount?.percent === 100) {
@@ -104,6 +161,7 @@ export default function AIScreen() {
                 setActionType('discount');
                 // Pre-fill with AI recommended price
                 setDiscountPrice(aiDiscount?.price_after_discount?.toString() || '');
+                setDaysValid(aiDiscount?.days_valid?.toString() || '3');
             }
             setProductModalVisible(true);
         } else if (item.type === 'debt') {
@@ -125,8 +183,9 @@ export default function AIScreen() {
 
     // Handle product discount/dispose confirm
     const handleProductConfirm = async () => {
-        if (!selectedItem) return;
+        if (!selectedItem || actionLoading) return;
 
+        setActionLoading(true);
         try {
             // Extract product names from AI recommendation
             const productNames = selectedItem.payload?.target_products || [selectedItem.title];
@@ -145,12 +204,21 @@ export default function AIScreen() {
                     throw new Error(result.error || 'Dispose failed');
                 }
             } else {
+                const aiDiscount = selectedItem.payload?.recommended_discount || {};
+                const promotionType = aiDiscount.promotion_type || 'discount_percent';
                 // Call API to create promotion
                 const result = await applyPromotion(
                     selectedItem.id,
                     productNames,
                     discountPercent,
-                    3 // 3 days valid
+                    parseInt(daysValid) || 3,
+                    promotionType,
+                    {
+                        minQtyRequired: aiDiscount.min_qty,
+                        freeQtyAmount: aiDiscount.free_qty,
+                        discountAmount: aiDiscount.discount_amount,
+                        minSpend: aiDiscount.min_spend
+                    }
                 );
                 if (result.success) {
                     const products = result.data.affectedProducts;
@@ -176,6 +244,8 @@ export default function AIScreen() {
         } catch (error) {
             console.error('Product action error:', error);
             Alert.alert('เกิดข้อผิดพลาด', error.message || 'ไม่สามารถดำเนินการได้');
+        } finally {
+            setActionLoading(false);
         }
     };
 
@@ -203,7 +273,7 @@ export default function AIScreen() {
         setChatLoading(true);
 
         try {
-            const response = await sendAIChat(currentMsg, MOCK_LOCATION.lat, MOCK_LOCATION.lon, chatHistory);
+            const response = await sendAIChat(currentMsg, location.lat, location.lon, chatHistory);
             if (response.success) {
                 const aiMsg = { role: 'model', parts: [{ text: response.answer }] };
                 setChatHistory(prev => [...prev, aiMsg]);
@@ -492,6 +562,71 @@ export default function AIScreen() {
         </KeyboardAvoidingView>
     );
 
+    const renderPromosTab = () => (
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleRow}>
+                    <Ionicons name="pricetag-outline" size={18} color='#E65100' />
+                    <Text style={styles.sectionTitle}>โปรโมชั่นที่ใช้อยู่</Text>
+                </View>
+                <View style={styles.countBadge}>
+                    <Text style={styles.countText}>{promotions.length} รายการ</Text>
+                </View>
+            </View>
+            {loading ? (
+                <ActivityIndicator size="large" color="#F37021" style={{ marginTop: 30 }} />
+            ) : promotions.length === 0 ? (
+                <View style={styles.emptyState}>
+                    <Ionicons name="pricetag-outline" size={48} color="#ddd" />
+                    <Text style={styles.emptyTitle}>ไม่มีโปรโมชั่นที่ใช้งาน</Text>
+                    <Text style={styles.emptySubtitle}>โปรโมชั่นที่สร้างจะแสดงที่นี่</Text>
+                </View>
+            ) : (
+                promotions.map(promo => {
+                    const productNames = promo.promotion_items?.map(pi => pi.products?.name).filter(Boolean).join(', ') || '-';
+                    const typeLabel = {
+                        'discount_percent': `ลด${promo.discount_value}%`,
+                        'discount_amount': `ลด ฿${promo.discount_value}`,
+                        'buy_x_get_y': `ซื้อ ${promo.min_qty_required} แถม ${promo.free_qty}`,
+                        'bundle': `ซื้อครบ ฿${promo.min_spend} ลด ฿${promo.discount_value}`
+                    }[promo.type] || promo.type;
+                    return (
+                        <View key={promo.id} style={styles.recCard}>
+                            <View style={styles.recContent}>
+                                <View style={styles.recHeader}>
+                                    <View style={[styles.iconBox, { backgroundColor: '#F3E5F5' }]}>
+                                        <Ionicons name="pricetag" size={26} color="#7B1FA2" />
+                                    </View>
+                                    <View style={styles.recInfo}>
+                                        <View style={[styles.tag, { backgroundColor: '#F3E5F5' }]}>
+                                            <Text style={[styles.tagText, { color: '#7B1FA2' }]}>{typeLabel}</Text>
+                                        </View>
+                                        <Text style={styles.recTitle} numberOfLines={2}>{promo.name}</Text>
+                                    </View>
+                                </View>
+                                <View style={styles.impactBox}>
+                                    <Ionicons name="cube-outline" size={16} color="#666" />
+                                    <Text style={[styles.impactText, { color: '#666' }]}>{productNames}</Text>
+                                </View>
+                                <Text style={{ color: '#999', fontSize: 12, marginTop: 4 }}>หมดเขต: {new Date(promo.end_date).toLocaleDateString('th-TH')}</Text>
+                            </View>
+                            <View style={styles.actionFooter}>
+                                <View />
+                                <TouchableOpacity
+                                    style={[styles.actionBtn, { backgroundColor: '#D32F2F' }]}
+                                    onPress={() => handleDeactivatePromo(promo)}
+                                >
+                                    <Ionicons name="close-circle" size={18} color='#fff' />
+                                    <Text style={styles.actionText}>ปิดโปรโมชั่น</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    );
+                })
+            )}
+        </ScrollView>
+    );
+
     return (
         <SafeAreaView style={styles.container}>
 
@@ -518,6 +653,14 @@ export default function AIScreen() {
                     <MaterialCommunityIcons name="comment-text-outline" size={18} color={activeTab === 'chat' ? '#E65100' : '#888'} />
                     <Text style={[styles.tabText, activeTab === 'chat' && styles.activeTabText]}>ถาม AI</Text>
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.tabItem, activeTab === 'promos' && styles.activeTab]}
+                    onPress={() => setActiveTab('promos')}
+                >
+                    <Ionicons name="pricetag-outline" size={18} color={activeTab === 'promos' ? '#E65100' : '#888'} />
+                    <Text style={[styles.tabText, activeTab === 'promos' && styles.activeTabText]}>โปรโมชั่น</Text>
+                </TouchableOpacity>
             </View>
 
             {/* Content Body */}
@@ -525,6 +668,7 @@ export default function AIScreen() {
                 {activeTab === 'today' && renderTodayTab()}
                 {activeTab === 'history' && renderHistoryTab()}
                 {activeTab === 'chat' && renderChatTab()}
+                {activeTab === 'promos' && renderPromosTab()}
             </View>
 
             {/* Product Action Modal */}
@@ -637,6 +781,11 @@ export default function AIScreen() {
                                                     <Text style={styles.quickDiscountText}>-30%</Text>
                                                 </TouchableOpacity>
                                             </View>
+                                            <View style={styles.discountInputRow}>
+                                                <Text style={{ color: '#666', marginRight: 8 }}>ระยะเวลาโปร:</Text>
+                                                <TextInput style={[styles.discountInput, { flex: 0, width: 60, textAlign: 'center' }]} placeholder="3" keyboardType="numeric" value={daysValid} onChangeText={setDaysValid} />
+                                                <Text style={{ color: '#666', marginLeft: 8 }}>วัน</Text>
+                                            </View>
                                         </View>
                                     )}
 
@@ -660,10 +809,15 @@ export default function AIScreen() {
                                         <Text style={styles.modalCancelText}>ยกเลิก</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
-                                        style={styles.modalConfirmBtn}
+                                        style={[styles.modalConfirmBtn, actionLoading && { opacity: 0.6 }]}
                                         onPress={handleProductConfirm}
+                                        disabled={actionLoading}
                                     >
-                                        <Text style={styles.modalConfirmText}>ยืนยัน</Text>
+                                        {actionLoading ? (
+                                            <ActivityIndicator size="small" color="#FFF" />
+                                        ) : (
+                                            <Text style={styles.modalConfirmText}>ยืนยัน</Text>
+                                        )}
                                     </TouchableOpacity>
                                 </View>
                             </>
@@ -807,7 +961,7 @@ export default function AIScreen() {
                                                 <Ionicons name="pricetag" size={16} color="#E65100" />
                                                 <Text style={styles.discountTitle}>โปรโมชั่นที่แนะนำ</Text>
                                             </View>
-                                            {selectedItem.payload.recommended_discount.promotion_type === 'buy_1_get_1' ? (
+                                            {selectedItem.payload.recommended_discount.promotion_type === 'buy_x_get_y' ? (
                                                 <Text style={styles.discountDetail}>🎁 ซื้อ 1 แถม 1</Text>
                                             ) : (
                                                 <Text style={styles.discountDetail}>
@@ -895,7 +1049,7 @@ const styles = StyleSheet.create({
         borderRadius: 25,
         padding: 4,
         marginBottom: 10,
-        marginTop: -60,
+        marginTop: '-10%',
     },
     tabItem: {
         flex: 1,

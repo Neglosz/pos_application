@@ -117,8 +117,12 @@ export default function TopBar({ onLogout, onGoToBranchList }) {
     return (
         <View style={styles.container}>
             {/* Profile Image - กดแล้วเปิด Menu */}
-            <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.menuButton}>
-                <Ionicons name="storefront" size={20} color="#fff" />
+            <TouchableOpacity onPress={() => setMenuVisible(true)} style={[styles.menuButton, currentStore?.image_url && { backgroundColor: 'transparent', overflow: 'hidden' }]}>
+                {currentStore?.image_url ? (
+                    <Image source={{ uri: currentStore.image_url }} style={{ width: '100%', height: '100%' }} resizeMode='cover' />
+                ) : (
+                    <Ionicons name="storefront" size={20} color="#fff" />
+                )}
             </TouchableOpacity>
             <Text style={styles.title}>Zippy Till</Text>
             {/* Bell Icon */}

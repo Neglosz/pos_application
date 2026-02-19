@@ -142,7 +142,8 @@ export const createCreditSale = async (saleData) => {
                 order_items: saleData.items.map(p => ({
                     products: { name: p.name },
                     qty: p.quantity,
-                    price_per_unit: p.price
+                    price_per_unit: p.price,
+                    unit: p.unit || p.unit_type || 'ชิ้น'
                 }))
             }
         };
@@ -183,7 +184,8 @@ export const createSale = async (saleData) => {
                 order_items: saleData.items.map(p => ({
                     products: { name: p.name },
                     qty: p.quantity,
-                    price_per_unit: p.price
+                    price_per_unit: p.price,
+                    unit: p.unit || p.unit_type || 'ชิ้น'
                 }))
             }
         };
@@ -412,10 +414,10 @@ export const getRecommendationStats = async () => {
 };
 
 // AI Action Endpoints
-export const applyPromotion = async (recommendationId, productNames, discountPercent, daysValid = 3) => {
+export const applyPromotion = async (recommendationId, productNames, discountPercent, daysValid = 3, promotionType = 'discount_percent', extraParams = {}) => {
     return apiRequest('/ai/apply-promotion', {
         method: 'POST',
-        body: JSON.stringify({ recommendationId, productNames, discountPercent, daysValid })
+        body: JSON.stringify({ recommendationId, productNames, discountPercent, daysValid, promotionType, ...extraParams })
     });
 };
 
@@ -425,6 +427,14 @@ export const disposeProduct = async (recommendationId, productNames) => {
         body: JSON.stringify({ recommendationId, productNames })
     });
 };
+
+export const getActivePromotions = async () => {
+    return apiRequest('/ai/active-promotions');
+};
+
+export const deactivatePromotion = async (promotionId) => {
+    return apiRequest(`/ai/promotions/${promotionId}/deactivate`, { method: 'PATCH' });
+}
 
 export const deleteTransaction = async (id) => {
     return apiRequest(`/transactions/${id}`, {

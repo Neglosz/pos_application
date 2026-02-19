@@ -41,7 +41,7 @@ export default function ReceiptModal({
         if (visible) {
             // Reset to initial passed transaction
             setDetails(transaction || {});
-            
+
             // Check if we need to fetch full details (if items are missing)
             if (transaction && transaction.id && (!transaction.items || transaction.items.length === 0)) {
                 fetchFullDetails(transaction.id);
@@ -217,7 +217,7 @@ export default function ReceiptModal({
                             <ScrollView style={styles.itemsList} nestedScrollEnabled>
                                 {items.map((item, index) => (
                                     <View key={index} style={styles.itemRow}>
-                                        <Text style={styles.itemName}>{item.name} x{item.quantity}</Text>
+                                        <Text style={styles.itemName}>{item.name} x{item.quantity} {item.unit || 'ชิ้น'}</Text>
                                         <Text style={styles.itemPrice}>฿{item.price.toFixed(2)}</Text>
                                     </View>
                                 ))}

@@ -1,9 +1,22 @@
 import { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, FlatList, StyleSheet, StatusBar, ActivityIndicator } from "react-native";
+import {
+    View,
+    Text,
+    TouchableOpacity,
+    FlatList,
+    StyleSheet,
+    StatusBar,
+    ActivityIndicator,
+    Dimensions,
+    Image
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../services/supabase";
 import AddBranchModal from "../components/AddBranchModal";
+
+const THEME = '#F37021';
+const { width } = Dimensions.get('window');
 
 export default function BranchListScreen({ userProfile, onSelectBranch, onLogout }) {
     const [branches, setBranches] = useState([]);
@@ -43,74 +56,97 @@ export default function BranchListScreen({ userProfile, onSelectBranch, onLogout
     const getCurrentDate = () => {
         const options = { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' };
         const date = new Date();
-        // Thai locale date
-        const thaiDate = date.toLocaleDateString('th-TH', options);
-        return thaiDate;
+        return date.toLocaleDateString('th-TH', options);
     };
 
-    const renderBranchItem = ({ item }) => (
+    const renderBranchItem = ({ item, index }) => (
         <TouchableOpacity
-            style={styles.branchItem}
+            style={styles.branchCard}
             onPress={() => onSelectBranch && onSelectBranch(item)}
+            activeOpacity={0.7}
         >
-            <View style={styles.branchIcon}>
-                <Ionicons name="storefront" size={24} color="#52616B" />
+            <View style={styles.cardLeft}>
+                <View style={[styles.branchIconWrap, { backgroundColor: `rgba(243,112,33,${0.10 + (index % 3) * 0.05})`, overflow: 'hidden' }]}>
+                    {item.image_url ? (
+                        <Image source={{ uri: item.image_url }} style={{ width: '100%', height: '100%' }} />
+                    ) : (
+                        <Ionicons name="storefront" size={22} color={THEME} />
+                    )}
+                </View>
+                <View style={styles.branchInfo}>
+                    <Text style={styles.branchName} numberOfLines={1}>{item.name}</Text>
+                    {item.address ? (
+                        <View style={styles.addressRow}>
+                            <Ionicons name="location-outline" size={13} color="#999" />
+                            <Text style={styles.branchAddress} numberOfLines={1}>{item.address}</Text>
+                        </View>
+                    ) : null}
+                </View>
             </View>
-            <View style={styles.branchInfo}>
-                <Text style={styles.branchName}>{item.name}</Text>
-                {item.address && (
-                    <Text style={styles.branchAddress}>{item.address}</Text>
-                )}
+            <View style={styles.chevronWrap}>
+                <Ionicons name="chevron-forward" size={20} color="#ccc" />
             </View>
-            <Ionicons name="chevron-forward" size={24} color="#999" />
         </TouchableOpacity>
     );
 
     if (loading) {
         return (
-            <SafeAreaView style={styles.container}>
-                <ActivityIndicator size="large" color="#52616B" style={{ flex: 1 }} />
+            <SafeAreaView style={styles.loadingContainer}>
+                <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+                <ActivityIndicator size="large" color={THEME} />
             </SafeAreaView>
         );
     }
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: '#1E2022', paddingTop:30 }]} edges={['top']}>
-            <StatusBar barStyle="light-content" backgroundColor="#1E2022" />
+        <SafeAreaView style={styles.container} edges={['top']}>
+            <StatusBar barStyle="light-content" backgroundColor={THEME} />
 
             {/* Header */}
             <View style={styles.header}>
-                <View style={styles.headerTop}>
-                    <View>
-                        <Text style={styles.greeting}>
-                            สวัสดี, {userProfile?.full_name || 'เจ้าของร้าน'}
-                        </Text>
-                        <Text style={styles.dateText}>{getCurrentDate()}</Text>
+                <View style={styles.headerContent}>
+                    <View style={styles.headerLeft}>
+                        <View style={styles.avatarWrap}>
+                            <Ionicons name="person" size={20} color={THEME} />
+                        </View>
+                        <View style={styles.headerText}>
+                            <Text style={styles.greeting} numberOfLines={1}>
+                                {userProfile?.full_name || 'เจ้าของร้าน'}
+                            </Text>
+                            <Text style={styles.dateText}>{getCurrentDate()}</Text>
+                        </View>
                     </View>
-                    <TouchableOpacity onPress={onLogout} style={styles.logoutBtn}>
-                        <Ionicons name="log-out-outline" size={24} color="#fff" />
+                    <TouchableOpacity onPress={onLogout} style={styles.logoutBtn} activeOpacity={0.7}>
+                        <Ionicons name="log-out-outline" size={22} color="rgba(255,255,255,0.85)" />
                     </TouchableOpacity>
                 </View>
-
             </View>
 
-            {/* Branch List Section */}
+            {/* Content */}
             <View style={styles.content}>
+                {/* Section Header */}
                 <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>สาขาที่ดูแล</Text>
-                    <TouchableOpacity
-                        style={styles.addButton}
-                        onPress={() => setModalVisible(true)}
-                    >
-                        <Text style={styles.addButtonText}>+ เพิ่มสาขาใหม่</Text>
-                    </TouchableOpacity>
+                    <View>
+                        <Text style={styles.sectionTitle}>สาขาของฉัน</Text>
+                        <Text style={styles.sectionSubtitle}>{branches.length} สาขา</Text>
+                    </View>
                 </View>
 
                 {branches.length === 0 ? (
                     <View style={styles.emptyState}>
-                        <Ionicons name="storefront-outline" size={64} color="#ccc" />
+                        <View style={styles.emptyIconWrap}>
+                            <Ionicons name="storefront-outline" size={48} color={THEME} />
+                        </View>
                         <Text style={styles.emptyText}>ยังไม่มีสาขา</Text>
-                        <Text style={styles.emptySubtext}>กด "เพิ่มสาขาใหม่" เพื่อเริ่มต้น</Text>
+                        <Text style={styles.emptySubtext}>เริ่มต้นเพิ่มสาขาแรกของคุณ</Text>
+                        <TouchableOpacity
+                            style={styles.emptyAddBtn}
+                            onPress={() => setModalVisible(true)}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons name="add" size={20} color="#fff" />
+                            <Text style={styles.emptyAddBtnText}>เพิ่มสาขาใหม่</Text>
+                        </TouchableOpacity>
                     </View>
                 ) : (
                     <FlatList
@@ -123,6 +159,17 @@ export default function BranchListScreen({ userProfile, onSelectBranch, onLogout
                 )}
             </View>
 
+            {/* Floating Add Button */}
+            {branches.length > 0 && (
+                <TouchableOpacity
+                    style={styles.fab}
+                    onPress={() => setModalVisible(true)}
+                    activeOpacity={0.85}
+                >
+                    <Ionicons name="add" size={28} color="#fff" />
+                </TouchableOpacity>
+            )}
+
             {/* Add Branch Modal */}
             <AddBranchModal
                 visible={modalVisible}
@@ -134,119 +181,120 @@ export default function BranchListScreen({ userProfile, onSelectBranch, onLogout
 }
 
 const styles = StyleSheet.create({
-    container: {
+    loadingContainer: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
-    },
-    header: {
-        backgroundColor: '#1E2022',
-        paddingHorizontal: 20,
-        paddingBottom: 10,
-    },
-    headerTop: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: 16
-    },
-    greeting: {
-        color: '#fff',
-        fontSize: 22,
-        fontWeight: 'bold',
-    },
-    dateText: {
-        color: 'rgba(255,255,255,0.7)',
-        fontSize: 14,
-        marginTop: 4,
-    },
-    logoutBtn: {
-        padding: 8,
-    },
-    statusCard: {
-        backgroundColor: 'rgba(255,255,255,0.1)',
-        borderRadius: 12,
-        padding: 16,
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    statusIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.1)',
+        backgroundColor: '#fff',
         justifyContent: 'center',
         alignItems: 'center',
     },
-    statusInfo: {
+    container: {
         flex: 1,
-        marginLeft: 12,
+        backgroundColor: THEME,
     },
-    statusLabel: {
-        color: 'rgba(255,255,255,0.6)',
-        fontSize: 12,
+    // ── Header ──
+    header: {
+        backgroundColor: THEME,
+        paddingHorizontal: 20,
+        paddingTop: 12,
+        paddingBottom: 24,
     },
-    statusText: {
+    headerContent: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    headerLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    avatarWrap: {
+        width: 42,
+        height: 42,
+        borderRadius: 21,
+        backgroundColor: 'rgba(255,255,255,0.95)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    headerText: {
+        flex: 1,
+    },
+    greeting: {
         color: '#fff',
-        fontSize: 14,
-        fontWeight: '500',
+        fontSize: 18,
+        fontWeight: '700',
+    },
+    dateText: {
+        color: 'rgba(255,255,255,0.75)',
+        fontSize: 13,
         marginTop: 2,
     },
-    statusDot: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
+    logoutBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginLeft: 8,
     },
+    // ── Content ──
     content: {
         flex: 1,
-        paddingHorizontal: 16,
-        paddingTop: 20,
-        borderTopRightRadius:30,
-        borderTopLeftRadius:30,
-        backgroundColor:'#fff'
+        backgroundColor: '#F5F5F7',
+        borderTopLeftRadius: 28,
+        borderTopRightRadius: 28,
+        paddingTop: 24,
+        paddingHorizontal: 18,
     },
     sectionHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 16,
+        marginBottom: 18,
     },
     sectionTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#333',
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1E2022',
     },
-    addButton: {
-        backgroundColor: 'transparent',
+    sectionSubtitle: {
+        fontSize: 13,
+        color: '#999',
+        marginTop: 2,
     },
-    addButtonText: {
-        color: '#007AFF',
-        fontSize: 14,
-        fontWeight: '500',
-    },
+    // ── Branch Cards ──
     list: {
-        paddingBottom: 20,
+        paddingBottom: 90,
     },
-    branchItem: {
+    branchCard: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'space-between',
         backgroundColor: '#fff',
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 12,
+        paddingVertical: 14,
+        paddingHorizontal: 14,
+        borderRadius: 16,
+        marginBottom: 10,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        elevation: 3,
     },
-    branchIcon: {
-        width: 48,
-        height: 48,
-        borderRadius: 12,
-        backgroundColor: '#f0f0f0',
+    cardLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    branchIconWrap: {
+        width: 46,
+        height: 46,
+        borderRadius: 14,
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 14,
+        marginRight: 12,
     },
     branchInfo: {
         flex: 1,
@@ -256,25 +304,87 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#1E2022',
     },
-    branchAddress: {
-        fontSize: 13,
-        color: '#666',
+    addressRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
         marginTop: 3,
     },
+    branchAddress: {
+        fontSize: 13,
+        color: '#999',
+        marginLeft: 3,
+        flex: 1,
+    },
+    chevronWrap: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#F5F5F7',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginLeft: 8,
+    },
+    // ── Empty State ──
     emptyState: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
+        paddingBottom: 60,
+    },
+    emptyIconWrap: {
+        width: 88,
+        height: 88,
+        borderRadius: 44,
+        backgroundColor: 'rgba(243,112,33,0.1)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 16,
     },
     emptyText: {
         fontSize: 18,
-        fontWeight: '600',
-        color: '#666',
-        marginTop: 16,
+        fontWeight: '700',
+        color: '#333',
     },
     emptySubtext: {
         fontSize: 14,
         color: '#999',
-        marginTop: 8,
+        marginTop: 6,
+        marginBottom: 24,
+    },
+    emptyAddBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: THEME,
+        paddingVertical: 14,
+        paddingHorizontal: 28,
+        borderRadius: 14,
+        shadowColor: THEME,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    emptyAddBtnText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
+        marginLeft: 6,
+    },
+    // ── FAB ──
+    fab: {
+        position: 'absolute',
+        bottom: 30,
+        right: 22,
+        width: 58,
+        height: 58,
+        borderRadius: 29,
+        backgroundColor: THEME,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: THEME,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.35,
+        shadowRadius: 10,
+        elevation: 6,
     },
 });

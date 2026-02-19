@@ -10,7 +10,7 @@ import { getStoreSettings, updateStoreSettings } from "../services/api";
 
 
 const ENCRYPTION_KEY = 'yourpos-secret-key-2026';
-const THEME_COLOR = '#FF9500'; // Orange
+const THEME_COLOR = '#F37021'; // Orange
 const BG_COLOR = '#F8F9FA'; // Light Gray Background
 
 export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {

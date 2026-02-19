@@ -465,6 +465,14 @@ export default function ScanScreen({ navigation, route }) {
                 // Pay for 'buy' amount in each set + remainder
                 const payableQty = (fullSets * buy) + remainder;
                 lineTotal = payableQty * p.price;
+            } else if (promo && promo.type === 'bundle' && promo.min_spend) {
+                const rawTotal = p.price * p.quantity;
+                if (rawTotal >= promo.min_spend) {
+                    lineTotal = rawTotal - parseFloat(promo.discount_value || 0);
+                }
+                else {
+                    lineTotal = rawTotal;
+                }
             } else {
                 // Normal or Discount % (price is already discounted from backend)
                 lineTotal = p.price * p.quantity;
@@ -547,7 +555,8 @@ export default function ScanScreen({ navigation, route }) {
                     items: transactionData.order_items.map(item => ({
                         name: item.products.name,
                         quantity: item.qty,
-                        price: item.price_per_unit
+                        price: item.price_per_unit,
+                        unit: item.unit || 'ชิ้น'
                     })),
                     total: transactionData.total_amount,
                     received: receivedAmount || transactionData.total_amount,
