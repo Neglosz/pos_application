@@ -318,7 +318,7 @@ export default function ScanScreen({ navigation, route }) {
             salePrice: newProductPrice,
             costPrice: newProductCost || 0,
             categoryId: dbCategoryId,
-            unitType: 'kg',
+            unitType: newProductUnit.label,
             quantity: newProductStock ? parseFloat(newProductStock) : 0,
             salePrice: newProductPrice, // Ensure mapping matches api.js expectation
             costPrice: newProductCost || 0,
