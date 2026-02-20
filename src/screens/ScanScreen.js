@@ -69,8 +69,6 @@ export default function ScanScreen({ navigation, route }) {
     // --- State: UI Modes ---
     const [activeTab, setActiveTab] = useState('scan'); // 'scan', 'search', 'weight'
     const [scanMode, setScanMode] = useState('sale'); // 'sale', 'price_check'
-    const [promoHint, setPromoHint] = useState(null);
-    const shownPromoHints = useRef(new Set());
 
     // --- State: Camera & Logic ---
     const [isCameraActive, setIsCameraActive] = useState(true);
@@ -425,7 +423,6 @@ export default function ScanScreen({ navigation, route }) {
             } else {
                 if (scanMode === 'sale') {
                     addToCart(product, 1);
-                    checkPromoHint(product, useCartStore.getState().cart);
                 } else {
                     // Price Check Mode
                     let priceMsg = `ราคา: ฿${product.price}`;
@@ -448,36 +445,6 @@ export default function ScanScreen({ navigation, route }) {
         } finally {
             // Longer debounce for iOS
             setTimeout(() => { isProcessingRef.current = false; }, 2000);
-        }
-    };
-
-    const checkPromoHint = (product, currentCart) => {
-        const promo = product.promotion;
-        if (!promo) return;
-        if (shownPromoHints.current.has(product.id)) return;
-
-        const cartItem = currentCart.find(p => p.id === product.id);
-        const qty = cartItem ? cartItem.quantity : 1;
-        let message = null;
-        if (promo.type === 'buy_x_get_y') {
-            const setSize = (promo.min_qty || 1) + (promo.free_qty || 1);
-            if (qty < setSize) {
-                const need = setSize - qty;
-                message = `🏷️ โปร: ซื้อ ${promo.min_qty} แถม ${promo.free_qty}! เพิ่มอีก ${need} ชิ้นเพื่อรับของแถม`;
-            }
-        }
-        else if (promo.type == 'bundle' && promo.min_spend) {
-            const currentTotal = product.price * qty;
-            if (currentTotal < promo.min_spend) {
-                const need = promo.min_spend - currentTotal;
-                message = `🏷️ โปร: ซื้อครบ ฿${promo.min_spend} ลด ฿${promo.discount_value}! เหลืออีก ฿${need}`;
-            }
-        }
-        if (message) {
-            shownPromoHints.current.add(product.id);
-            setPromoHint({ message, type: promo.type });
-
-            setTimeout(() => setPromoHint(null), 5000);
         }
     };
 
@@ -520,11 +487,60 @@ export default function ScanScreen({ navigation, route }) {
     const handleConfirmAddToCart = (quantity) => {
         if (selectedProductToAdd) {
             addToCart(selectedProductToAdd, quantity);
-            checkPromoHint(selectedProductToAdd, useCartStore.getState().cart);
             setQuantityModalVisible(false);
             if (activeTab !== 'scan') {
                 Alert.alert('สำเร็จ', 'เพิ่มลงตะกร้าแล้ว');
             }
+        }
+    };
+
+    const checkCartPromotionsAlert = () => {
+        const missedPromos = [];
+
+        products.forEach(p => {
+            const promo = p.promotion;
+            if (!promo) return;
+
+            const qty = p.quantity;
+
+            if (promo.type === 'buy_x_get_y') {
+                const setSize = (promo.min_qty || 1) + (promo.free_qty || 1);
+                const remainder = qty % setSize;
+
+                if (remainder > 0) {
+                    const need = setSize - remainder;
+                    missedPromos.push(`- ${p.name}: ซื้อ ${promo.min_qty} แถม ${promo.free_qty} (ขาดอีก ${need} ชิ้น)`);
+                }
+            }
+            else if (promo.type === 'bundle' && promo.min_spend) {
+                const currentTotal = p.price * qty;
+                if (currentTotal < promo.min_spend) {
+                    const need = promo.min_spend - currentTotal;
+                    missedPromos.push(`- ${p.name}: ลด ฿${promo.discount_value} เมื่อซื้อครบ ฿${promo.min_spend} (ขาดอีก ฿${need})`);
+                }
+            }
+        });
+        return missedPromos;
+    };
+
+    const handleCheckoutClick = () => {
+        if (products.length === 0) {
+            Alert.alert('ตะกร้าว่าง', 'กรุณาเพิ่มสินค้าลงตะกร้าก่อนทำรายการชำระเงิน');
+            return;
+        }
+        const missedPromos = checkCartPromotionsAlert();
+
+        if (missedPromos.length > 0) {
+            Alert.alert(
+                'แจ้งเตือนโปรโมชัน',
+                'คุณมีโปรโมชันที่ยังใช้ไม่ครบ:\n\n' + missedPromos.join('\n') + '\n\nต้องการไปชำระเงินเลยหรือไม่?',
+                [
+                    { text: 'กลับไปเลือกของเพิ่ม', style: 'cancel' },
+                    { text: 'ชำระเงินเลย', style: 'default', onPress: () => setShowPaymentModal(true) }
+                ]
+            );
+        } else {
+            setShowPaymentModal(true);
         }
     };
 
@@ -599,7 +615,6 @@ export default function ScanScreen({ navigation, route }) {
                 });
 
                 clearCart();
-                shownPromoHints.current.clear();
                 refreshProducts();
                 setShowReceiptModal(true);
             } else {
@@ -1266,7 +1281,7 @@ export default function ScanScreen({ navigation, route }) {
                             style={[styles.payButton, { borderRadius: 12 }]}
                             onPress={() => {
                                 setShowCartModal(false);
-                                setShowPaymentModal(true);
+                                handleCheckoutClick();
                             }}
                         >
                             <Text style={[styles.payButtonText, { flex: 1, textAlign: 'center' }]}>ชำระเงิน</Text>
@@ -1309,7 +1324,7 @@ export default function ScanScreen({ navigation, route }) {
         <View style={[styles.footer]}>
             <TouchableOpacity
                 style={styles.payButton}
-                onPress={() => setShowPaymentModal(true)}
+                onPress={handleCheckoutClick}
             >
                 {/* Left: Count Badge */}
                 <View style={styles.itemCountBadge}>
@@ -1337,16 +1352,6 @@ export default function ScanScreen({ navigation, route }) {
     return (
         <View style={styles.container}>
             {renderTabs()}
-            {promoHint && (
-                <Animated.View style={styles.promoHintToast}>
-                    <View style={styles.promoHintContent}>
-                        <Text style={styles.promoHintText}>{promoHint.message}</Text>
-                        <TouchableOpacity onPress={() => setPromoHint(null)}>
-                            <Ionicons name="close" size={18} color='#fff' />
-                        </TouchableOpacity>
-                    </View>
-                </Animated.View>
-            )}
 
             {/* Split View Container for Scan Tab */}
             {activeTab === 'scan' ? (
@@ -1569,33 +1574,4 @@ const styles = StyleSheet.create({
     fabBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#FF3B30', borderRadius: 10, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4, borderWidth: 1.5, borderColor: '#fff', zIndex: 3 },
     fabBadgeText: { color: '#fff', fontSize: 9, fontWeight: 'bold' },
     fabAmountText: { color: '#fff', fontSize: 8, fontWeight: '600', marginTop: 1 },
-
-    // Promo Hint Toast Styles
-    promoHintToast: {
-        position: 'absolute',
-        top: 60, // ปรับตำแหน่งตามความสวยงาม (หลบ Tabs ด้านบน)
-        left: 16,
-        right: 16,
-        zIndex: 999,
-    },
-    promoHintContent: {
-        backgroundColor: '#7B1FA2', // สีม่วง Branding เดียวกับโปร
-        borderRadius: 12,
-        padding: 14,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 5,
-    },
-    promoHintText: {
-        color: '#fff',
-        fontSize: 14,
-        fontWeight: '600',
-        flex: 1,
-        marginRight: 8,
-    },
 });
