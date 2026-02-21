@@ -525,13 +525,31 @@ export default function AIScreen() {
                         </View>
                     </View>
                 ) : (
-                    chatHistory.map((chat, index) => (
-                        <View key={index} style={[styles.messageBubble, chat.role === 'user' ? styles.userBubble : styles.aiBubble]}>
-                            <Text style={[styles.messageText, chat.role === 'user' ? styles.userMessageText : styles.aiMessageText]}>
-                                {chat.parts[0].text}
-                            </Text>
-                        </View>
-                    ))
+                    chatHistory.map((chat, index) => {
+                        const isUser = chat.role === 'user';
+                        const rawText = chat.parts[0].text.replace(/\*\*/g, '');
+                        const textParagraphs = isUser ? [rawText] : rawText.split('\n').filter(t => t.trim().length > 0);
+                        return (
+                            <View key={index} style={[styles.messageBubble, isUser ? styles.userBubble : styles.aiBubble]}>
+                                {!isUser && (
+                                    <View style={styles.aiMessageHeader}>
+                                        <View style={styles.aiHeaderIconBage}>
+                                            <Ionicons name="sparkles" size={14} color="#F37021" />
+                                        </View>
+                                        <Text style={styles.aiHeaderTitle}>ผู้ช่วย AI บทวิเคราะห์</Text>
+                                    </View>
+                                )}
+                                {textParagraphs.map((paragraph, pIndex) => (
+                                    <Text key={pIndex} style={[styles.messageText, isUser ? styles.userMessageText : styles.aiMessageText, (!isUser && pIndex < textParagraphs.length - 1) && { marginBottom: 12 }]}>
+                                        {isUser ? paragraph : paragraph.replace(/^\*\s/, '').trim()}
+                                    </Text>
+                                ))}
+                                {!isUser && (
+                                    <Text style={styles.aiMessageFooter}>ประมวลผลจริงจากข้อมูลจริงของร้านคุณ</Text>
+                                )}
+                            </View>
+                        )
+                    })
                 )}
                 {chatLoading && (
                     <View style={[styles.messageBubble, styles.aiBubble]}>
@@ -1638,10 +1656,20 @@ const styles = StyleSheet.create({
         backgroundColor: '#F37021',
     },
     aiBubble: {
+        backgroundColor: '#FFF',
         alignSelf: 'flex-start',
-        backgroundColor: '#fff',
+        maxWidth: '85%',
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+        borderTopLeftRadius: 4,
         borderWidth: 1,
-        borderColor: '#eee',
+        borderColor: '#FFE0B2',
+        shadowColor: '#F37021',
+        shadowOffset: { width: 0, heoght: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
     },
     messageText: {
         fontSize: 15,
@@ -1650,8 +1678,36 @@ const styles = StyleSheet.create({
     userMessageText: {
         color: '#fff',
     },
+    aiMessageHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+        paddingBottom: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#FFF3E0',
+    },
+    aiHeaderIconBage: {
+        backgroundColor: '#FFF3E0',
+        padding: 4,
+        borderRadius: 12,
+        marginRight: 6,
+    },
+    aiHeaderTitle: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#E65100',
+    },
     aiMessageText: {
+        fontSize: 15,
         color: '#333',
+        lineHeight: 24,
+    },
+    aiMessageFooter: {
+        fontSize: 11,
+        color: '#9E9E9E',
+        marginTop: 8,
+        fontStyle: 'italic',
+        textAlign: 'right',
     },
     chatInputWrapper: {
         backgroundColor: '#fff',
