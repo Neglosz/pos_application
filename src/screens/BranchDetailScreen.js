@@ -76,7 +76,7 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${session.access_token}`,
-                    'Content-Type': `${session.access_token}`,
+
                 },
                 body: formData,
             });

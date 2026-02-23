@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getTransactions, createTransaction, deleteTransaction } from '../services/api';
 import AddTransactionModal from '../components/AddTransactionModal';
+import { useBluetooth } from '../contexts/BluetoothContext';
+import { ReceiptModal } from '../components/payment';
 
 export default function TransactionHistoryScreen({ navigation }) {
     const insets = useSafeAreaInsets();
@@ -11,6 +13,9 @@ export default function TransactionHistoryScreen({ navigation }) {
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all'); // all, income, expense
     const [modalVisible, setModalVisible] = useState(false);
+    const { connectedPrinter } = useBluetooth();
+    const [receiptModalVisible, setReceiptModalVisible] = useState(false);
+    const [selectedTransaction, setSelectedTransaction] = useState(null);
 
     const fetchTransactions = async () => {
         setLoading(true);
@@ -77,10 +82,33 @@ export default function TransactionHistoryScreen({ navigation }) {
                 <Text style={[styles.amount, { color: item.trans_type === 'income' ? '#4CAF50' : '#F44336' }]}>
                     {item.trans_type === 'income' ? '+' : '-'} ฿{parseFloat(item.amount).toLocaleString()}
                 </Text>
-                {/* Only allow deleting manual entries if needed, or all. For now allow all for owner/manager */}
-                <TouchableOpacity onPress={() => handleDelete(item.id)}>
-                    <Ionicons name="trash-outline" size={18} color="#ccc" />
-                </TouchableOpacity>
+                
+                <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                    {/* ปุ่มพิมพ์ใบเสร็จย้อนหลัง (โผล่เฉพาะรายรับเมื่อมีปรินเตอร์) */}
+                    {item.trans_type === 'income' && connectedPrinter && (
+                        <TouchableOpacity 
+                            onPress={() => {
+                                // แปลงข้อมูลให้ตรงกับที่ ReceiptModal ต้องการ
+                                setSelectedTransaction({
+                                    id: item.reference_id || item.id, // ใช้ order_id ถ้ามี
+                                    receiptNo: item.order_no || `MANUAL-${item.id}`,
+                                    date: new Date(item.trans_date).toLocaleString('th-TH'),
+                                    total: parseFloat(item.amount),
+                                    paymentMethod: item.payment_method === 'cash' ? 'เงินสด' : (item.payment_method === 'qr' ? 'Thai QR' : 'อื่นๆ'),
+                                    received: parseFloat(item.amount), // สมมติว่ารับเต็ม
+                                    change: 0,
+                                    // items จะโดนดึงมาอัตโนมัติเมื่อ Modal เปิด (logic ของพี่ทำไว้แล้ว)
+                                });
+                                setReceiptModalVisible(true);
+                            }}
+                        >
+                            <Ionicons name="print" size={20} color="#0A84FF" />
+                        </TouchableOpacity>
+                    )}
+                    <TouchableOpacity onPress={() => handleDelete(item.id)}>
+                        <Ionicons name="trash-outline" size={18} color="#ccc" />
+                    </TouchableOpacity>
+                </View>
             </View>
         </View>
     );
@@ -127,6 +155,14 @@ export default function TransactionHistoryScreen({ navigation }) {
                 visible={modalVisible} 
                 onClose={() => setModalVisible(false)} 
                 onSave={handleSaveTransaction} 
+            />
+
+            <ReceiptModal 
+                visible={receiptModalVisible}
+                transaction={selectedTransaction}
+                onClose={() => setReceiptModalVisible(false)}
+                onNewTransaction={() => setReceiptModalVisible(false)}
+                onPrint={() => Alert.alert('Printing...', 'กำลังส่งข้อมูลไปเครื่องพิมพ์')} 
             />
         </View>
     );

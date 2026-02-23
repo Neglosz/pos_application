@@ -7,6 +7,7 @@ import { Audio } from 'expo-av';
 import { Ionicons, FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
+import { useBluetooth } from '../contexts/BluetoothContext';
 
 // Stores
 import { useProductStore } from '../stores/useProductStore';
@@ -41,12 +42,20 @@ const WEIGHT_UNITS = [
 ];
 
 export default function ScanScreen({ navigation, route }) {
+    const { connectedScanner, connectedPrinter, connectedScale, printReceipt, scaleWeight } = useBluetooth();
     // --- Permissions & Stores ---
     const [permission, requestPermission] = useCameraPermissions();
     const insets = useSafeAreaInsets();
     const isFocused = useIsFocused(); // Track if screen is focused
     const { getProductByBarcode, products: storeProducts, weightProducts, categories, fetchProducts, fetchWeightProducts, fetchCategories, addProduct, refreshProducts, setSearchQuery, selectedCategoryId, setSelectedCategory, isLoading, hasMore } = useProductStore();
     const { cart: products, addToCart, removeFromCart, updateQuantity, reset: clearCart } = useCartStore();
+
+    useEffect(() => {
+        if (connectedScale && scaleWeight) {
+            setWeightInput(scaleWeight);
+            setSelectedUnit(WEIGHT_UNITS.find(u => u.value === 'kg'));
+        }
+    }, [connectedScale, scaleWeight]);
 
     // Enable real-time sync for products across devices
     useRealtimeSync();
@@ -650,6 +659,22 @@ export default function ScanScreen({ navigation, route }) {
     const renderCameraSection = () => {
         if (activeTab !== 'scan') return null;
 
+        if (connectedScanner) {
+            return (
+                <View style={[styles.cameraSection, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
+                    <Ionicons name="barcode-outline" size={60} color="#0A84FF" />
+                    <Text style={{ color: '#fff', fontSize: 18, marginTop: 10, fontWeight: 'bold' }}>เครื่องสแกนไร้สายพร้อมใช้งาน</Text>
+                    <Text style={{ color: '#888', fontSize: 14, marginTop: 5 }}>ยิงบาร์โค้ดที่สินค้าได้เลย</Text>
+                    <TextInput
+                        autoFocus={true}
+                        showSoftInputOnFocus={false}
+                        style={{ width: 0, height: 0, opacity: 0 }}
+                        onSubmitEditing={(e) => handleBarCodeScanned({ data: e.nativeEvent.text })}
+                    />
+                </View>
+            );
+        }
+
         // Only show camera when both isCameraActive AND screen is focused
         // This prevents flickering when navigating to other screens
         const shouldShowCamera = isCameraActive && isFocused;
@@ -961,27 +986,45 @@ export default function ScanScreen({ navigation, route }) {
                                     </View>
 
                                     {/* Weight Input */}
-                                    <View style={styles.wInputFieldWrap}>
-                                        <Ionicons name="scale-outline" size={20} color="#bbb" style={{ marginRight: 8 }} />
-                                        <TextInput
-                                            style={styles.wInputField}
-                                            value={weightInput}
-                                            onChangeText={setWeightInput}
-                                            keyboardType="decimal-pad"
-                                            placeholder="0.0"
-                                            placeholderTextColor="#ccc"
-                                            autoFocus={true}
-                                        />
-                                        <Text style={styles.wInputUnitLabel}>{selectedUnit.label}</Text>
-                                    </View>
+                                    {connectedScale ? (
+                                        <View style={[styles.wInputFieldWrap, { backgroundColor: '#000', paddingVertical: 20 }]}>
+                                            <Ionicons name="bluetooth" size={20} color="#30D158" style={{ position: 'absolute', top: 10, left: 10 }} />
+                                            <Text style={[styles.wInputField, { color: '#30D158' }]}>{weightInput}</Text>
+                                            <Text style={[styles.wInputUnitLabel, { color: '#888' }]}>{selectedUnit.label}</Text>
+                                        </View>
+                                    ) : (
+                                        <View style={styles.wInputFieldWrap}>
+                                            <Ionicons name="scale-outline" size={20} color="#bbb" style={{ marginRight: 8 }} />
+                                            <TextInput
+                                                style={styles.wInputField}
+                                                value={weightInput}
+                                                onChangeText={setWeightInput}
+                                                keyboardType="decimal-pad"
+                                                placeholder="0.0"
+                                                placeholderTextColor="#ccc"
+                                                autoFocus={true}
+                                            />
+                                            <Text style={styles.wInputUnitLabel}>{selectedUnit.label}</Text>
+                                        </View>
+                                    )}
+                                    {connectedScale && (
+                                        <Text style={{ textAlign: 'center', color: '#888', marginTop: 10, fontSize: 13 }}>⚫ รับค่าน้ำหนักจากตาชั่งอัตโนมัติ</Text>
+                                    )}
 
                                     {/* Unit Selector */}
                                     <View style={styles.wUnitRow}>
                                         {WEIGHT_UNITS.map(unit => (
                                             <TouchableOpacity
                                                 key={unit.value}
-                                                style={[styles.wUnitBtn, selectedUnit.value === unit.value && styles.wUnitBtnActive]}
-                                                onPress={() => setSelectedUnit(unit)}
+                                                style={[
+                                                    styles.wUnitBtn,
+                                                    selectedUnit.value === unit.value && styles.wUnitBtnActive,
+                                                    connectedScale && styles.wUnitBtnDisabled
+                                                ]}
+                                                onPress={() => {
+                                                    if (!connectedScale) setSelectedUnit(unit);  // กดได้เฉพาะตอนไม่ได้ต่อตาชั่ง
+                                                }}
+                                                activeOpacity={connectedScale ? 1 : 0.7}
                                             >
                                                 <Text style={[styles.wUnitBtnText, selectedUnit.value === unit.value && styles.wUnitBtnTextActive]}>{unit.label}</Text>
                                             </TouchableOpacity>
@@ -1081,7 +1124,7 @@ export default function ScanScreen({ navigation, route }) {
 
                             {/* Price Input */}
                             <Text style={styles.inputLabel}>
-                                <Ionicons name="cash-outline" size={14} /> ราคา (บาท)
+                                <Ionicons name="cash-outline" size={14} /> ราคาขาย (บาท)
                             </Text>
                             <View style={[styles.textInput, { flexDirection: 'row', alignItems: 'center' }]}>
                                 <Text style={{ fontSize: 16, color: '#999', marginRight: 10 }}>฿</Text>
@@ -1321,22 +1364,35 @@ export default function ScanScreen({ navigation, route }) {
 
     // 8. FOOTER (PAYMENT)
     const renderFooter = () => (
-        <View style={[styles.footer]}>
-            <TouchableOpacity
-                style={styles.payButton}
-                onPress={handleCheckoutClick}
-            >
-                {/* Left: Count Badge */}
-                <View style={styles.itemCountBadge}>
-                    <Text style={styles.itemCountText}>{totalItems}</Text>
-                </View>
-
-                {/* Center: Text */}
-                <Text style={styles.payButtonText}>ชำระเงิน</Text>
-
-                {/* Right: Total Price */}
-                <Text style={styles.payTotalText}>฿{totalAmount.toLocaleString()}</Text>
-            </TouchableOpacity>
+        <View style={styles.footer}>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+                {/* ปุ่มพิมพ์โผล่มาเฉพาะตอนเชื่อมเครื่องปริ้น */}
+                {connectedPrinter && (
+                    <TouchableOpacity
+                        style={[styles.payButton, { flex: 0.3, backgroundColor: lastTransaction ? '#000' : '#E5E5EA', justifyContent: 'center' }]}
+                        onPress={() => {
+                            if (lastTransaction) {
+                                setShowReceiptModal(true);
+                            } else {
+                                Alert.alert('ไม่มีข้อมูล', 'ยังไม่มีรายการขายล่าสุดให้พิมพ์ครับ');
+                            }
+                        }}
+                        activeOpacity={lastTransaction ? 0.8 : 1}
+                    >
+                        <Ionicons name="print" size={24} color={lastTransaction ? "#fff" : "#999"} />
+                    </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                    style={[styles.payButton, connectedPrinter ? { flex: 0.7 } : { flex: 1 }]}
+                    onPress={handleCheckoutClick}
+                >
+                    <View style={styles.itemCountBadge}>
+                        <Text style={styles.itemCountText}>{totalItems}</Text>
+                    </View>
+                    <Text style={styles.payButtonText}>ชำระเงิน</Text>
+                    <Text style={styles.payTotalText}>฿{totalAmount.toLocaleString()}</Text>
+                </TouchableOpacity>
+            </View>
         </View>
     );
 
@@ -1394,6 +1450,14 @@ export default function ScanScreen({ navigation, route }) {
                 transaction={lastTransaction}
                 onClose={() => setShowReceiptModal(false)}
                 onNewTransaction={() => setShowReceiptModal(false)}
+                onPrint={async () => {
+                    try {
+                        await printReceipt(lastTransaction);
+                        Alert.alert('สำเร็จ', 'พิมพ์ใบเสร็จเรียบร้อยแล้ว');
+                    } catch (error) {
+                        Alert.alert('ผิดพลาด', error.message);
+                    }
+                }}
             />
 
             {/* Add Product Modal */}
@@ -1574,4 +1638,8 @@ const styles = StyleSheet.create({
     fabBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#FF3B30', borderRadius: 10, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4, borderWidth: 1.5, borderColor: '#fff', zIndex: 3 },
     fabBadgeText: { color: '#fff', fontSize: 9, fontWeight: 'bold' },
     fabAmountText: { color: '#fff', fontSize: 8, fontWeight: '600', marginTop: 1 },
+
+    wUnitBtnDisabled: {
+        opacity: 0.4,
+    },
 });

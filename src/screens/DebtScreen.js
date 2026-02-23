@@ -609,7 +609,7 @@ const styles = StyleSheet.create({
     },
     searchInput: {
         flex: 1,
-        color: '#fff',
+        color: '#000',
         fontSize: 16,
     },
     filterRow: {

@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { getSalesSummary, getSalesChartData, getPaymentMethodStats, getOrders, getOrderDetails, getRecommendationStats } from '../services/api';
 import ReceiptModal from '../components/payment/ReceiptModal';
+import { useBluetooth } from '../contexts/BluetoothContext';
 
 const { width } = Dimensions.get('window');
 
@@ -19,6 +20,7 @@ const periods = [
 export default function ReportScreen() {
     const insets = useSafeAreaInsets();
     const navigation = useNavigation();
+    const { printReceipt } = useBluetooth();
     const [period, setPeriod] = useState('today');
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -379,9 +381,13 @@ export default function ReportScreen() {
                 visible={receiptVisible}
                 transaction={selectedTransaction}
                 onClose={() => setReceiptVisible(false)}
-                onPrint={() => {
-                    // Implement print logic later if needed
-                    Alert.alert('Info', 'ฟังก์ชันพิมพ์ยังไม่เปิดใช้งานในหน้านี้');
+                onPrint={ async () => {
+                    try {
+                        await printReceipt(selectedTransaction);
+                        Alert.alert('สำเร็จ', 'พิมพ์ใบเสร็จเรียบร้อยแล้ว');
+                    } catch (error) {
+                        Alert.alert('ผิดพลาด', error.message);
+                    }
                 }}
                 onNewTransaction={() => setReceiptVisible(false)}
             />
