@@ -29,8 +29,8 @@ export default function AddBranchModal({ visible, onClose, onSuccess }) {
 
     const generateCredentials = () => {
         // Generate random suffix for email
-        const randomSuffix = Math.random().toString(36).substring(2, 8);
-        setGeneratedEmail(`store-${randomSuffix}@${EMAIL_DOMAIN}`);
+        const ts = Date.now().toString(36);
+        setGeneratedEmail(`store-${ts}@zippy.pos`);
 
         // Generate random password (10 chars)
         const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
@@ -41,20 +41,36 @@ export default function AddBranchModal({ visible, onClose, onSuccess }) {
         setGeneratedPassword(password);
     };
 
+    const thaiToRoman = (text) => {
+        const map = {
+            'ก':'k','ข':'kh','ฃ':'kh','ค':'kh','ฅ':'kh','ฆ':'kh',
+            'ง':'ng','จ':'ch','ฉ':'ch','ช':'ch','ซ':'s','ฌ':'ch',
+            'ญ':'y','ฎ':'d','ฏ':'t','ฐ':'th','ฑ':'th','ฒ':'th',
+            'ณ':'n','ด':'d','ต':'t','ถ':'th','ท':'th','ธ':'th',
+            'น':'n','บ':'b','ป':'p','ผ':'ph','ฝ':'f','พ':'ph',
+            'ฟ':'f','ภ':'ph','ม':'m','ย':'y','ร':'r','ล':'l',
+            'ว':'w','ศ':'s','ษ':'s','ส':'s','ห':'h','ฬ':'l',
+            'อ':'o','ฮ':'h',
+            'ะ':'a','า':'a','ิ':'i','ี':'i','ึ':'ue','ื':'ue',
+            'ุ':'u','ู':'u','เ':'e','แ':'ae','โ':'o','ใ':'ai','ไ':'ai',
+            '็':'','่':'','้':'','๊':'','๋':'','์':'','ั':'a','ำ':'am',
+        };
+        let result = '';
+        for(const ch of text) {
+            result += map[ch] || ch;
+        }
+        return result;
+    };
+
     const generateEmailFromName = (name) => {
         if (!name.trim()) return;
-
-        // Convert Thai/English name to slug
-        // Remove non-ASCII characters to ensure valid email format
-        const slug = name
+        const slug = thaiToRoman(name)
             .toLowerCase()
             .replace(/\s+/g, '-')
-            .replace(/[^a-z0-9-]/g, '') // Only keep a-z, 0-9, -
+            .replace(/[^a-z0-9-]/g, '')
             .substring(0, 30);
-
-        // Add random suffix to ensure uniqueness
-        const randomSuffix = Math.random().toString(36).substring(2, 6);
-        setGeneratedEmail(`${slug || 'store'}-${randomSuffix}@${EMAIL_DOMAIN}`);
+        const ts = Date.now().toString(36);
+        setGeneratedEmail(`${slug || 'store'}-${ts}@zippy.pos`);
     };
 
     // Simple XOR encryption with Base64 encoding
