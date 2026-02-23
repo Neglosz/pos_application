@@ -543,7 +543,7 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
             onRequestClose={onClose}
             statusBarTranslucent={true}
         >
-            <TouchableWithoutFeedback onPress={onClose}>
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                 <View style={styles.centeredView}>
                     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                         <KeyboardAvoidingView
