@@ -213,8 +213,91 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
         Alert.alert('คัดลอกแล้ว', `${label} ถูกคัดลอกไปยังคลิปบอร์ด`);
     };
 
+    const thaiToRoman = (text) => {
+        const map = {
+            'ก':'k','ข':'kh','ฃ':'kh','ค':'kh','ฅ':'kh','ฆ':'kh',
+            'ง':'ng','จ':'ch','ฉ':'ch','ช':'ch','ซ':'s','ฌ':'ch',
+            'ญ':'y','ฎ':'d','ฏ':'t','ฐ':'th','ฑ':'th','ฒ':'th',
+            'ณ':'n','ด':'d','ต':'t','ถ':'th','ท':'th','ธ':'th',
+            'น':'n','บ':'b','ป':'p','ผ':'ph','ฝ':'f','พ':'ph',
+            'ฟ':'f','ภ':'ph','ม':'m','ย':'y','ร':'r','ล':'l',
+            'ว':'w','ศ':'s','ษ':'s','ส':'s','ห':'h','ฬ':'l',
+            'อ':'o','ฮ':'h',
+            'ะ':'a','า':'a','ิ':'i','ี':'i','ึ':'ue','ื':'ue',
+            'ุ':'u','ู':'u','เ':'e','แ':'ae','โ':'o','ใ':'ai','ไ':'ai',
+            '็':'','่':'','้':'','๊':'','๋':'','์':'','ั':'a','ำ':'am',
+        };
+        let result = '';
+        for(const ch of text) {
+            result += map[ch] || ch;
+        }
+        return result;
+    };
+
     const handleResetCredentials = () => {
-        Alert.alert('แจ้งเตือน', 'ฟีเจอร์นี้กำลังพัฒนา');
+        Alert.alert('รีเซ็ตรหัสผ่าน', 'ระบบจะรีเซ็ต Email และรหัสผ่านของผู้จัดการ\nข้อมูลสินค้าและการขายจะไม่ถูกลบ ต้องการดำเนินการหรือไม่?',
+            [
+                { text: 'ยกเลิก', style: 'cancel' },
+                { text: 'รีเซ็ต', style: 'destructive', onPress: performResetCredentials },
+            ]
+        );
+    };
+
+    const performResetCredentials = async ()=> {
+        setLoading(true);
+        try{
+            const { data: { session } } = await supabase.auth.getSession();
+            if(!session) throw new Error('Session หมดอายุ');
+            //หา OldUser
+            const { data: member } = await supabase
+                .from('store_members')
+                .select('user_id')
+                .eq('store_id', branch.id)
+                .eq('role', 'manager')
+                .limit(1)
+                .single();
+            
+            const oldUserId = member?.user_id || null;
+            // สร้าง credient ใหม่
+            const storeName = thaiToRoman(branch.name)
+                .toLowerCase()
+                .replace(/\s+/g, '-')
+                .replace(/[^a-z0-9-]/g, '')
+                .substring(0, 20);
+            const ts = Date.now().toString(36);
+            const newEmail = `${storeName || 'manager'}-${ts}@zippy.pos`;
+
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+            let newPassword = '';
+            for(let i = 0; i < 10; i++){
+                newPassword += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+
+            const { API_BASE_URL } = require('../config');
+            const response = await fetch(`${API_BASE_URL}/branches/reset-credentials`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({
+                    store_id: branch.id,
+                    old_user_id: oldUserId,
+                    new_email: newEmail,
+                    new_password: newPassword,
+                }),
+            });
+
+            const result = await response.json();
+            if(!response.ok) throw new Error(result.error || 'รีเซ็ตไม่สำเร็จ');
+
+            setCredentials({ email: newEmail, password: newPassword });
+            Alert.alert('สำเร็จ', `รีเซ็ตเรียบร้อย\n\nEmail: ${newEmail}\nPassword: ${newPassword}`);
+        }catch(error){
+            Alert.alert('ผิดพลาด', error.message);
+        }finally{
+            setLoading(false);
+        }
     };
 
     const handleDeleteBranch = () => {
