@@ -35,6 +35,7 @@ import BranchDetailScreen from './src/screens/BranchDetailScreen';
 import DeviceConnectScreen from './src/screens/DeviceConnectScreen';
 import BackupScreen from './src/screens/BackupScreen';
 import TransactionHistoryScreen from './src/screens/TransactionHistoryScreen';
+import { BluetoothProvider } from './src/contexts/BluetoothContext';
 
 import AllTransactionsScreen from './src/screens/AllTransactionsScreen';
 
@@ -354,10 +355,12 @@ export default function App() {
     }
 
     return (
-      <NavigationContainer>
-        <MainStack onLogout={handleLogout} onGoToBranchList={handleGoToBranchList} />
-        <StatusBar style="dark" />
-      </NavigationContainer>
+      <BluetoothProvider>
+        <NavigationContainer>
+          <MainStack onLogout={handleLogout} onGoToBranchList={handleGoToBranchList} />
+          <StatusBar style="dark" />
+        </NavigationContainer>
+      </BluetoothProvider>
     );
   };
 

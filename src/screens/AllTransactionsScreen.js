@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getOrders, getOrderDetails } from '../services/api';
 import ReceiptModal from '../components/payment/ReceiptModal';
+import { useBluetooth } from '../contexts/BluetoothContext';
+
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -93,6 +95,7 @@ const TransactionItem = React.memo(({ item, onPress }) => {
 
 export default function AllTransactionsScreen({ navigation }) {
     const insets = useSafeAreaInsets();
+    const { printReceipt } = useBluetooth();
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -413,7 +416,14 @@ export default function AllTransactionsScreen({ navigation }) {
                 visible={receiptVisible}
                 transaction={selectedTransaction}
                 onClose={() => setReceiptVisible(false)}
-                onPrint={() => Alert.alert('Info', 'ฟังก์ชันพิมพ์ยังไม่เปิดใช้งานในหน้านี้')}
+                onPrint={async () => {
+                    try {
+                        await printReceipt(selectedTransaction);
+                        Alert.alert('สำเร็จ', 'พิมพ์ใบเสร็จเรียบร้อยแล้ว');
+                    } catch (error) {
+                        Alert.alert('ผิดพลาด', error.message);
+                    }
+                }}
                 onNewTransaction={() => setReceiptVisible(false)}
             />
 

@@ -7,48 +7,101 @@ import {
     FlatList,
     Switch,
     Modal,
+    PermissionsAndroid,
+    Platform,
+    Alert
 } from 'react-native';
 import { Ionicons, FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useBluetooth } from '../contexts/BluetoothContext';
 
 export default function DeviceConnectScreen() {
     const navigation = useNavigation();
-    const [savedDevices, setSavedDevices] = useState([
-        { id: '1', name: 'XPrinter XP-58', type: 'printer', status: 'ready', connected: true }, // ready = พร้อมใช้งาน
-        { id: '2', name: 'Scanner BT-001', type: 'scanner', status: 'history', connected: false }, // history = เคยเชื่อมต่อ
-    ]);
+    const { 
+        manager, savedDevices, setSavedDevices, isScanning, setIsScanning, 
+        requestPermissions, guessType, connectToDevice, disconnectDevice 
+    } = useBluetooth();
 
-    const [isScanning, setIsScanning] = useState(false);
     const [scanModalVisible, setScanModalVisible] = useState(false);
     const [foundDevices, setFoundDevices] = useState([]);
 
+    const pairDevice = async (device) => {
+        setIsScanning(false);
+        manager.stopDeviceScan();
+        // 1. เพิ่มอุปกรณ์ลงรายการ (สถานะ history ไปก่อน)
+        const newDevice = {
+            id: device.id,
+            name: device.name,
+            type: device.type,
+            status: 'history',
+            connected: false,
+        };
+        
+        // ถ้ารายการยังไม่มี ค่อยเพิ่มเข้าไป
+        if (!savedDevices.find(d => d.id === device.id)) {
+            setSavedDevices(prev => [...prev, newDevice]);
+        }
+        
+        // 2. เรียกใช้งานฟังก์ชั่นจาก Context ไปต่อ Bluetooth จริงๆ
+        const success = await connectToDevice(device);
+        if(success) {
+            setScanModalVisible(false);
+            Alert.alert('สำเร็จ', `เชื่อมต่อ ${device.name} แล้ว`);
+        } else {
+            Alert.alert('ผิดพลาด', `ไม่สามารถเชื่อมต่อได้`);
+        }
+    };
+
     // Simulate scanning
     useEffect(() => {
-        if (scanModalVisible) {
+        if (!scanModalVisible) return;
+        let isCancelled = false;
+        const startScan = async () => {
+            const hasPermission = await requestPermissions();
+            if (!hasPermission) {
+                Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาติใช้ Bluetooth');
+                setScanModalVisible(false);
+                return;
+            }
             setIsScanning(true);
             setFoundDevices([]);
+            manager.startDeviceScan(null, null, (error, device) => {
+                if (error || isCancelled) {
+                    setIsScanning(false);
+                    return;
+                }
+                if (device && device.name) {
+                    setFoundDevices(prev => {
+                        if (prev.find(d => d.id === device.id)) return prev;
+                        return [...prev, {
+                            id: device.id,
+                            name: device.name,
+                            type: guessType(device.name),
+                        }];
+                    });
+                }
+            });
+            setTimeout(() => {
+                manager.stopDeviceScan();
+                if (!isCancelled) setIsScanning(false);
+            }, 10000);
+        };
 
-            // Mock finding devices
-            const timer1 = setTimeout(() => {
-                setFoundDevices(prev => [...prev, { id: 'd1', name: 'Digital Scale 200g', type: 'scale' }]);
-            }, 1000);
-
-            const timer2 = setTimeout(() => {
-                setFoundDevices(prev => [...prev, { id: 'd2', name: 'Unknown Device', type: 'unknown' }]);
-                setIsScanning(false);
-            }, 2500);
-
-            return () => {
-                clearTimeout(timer1);
-                clearTimeout(timer2);
-            };
-        }
+        startScan();
+        return () => {
+            isCancelled = true;
+            manager.stopDeviceScan();
+        };
     }, [scanModalVisible]);
 
-    const toggleSwitch = (id) => {
-        setSavedDevices(prev => prev.map(device =>
-            device.id === id ? { ...device, connected: !device.connected, status: !device.connected ? 'ready' : 'history' } : device
-        ));
+    const toggleSwitch = async (id) => {
+        const device = savedDevices.find(d => d.id === id);
+        if(!device) return;
+        if(device.connected) {
+            await disconnectDevice(device);
+        } else {
+            await connectToDevice(device);
+        }
     };
 
     const getIcon = (type) => {
@@ -189,7 +242,7 @@ export default function DeviceConnectScreen() {
                                         </View>
                                         <Text style={styles.foundName}>{device.name}</Text>
                                     </View>
-                                    <TouchableOpacity style={styles.pairButton}>
+                                    <TouchableOpacity style={styles.pairButton} onPress={() => pairDevice(device)}>
                                         <Text style={styles.pairButtonText}>จับคู่</Text>
                                     </TouchableOpacity>
                                 </View>
