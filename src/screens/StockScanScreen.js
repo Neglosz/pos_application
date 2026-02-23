@@ -14,7 +14,7 @@ export default function StockScanScreen({ navigation }) {
     const [scannedCode, setScannedCode] = useState('');
     const [torchOn, setTorchOn] = useState(false);
     const [focusMode, setFocusMode] = useState('on');
-    const [sound, setSound] = useState();
+    const soundRef = useRef(null);
 
     // Focus Animation
     const focusAnim = useRef(new Animated.Value(0)).current;
@@ -45,8 +45,8 @@ export default function StockScanScreen({ navigation }) {
 
     async function playSound() {
         try {
-            if (sound) {
-                await sound.replayAsync();
+            if (soundRef.current) {
+                await soundRef.current.replayAsync();
             }
         } catch (error) {
             console.log('Error playing sound', error);
@@ -59,14 +59,14 @@ export default function StockScanScreen({ navigation }) {
                 const { sound: newSound } = await Audio.Sound.createAsync(
                     require('../../assets/beep.wav')
                 );
-                setSound(newSound);
+                soundRef.current = newSound;
             } catch (error) {
                 console.log('Error loading sound', error);
             }
         }
         loadSound();
         return () => {
-            if (sound) sound.unloadAsync();
+            if (soundRef.current) soundRef.current.unloadAsync();
         };
     }, []);
 
