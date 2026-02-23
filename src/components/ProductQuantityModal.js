@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Image, TextInput, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, Image, TextInput, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function ProductQuantityModal({ visible, product, onClose, onConfirm }) {
@@ -27,7 +27,7 @@ export default function ProductQuantityModal({ visible, product, onClose, onConf
             animationType="fade"
             onRequestClose={onClose}
         >
-            <TouchableWithoutFeedback onPress={onClose}>
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                 <View style={styles.modalOverlay}>
                     <TouchableWithoutFeedback>
                         <View style={styles.modalContent}>
