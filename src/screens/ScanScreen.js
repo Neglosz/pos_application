@@ -83,7 +83,7 @@ export default function ScanScreen({ navigation, route }) {
     const [isCameraActive, setIsCameraActive] = useState(true);
     const [flash, setFlash] = useState(false);
     const [scannedProduct, setScannedProduct] = useState(null); // For Price Check modal
-    const [sound, setSound] = useState();
+    const soundRef = useRef(null);
 
     // Auto-off Timer
     const inactivityTimer = useRef(null);
@@ -361,11 +361,11 @@ export default function ScanScreen({ navigation, route }) {
                 const { sound: newSound } = await Audio.Sound.createAsync(
                     require('../../assets/beep.wav')
                 );
-                setSound(newSound);
+                soundRef.current = newSound;
             } catch (error) { console.log('Error loading sound', error); }
         }
         loadSound();
-        return () => { if (sound) sound.unloadAsync(); };
+        return () => { if (soundRef.current) soundRef.current.unloadAsync(); };
     }, [permission]);
 
     // --- Effects: Camera Auto-off ---
@@ -411,7 +411,7 @@ export default function ScanScreen({ navigation, route }) {
 
     // --- Logic: Sound ---
     const playSound = async () => {
-        try { if (sound) await sound.replayAsync(); } catch (e) { }
+        try { if (soundRef.current) await soundRef.current.replayAsync(); } catch (e) { }
     };
 
     // --- Logic: Scan ---
