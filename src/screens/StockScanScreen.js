@@ -10,6 +10,7 @@ import { useProductStore } from '../stores/useProductStore';
 export default function StockScanScreen({ navigation }) {
     const [permission, requestPermission] = useCameraPermissions();
     const [scanned, setScanned] = useState(false);
+    const scannedRef = useRef(false);
     const [modalVisible, setModalVisible] = useState(false);
     const [scannedCode, setScannedCode] = useState('');
     const [torchOn, setTorchOn] = useState(false);
@@ -74,25 +75,27 @@ export default function StockScanScreen({ navigation }) {
     const VALID_BARCODE_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'codabar'];
 
     const handleBarCodeScanned = ({ type, data }) => {
-        if (!scanned) {
-            // Filter out non-barcode types (e.g. QR codes)
-            const barcodeType = type?.toString().toLowerCase().replace(/[-.]/g, '_');
-            if (!VALID_BARCODE_TYPES.some(t => barcodeType.includes(t))) {
-                setScanned(true);
-                Alert.alert(
-                    'ไม่ใช่บาร์โค้ดสินค้า',
-                    'สิ่งที่สแกนได้เป็น QR Code ไม่ใช่บาร์โค้ดสินค้า กรุณาสแกนบาร์โค้ดที่อยู่บนตัวสินค้า',
-                    [{ text: 'ตกลง', onPress: () => setScanned(false) }]
-                );
-                return;
-            }
+        if(scannedRef.current) return;
+        scannedRef.current = true;
 
-            Vibration.vibrate();
-            playSound();
+        
+        // Filter out non-barcode types (e.g. QR codes)
+        const barcodeType = type?.toString().toLowerCase().replace(/[-.]/g, '_');
+        if (!VALID_BARCODE_TYPES.some(t => barcodeType.includes(t))) {
             setScanned(true);
-            setScannedCode(data);
-            setModalVisible(true);
+            Alert.alert(
+                'ไม่ใช่บาร์โค้ดสินค้า',
+                'สิ่งที่สแกนได้เป็น QR Code ไม่ใช่บาร์โค้ดสินค้า กรุณาสแกนบาร์โค้ดที่อยู่บนตัวสินค้า',
+                [{ text: 'ตกลง', onPress: () => setScanned(false) }]
+            );
+            return;
         }
+
+        Vibration.vibrate();
+        playSound();
+        setScanned(true);
+        setScannedCode(data);
+        setModalVisible(true);
     };
 
     const handleAddStock = (data) => {
@@ -105,12 +108,13 @@ export default function StockScanScreen({ navigation }) {
             Alert.alert("สำเร็จ", `เติมสต็อก "${data.name}" จำนวน ${data.addedQty} ชิ้น\n(สต็อกรวม: ${data.newStockQty} ชิ้น)`);
         }
         setModalVisible(false);
-        setTimeout(() => setScanned(false), 1000);
+        setTimeout(() => { setScanned(false); scannedRef.current = false; }, 1000);
     };
 
     const handleCloseModal = () => {
         setModalVisible(false);
         setScanned(false);
+        scannedRef.current = false;
     };
 
     if (!permission) {
@@ -141,7 +145,7 @@ export default function StockScanScreen({ navigation }) {
             <CameraView
                 style={styles.camera}
                 facing="back"
-                onBarcodeScanned={handleBarCodeScanned}
+                onBarcodeScanned={modalVisible ? undefined : handleBarCodeScanned}
                 barcodeScannerSettings={{
                     barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e", "code128", "code39", "codabar"],
                 }}
