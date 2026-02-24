@@ -359,7 +359,7 @@ export default function ScanScreen({ navigation, route }) {
         async function loadSound() {
             try {
                 const { sound: newSound } = await Audio.Sound.createAsync(
-                    require('../../assets/beep.wav')
+                    require('../../assets/beep.mp3')
                 );
                 soundRef.current = newSound;
             } catch (error) { console.log('Error loading sound', error); }

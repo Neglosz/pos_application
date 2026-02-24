@@ -58,7 +58,7 @@ export default function StockScanScreen({ navigation }) {
         async function loadSound() {
             try {
                 const { sound: newSound } = await Audio.Sound.createAsync(
-                    require('../../assets/beep.wav')
+                    require('../../assets/beep.mp3')
                 );
                 soundRef.current = newSound;
             } catch (error) {
