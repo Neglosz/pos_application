@@ -67,12 +67,15 @@ export default function StockScreen() {
 
     const formatExpireDate = (dateStr) => {
         if (!dateStr) return 'ไม่ระบุ';
-        const date = new Date(dateStr);
+        const [year, month, day] = dateStr.split('T')[0].split('-');
+        const date = new Date(year, month - 1, day, 0, 0, 0);
         const today = new Date();
+        today.setHours(0, 0, 0, 0);
         const diffTime = date - today;
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
-        if (diffDays <= 0) return 'หมดอายุแล้ว';
+        if (diffDays < 0) return 'หมดอายุแล้ว';
+        if (diffDays == 0) return 'หมดอายุวันนี้';
         if (diffDays === 1) return 'พรุ่งนี้';
         if (diffDays <= 7) return `อีก ${diffDays} วัน`;
         return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
@@ -320,13 +323,11 @@ export default function StockScreen() {
                                                 )}
                                             </View>
                                         </View>
-                                        <View style={styles.itemRight}>
-                                            <Text style={styles.quantityText}>{item.quantity}</Text>
-                                            <Text style={styles.unitText}>{item.unit || 'ชิ้น'}</Text>
+                                        <View style={[styles.itemRight]}>
+                                            <View style={styles.BadgeBlue}>
+                                                <Text style={styles.BadgeBlueText}>{item.quantity} {item.unit || 'ชิ้น'}</Text>
+                                            </View>
                                         </View>
-                                        <TouchableOpacity style={styles.moreButton}>
-                                            <Ionicons name="ellipsis-horizontal-circle" size={32} color="#1E2022" />
-                                        </TouchableOpacity>
                                     </View>
                                 ))}
                             </View>
@@ -457,7 +458,7 @@ const styles = StyleSheet.create({
     },
     // Scan Button
     scanButton: {
-        backgroundColor: '#1E2022',
+        backgroundColor: '#F37021',
         borderRadius: 16,
         padding: 20,
         flexDirection: 'row',
@@ -482,7 +483,7 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     scanButtonSubText: {
-        color: '#aaa',
+        color: '#fff',
         fontSize: 12,
     },
     // Section Headers
@@ -573,7 +574,7 @@ const styles = StyleSheet.create({
     },
     tagYellowText: {
         color: '#F57F17',
-        fontSize: 10,
+        fontSize: 12,
         fontWeight: '600',
     },
     tagRed: {
@@ -585,7 +586,7 @@ const styles = StyleSheet.create({
     },
     tagRedText: {
         color: '#D32F2F',
-        fontSize: 10,
+        fontSize: 12,
         fontWeight: '600',
     },
     priceText: {
