@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, Modal, StyleSheet, TouchableOpacity, TextInput, Image, ScrollView, Platform, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard, Alert, ActivityIndicator } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
     // Mode: 'loading', 'new', 'restock'
     const [mode, setMode] = useState('loading');
     const [existingProduct, setExistingProduct] = useState(null);
+    const lastCheckedCode = useRef(null);
 
     // Form fields
     const [name, setName] = useState('');
@@ -28,20 +29,37 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [fieldErrors, setFieldErrors] = useState({});
 
-    // Data
+    // Datas
     const [categories, setCategories] = useState([]);
 
     useEffect(() => {
+        let cancelToken = { cancelled: false };
+
         if (visible && scannedCode) {
-            checkExistingProduct();
+            // ถ้าเป็นบาร์โค้ดเดิม ไม่ต้องเรียก API ซ้ำ (ป้องกัน modal กระพริบ)
+            if (lastCheckedCode.current === scannedCode) {
+                // แค่ reset จำนวนให้กรอกใหม่
+                setQuantity('');
+                setExpireDate(new Date());
+            } else {
+                // บาร์โค้ดใหม่ เรียก API ตรวจสอบ
+                lastCheckedCode.current = scannedCode;
+                checkExistingProduct(scannedCode, cancelToken);
+            }
             loadCategories();
         }
+
+        return () => {
+            cancelToken.cancelled = true;
+        };
     }, [visible, scannedCode]);
 
-    const checkExistingProduct = async () => {
+    const checkExistingProduct = async (code, cancelToken) => {
         setMode('loading');
         try {
-            const res = await getProductByBarcode(scannedCode);
+            const res = await getProductByBarcode(code);
+            // ป้องกัน race condition: ถ้า effect ถูก cleanup แล้ว ไม่ต้อง set state
+            if (cancelToken.cancelled) return;
             if (res.success && res.exists) {
                 // Product exists - restock mode
                 setExistingProduct(res.data);
@@ -59,6 +77,7 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
                 resetForm();
             }
         } catch (error) {
+            if (cancelToken.cancelled) return;
             console.error("Error checking product:", error);
             setMode('new');
             resetForm();
@@ -208,7 +227,6 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
                     addedQty: parseFloat(quantity) || 0,
                     isNew: true
                 });
-                onClose();
             } else {
                 alert('เกิดข้อผิดพลาด: ' + (res.error || 'Unknown error'));
             }
@@ -247,7 +265,6 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
                     newStockQty: res.data.newStockQty,
                     isNew: false
                 });
-                onClose();
             } else {
                 alert('เกิดข้อผิดพลาด: ' + (res.error || 'Unknown error'));
             }
@@ -311,7 +328,6 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
                     onChangeText={setQuantity}
                     keyboardType="numeric"
                     placeholder="0"
-                    autoFocus
                 />
             </View>
 
@@ -547,7 +563,7 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
                 <View style={styles.centeredView}>
                     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                         <KeyboardAvoidingView
-                            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                             style={styles.modalView}
                         >
                             <View style={styles.header}>

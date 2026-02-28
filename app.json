@@ -17,7 +17,8 @@
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "ใช้เชื่อมต่อเครื่องพิมพ์และเครื่องชั่ง",
         "NSBluetoothPeripheralUsageDescription": "ใช้เชื่อมต่ออุปกรณ์ POS"
-      }
+      },
+      "bundleIdentifier": "com.neglosz.pos-application"
     },
     "android": {
       "adaptiveIcon": {
@@ -30,7 +31,10 @@
         "BLUETOOTH_ADMIN",
         "BLUETOOTH_SCAN",
         "BLUETOOTH_CONNECT",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT"
       ],
       "package": "com.neglosz.pos_application"
     },
