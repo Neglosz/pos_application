@@ -75,10 +75,10 @@ export default function StockScanScreen({ navigation }) {
     const VALID_BARCODE_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'codabar'];
 
     const handleBarCodeScanned = ({ type, data }) => {
-        if(scannedRef.current) return;
+        if (scannedRef.current) return;
         scannedRef.current = true;
 
-        
+
         // Filter out non-barcode types (e.g. QR codes)
         const barcodeType = type?.toString().toLowerCase().replace(/[-.]/g, '_');
         if (!VALID_BARCODE_TYPES.some(t => barcodeType.includes(t))) {
@@ -113,8 +113,10 @@ export default function StockScanScreen({ navigation }) {
 
     const handleCloseModal = () => {
         setModalVisible(false);
-        setScanned(false);
-        scannedRef.current = false;
+        setTimeout(() => {
+            setScanned(false);
+            scannedRef.current = false;
+        }, 1000)
     };
 
     if (!permission) {
@@ -145,6 +147,7 @@ export default function StockScanScreen({ navigation }) {
             <CameraView
                 style={styles.camera}
                 facing="back"
+                active={!modalVisible}
                 onBarcodeScanned={modalVisible ? undefined : handleBarCodeScanned}
                 barcodeScannerSettings={{
                     barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e", "code128", "code39", "codabar"],
