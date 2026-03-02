@@ -73,7 +73,7 @@ export const useProductStore = create(
                             // If this was a reset, strictly replace. If not, append.
                             // However, we must be careful not to append to WRONG results if a race happened
                             // But AbortController handles the network race.
-                            const existingProducts = (reset && !keepPreviousData) ? [] : state.products;
+                            const existingProducts = reset ? [] : state.products;
 
                             // Map-based deduplication
                             const productMap = new Map();
@@ -331,6 +331,13 @@ export const useProductStore = create(
         {
             name: 'product-store',
             storage: createJSONStorage(() => asyncStorageAdapter),
+            version: 2,
+            migrate: (persistedState, version) => {
+                if (version < 2) {
+                    return { ...persistedState, products: [], weightProducts: [], lastFetch: null };
+                }
+                return persistedState;
+            },
             partialize: (state) => ({
                 products: state.products, // Persist loaded normal products
                 weightProducts: state.weightProducts, // Persist ALL weight products (critical for offline)

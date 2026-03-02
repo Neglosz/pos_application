@@ -12,7 +12,6 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
     // Mode: 'loading', 'new', 'restock'
     const [mode, setMode] = useState('loading');
     const [existingProduct, setExistingProduct] = useState(null);
-    const lastCheckedCode = useRef(null);
 
     // Form fields
     const [name, setName] = useState('');
@@ -23,7 +22,7 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
     const [categoryId, setCategoryId] = useState(null);
     const [image, setImage] = useState(null);
     const [unitType, setUnitType] = useState('ชิ้น');
-    const [expireDate, setExpireDate] = useState(new Date());
+    const [expireDate, setExpireDate] = useState(null);
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [loading, setLoading] = useState(false);
     const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -34,21 +33,11 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
 
     useEffect(() => {
         let cancelToken = { cancelled: false };
-
         if (visible && scannedCode) {
-            // ถ้าเป็นบาร์โค้ดเดิม ไม่ต้องเรียก API ซ้ำ (ป้องกัน modal กระพริบ)
-            if (lastCheckedCode.current === scannedCode) {
-                // แค่ reset จำนวนให้กรอกใหม่
-                setQuantity('');
-                setExpireDate(new Date());
-            } else {
-                // บาร์โค้ดใหม่ เรียก API ตรวจสอบ
-                lastCheckedCode.current = scannedCode;
-                checkExistingProduct(scannedCode, cancelToken);
-            }
+            // เรียกตรวจสอบบาร์โค้ดจาก API ใหม่ทุกครั้งที่เปิด Modal
+            checkExistingProduct(scannedCode, cancelToken);
             loadCategories();
         }
-
         return () => {
             cancelToken.cancelled = true;
         };
@@ -69,7 +58,7 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
                 setSalePrice(res.data.price?.toString() || '');
                 // Reset batch-specific fields
                 setQuantity('');
-                setExpireDate(new Date());
+                setExpireDate(null);
             } else {
                 // New product mode
                 setExistingProduct(null);
@@ -93,7 +82,7 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
         setCategoryId(null);
         setImage(null);
         setUnitType('ชิ้น');
-        setExpireDate(new Date());
+        setExpireDate(null);
         setFieldErrors({});
     };
 
@@ -162,6 +151,7 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
         if (!costPrice) errors.costPrice = true;
         if (!salePrice) errors.salePrice = true;
         if (!lowStockThreshold) errors.lowStockThreshold = true;
+        if (!expireDate) errors.expireDate = true;
         if (Object.keys(errors).length > 0) {
             setFieldErrors(errors);
             return;
@@ -239,11 +229,14 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
     };
 
     const handleConfirmRestock = async () => {
-        if (!quantity) {
-            alert('กรุณากรอกจำนวนสินค้าที่เติม');
+        const errors = {};
+        if (!quantity) errors.quantity = true;
+        if (!expireDate) errors.expireDate = true;
+        if (Object.keys(errors).length > 0) {
+            setFieldErrors(errors);
             return;
         }
-
+        setFieldErrors({});
         setLoading(true);
         try {
             const day = expireDate.getDate().toString().padStart(2, '0');
@@ -321,11 +314,15 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
             <Text style={styles.sectionTitle}>เติมสต็อก (Lot ใหม่)</Text>
 
             <View style={styles.inputGroup}>
-                <Text style={styles.label}>จำนวนที่เติม *</Text>
+                <Text style={[styles.label, fieldErrors.quantity && styles.errorLabel]}>จำนวนที่เติม *</Text>
                 <TextInput
-                    style={styles.input}
+                    style={[styles.input, fieldErrors.quantity && styles.errorInput]}
                     value={quantity}
-                    onChangeText={setQuantity}
+                    onChangeText={(text) => {
+                        setQuantity(text);
+                        // ถ้าพิมพ์ค่าเข้าไปใหม่ ให้เอาขอบแดงออก
+                        setFieldErrors(prev => ({ ...prev, quantity: false }));
+                    }}
                     keyboardType="numeric"
                     placeholder="0"
                 />
@@ -354,14 +351,19 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
             </View>
 
             <View style={styles.inputGroup}>
-                <Text style={styles.label}>วันหมดอายุ (Lot นี้)</Text>
-                <TouchableOpacity style={styles.dateInput} onPress={() => setShowDatePicker(true)}>
-                    <Text style={styles.dateText}>{expireDate.toLocaleDateString('th-TH')}</Text>
+                <Text style={[styles.label, fieldErrors.expireDate && styles.errorLabel]}>วันหมดอายุ (Lot นี้) *</Text>
+                <TouchableOpacity
+                    style={[styles.dateInput, fieldErrors.expireDate && styles.errorInput]}
+                    onPress={() => setShowDatePicker(true)}
+                >
+                    <Text style={[styles.dateText, !expireDate && { color: '#999' }]}>
+                        {expireDate ? expireDate.toLocaleDateString('th-TH') : 'เลือกวันหมดอายุ'}
+                    </Text>
                     <Ionicons name="calendar-outline" size={20} color="#666" />
                 </TouchableOpacity>
                 {showDatePicker && Platform.OS === 'android' && (
                     <DateTimePicker
-                        value={expireDate}
+                        value={expireDate || new Date()}
                         mode="date"
                         display="default"
                         onChange={onDateChange}
@@ -507,14 +509,19 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
 
             {/* Row 4: Expiry Date */}
             <View style={styles.inputGroup}>
-                <Text style={styles.label}>วันหมดอายุ</Text>
-                <TouchableOpacity style={styles.dateInput} onPress={() => setShowDatePicker(true)}>
-                    <Text style={styles.dateText}>{expireDate.toLocaleDateString('th-TH')}</Text>
+                <Text style={[styles.label, fieldErrors.expireDate && styles.errorLabel]}>วันหมดอายุ *</Text>
+                <TouchableOpacity
+                    style={[styles.dateInput, fieldErrors.expireDate && styles.errorInput]}
+                    onPress={() => setShowDatePicker(true)}
+                >
+                    <Text style={[styles.dateText, !expireDate && { color: '#999' }]}>
+                        {expireDate ? expireDate.toLocaleDateString('th-TH') : 'เลือกวันหมดอายุ'}
+                    </Text>
                     <Ionicons name="calendar-outline" size={20} color="#666" />
                 </TouchableOpacity>
                 {showDatePicker && Platform.OS === 'android' && (
                     <DateTimePicker
-                        value={expireDate}
+                        value={expireDate || new Date()}
                         mode="date"
                         display="default"
                         onChange={onDateChange}
@@ -599,7 +606,7 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
                                     </TouchableOpacity>
                                 </View>
                                 <DateTimePicker
-                                    value={expireDate}
+                                    value={expireDate || new Date()}
                                     mode="date"
                                     display="spinner"
                                     onChange={onDateChange}

@@ -11,7 +11,8 @@ export default function ProductQuantityModal({ visible, product, onClose, onConf
         }
     }, [visible]);
 
-    const handleIncrease = () => setQuantity(prev => prev + 1);
+    const maxQty = parseFloat(product?.stock_qty || 999);
+    const handleIncrease = () => setQuantity(prev => prev < maxQty ? prev + 1 : prev);
     const handleDecrease = () => {
         if (quantity > 1) {
             setQuantity(prev => prev - 1);
@@ -50,6 +51,7 @@ export default function ProductQuantityModal({ visible, product, onClose, onConf
                                         ฿{product.price}
                                         <Text style={styles.productUnit}> / {product.unit_type || 'ชิ้น'}</Text>
                                     </Text>
+                                    <Text style={{ fontSize: 12, color: '#999', marginTop: 2 }}>คงเหลือ: {product.stock_qty || 0} {product.unit_type || 'ชิ้น'}</Text>
                                 </View>
                             </View>
 
@@ -63,7 +65,7 @@ export default function ProductQuantityModal({ visible, product, onClose, onConf
                                     <Text style={styles.quantityText}>{quantity}</Text>
                                 </View>
 
-                                <TouchableOpacity onPress={handleIncrease} style={styles.quantityButtonPlus}>
+                                <TouchableOpacity onPress={handleIncrease} style={[styles.quantityButtonPlus, quantity >= maxQty && { opacity: 0.3 }]} disabled={quantity >= maxQty}>
                                     <Ionicons name="add" size={24} color="#4CAF50" />
                                 </TouchableOpacity>
                             </View>
