@@ -25,6 +25,9 @@ import ProductQuantityModal from '../components/ProductQuantityModal';
 
 const { width, height } = Dimensions.get('window');
 
+const SEARCH_CONTENT_STYLE = { padding: 10, paddingBottom: 180 };
+const COLUMN_WRAPPER_STYLE = { justifyContent: 'space-between' };
+
 // Weight Data (Mock from SaleScreen)
 // Weight Data (Fixed Categories per user request)
 const FIXED_WEIGHT_CATEGORIES = [
@@ -40,6 +43,14 @@ const WEIGHT_UNITS = [
     { label: 'กรัม', value: 'g', multiplier: 0.001 },
     { label: 'ขีด', value: 'h', multiplier: 0.1 },
 ];
+
+const getUnitMultiplier = (unitTypeOrCode) => {
+    const u = (unitTypeOrCode || '').toLowerCase();
+    if (u === 'g' || u === 'กรัม') return 0.001;
+    if (u === 'h' || u === 'ขีด') return 0.1;
+    if (u === 'kg' || u === 'กิโลกรัม') return 1;
+    return 1;
+};
 
 export default function ScanScreen({ navigation, route }) {
     const { connectedScanner, connectedPrinter, connectedScale, printReceipt, scaleWeight } = useBluetooth();
@@ -85,6 +96,8 @@ export default function ScanScreen({ navigation, route }) {
     const [scannedProduct, setScannedProduct] = useState(null); // For Price Check modal
     const soundRef = useRef(null);
 
+    const [editingQty, setEditingQty] = useState({});
+
     // Auto-off Timer
     const inactivityTimer = useRef(null);
 
@@ -112,7 +125,7 @@ export default function ScanScreen({ navigation, route }) {
     // --- State: Weight Tab ---
     const [selectedWeightCategoryId, setSelectedWeightCategoryId] = useState(FIXED_WEIGHT_CATEGORIES[0].id);
     const [selectedItem, setSelectedItem] = useState(null);
-    const [weightInput, setWeightInput] = useState('1.0');
+    const [weightInput, setWeightInput] = useState('1');
     const [selectedUnit, setSelectedUnit] = useState(WEIGHT_UNITS[0]);
     const [showWeightInputModal, setShowWeightInputModal] = useState(false);
 
@@ -237,6 +250,7 @@ export default function ScanScreen({ navigation, route }) {
     const [showDatePicker, setShowDatePicker] = useState(false); // New: Date Picker Visibility
     const [newProductUnit, setNewProductUnit] = useState(WEIGHT_UNITS[0]);
 
+    const searchTimerRef = useRef(null);
     // Image Picker Helper
     // Image Picker Helper
     const pickImage = async () => {
@@ -747,6 +761,9 @@ export default function ScanScreen({ navigation, route }) {
             <FlatList
                 data={products}
                 keyExtractor={item => item.id}
+                removeClippedSubviews={true}
+                maxToRenderPerBatch={10}
+                windowSize={5}
                 style={styles.cartList}
                 contentContainerStyle={{ padding: 15, paddingBottom: 20 }}
                 ListEmptyComponent={
@@ -757,7 +774,13 @@ export default function ScanScreen({ navigation, route }) {
                 renderItem={({ item }) => (
                     <View style={styles.cartItem}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                            <Image source={{ uri: item.image_url || item.image || 'https://via.placeholder.com/50' }} style={styles.cartItemImage} />
+                            {(item.image_url || item.image) ? (
+                                <Image source={{ uri: item.image_url || item.image }} style={styles.cartItemImage} />
+                            ) : (
+                                <View style={[styles.cartItemImage, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#F0F0F0' }]}>
+                                    <Ionicons name="cube-outline" size={24} color="#ccc" />
+                                </View>
+                            )}
                             <View style={{ marginLeft: 10, flex: 1 }}>
                                 <Text style={styles.cartItemName} numberOfLines={1}>{item.name}</Text>
                                 <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
@@ -782,40 +805,110 @@ export default function ScanScreen({ navigation, route }) {
                             </View>
                         </View>
                         {/* Qty Controls */}
-                        <View style={styles.qtyContainer}>
-                            <TouchableOpacity onPress={() => handleDecreaseQty(item)} style={styles.qtyBtn}>
-                                {item.quantity > 1 ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+
+
+                            {/* ปุ่ม +/- กับช่องกรอกจำนวน */}
+                            <View style={styles.qtyContainer}>
+                                <TouchableOpacity
+                                    onPress={() => { if (item.quantity > 1) updateQuantity(item.id, item.quantity - 1); }}
+                                    style={[styles.qtyBtn, item.quantity <= 1 && { opacity: 0.3 }]}
+                                    disabled={item.quantity <= 1}
+                                >
                                     <Ionicons name="remove" size={16} color="#555" />
-                                ) : (
-                                    <Ionicons name="trash" size={16} color="#FF3B30" />
-                                )}
+                                </TouchableOpacity>
+
+                                <TextInput
+                                    style={[styles.qtyText, { textAlign: 'center', minWidth: 30, padding: 2 }]}
+                                    keyboardType="number-pad"
+                                    value={editingQty[item.id] !== undefined ? editingQty[item.id] : String(item.quantity)}
+                                    onFocus={() => {
+                                        setEditingQty(prev => ({ ...prev, [item.id]: String(item.quantity) }));
+                                    }}
+                                    onChangeText={(text) => {
+                                        setEditingQty(prev => ({ ...prev, [item.id]: text }));
+                                    }}
+                                    onEndEditing={() => {
+                                        const text = editingQty[item.id];
+                                        const num = parseInt(text) || 0;
+                                        if (num === 0) {
+                                            Alert.alert('ลบสินค้า', `ต้องการลบ "${item.name}" ออกจากตะกร้าใช่หรือไม่?`, [
+                                                { text: 'ยกเลิก', style: 'cancel', onPress: () => updateQuantity(item.id, 1) },
+                                                { text: 'ลบ', style: 'destructive', onPress: () => removeFromCart(item.id) }
+                                            ]);
+                                        } else {
+                                            updateQuantity(item.id, num);
+                                        }
+                                        setEditingQty(prev => { const copy = { ...prev }; delete copy[item.id]; return copy; });
+                                    }}
+                                />
+
+                                <TouchableOpacity onPress={() => addToCart(item, 1)} style={styles.qtyBtn}>
+                                    <Ionicons name="add" size={16} color="#555" />
+                                </TouchableOpacity>
+                            </View>
+                            {/* ปุ่มลบแยก */}
+                            <TouchableOpacity
+                                onPress={() => {
+                                    Alert.alert(
+                                        'ลบสินค้า',
+                                        `ต้องการลบ "${item.name}" ออกจากตะกร้าใช่หรือไม่?`,
+                                        [
+                                            { text: 'ยกเลิก', style: 'cancel' },
+                                            { text: 'ลบ', style: 'destructive', onPress: () => removeFromCart(item.id) }
+                                        ]
+                                    );
+                                }}
+                                style={{ padding: 6, marginLeft: 10 }}
+                            >
+                                <Ionicons name="trash" size={18} color="#FF3B30" />
                             </TouchableOpacity>
-                            <Text style={styles.qtyText}>{item.quantity}</Text>
-                            <TouchableOpacity onPress={() => addToCart(item, 1)} style={styles.qtyBtn}><Ionicons name="add" size={16} color="#555" /></TouchableOpacity>
                         </View>
+
                     </View>
                 )}
             />
         );
     };
 
+    const renderSearchItem = useCallback(({ item }) => (
+        <View style={styles.gridItem}>
+            {item.image_url ? (
+                <Image source={{ uri: item.image_url }} style={styles.gridImage} />
+            ) : (
+                <View style={[styles.gridImage, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#F0F0F0' }]}>
+                    <Ionicons name="cube-outline" size={32} color="#ccc" />
+                </View>
+            )}
+            <Text numberOfLines={1} style={styles.gridName}>{item.name}</Text>
+            <Text style={styles.gridPrice}>฿{item.price}</Text>
+            <TouchableOpacity style={styles.addButton} onPress={() => { setSelectedProductToAdd(item); setQuantityModalVisible(true); }}>
+                <Ionicons name="add" size={24} color="#fff" />
+            </TouchableOpacity>
+        </View>
+    ), []);
+
     // 5. SEARCH VIEW
     const renderSearchView = () => {
         if (activeTab !== 'search') return null;
-        const displayProducts = storeProducts; // Already filtered by store
+        const displayProducts = searchQueryLocal.trim()
+            ? storeProducts.filter(p =>
+                p.name?.toLowerCase().includes(searchQueryLocal.toLowerCase().trim()) ||
+                p.barcode?.toLowerCase().includes(searchQueryLocal.toLowerCase().trim())
+            )
+            : storeProducts;
         return (
             <View style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
                 {/* Search Bar */}
                 <View style={styles.searchHeader}>
                     <View style={styles.searchBar}>
-                        <Ionicons name="search" size={20} color="#999" />
+                        <Ionicons name="search" size={20} color="#999" style={{ marginLeft: 10 }} />
                         <TextInput
                             style={styles.searchInput}
                             placeholder="ค้นหาสินค้า..."
                             value={searchQueryLocal}
                             onChangeText={(text) => {
                                 setSearchQueryLocal(text);
-                                setTimeout(() => setSearchQuery(text), 500);
                             }}
                         />
                     </View>
@@ -826,19 +919,14 @@ export default function ScanScreen({ navigation, route }) {
                     data={displayProducts}
                     numColumns={2}
                     keyExtractor={item => item.id}
-                    contentContainerStyle={{ padding: 10, paddingBottom: 180 }}
-                    columnWrapperStyle={{ justifyContent: 'space-between' }}
+                    removeClippedSubviews={true}
+                    maxToRenderPerBatch={6}
+                    windowSize={3}
+                    initialNumToRender={4}
+                    contentContainerStyle={SEARCH_CONTENT_STYLE}
+                    columnWrapperStyle={COLUMN_WRAPPER_STYLE}
                     onEndReached={handleLoadMore}
-                    renderItem={({ item }) => (
-                        <View style={styles.gridItem}>
-                            <Image source={{ uri: item.image_url || 'https://via.placeholder.com/100' }} style={styles.gridImage} />
-                            <Text numberOfLines={1} style={styles.gridName}>{item.name}</Text>
-                            <Text style={styles.gridPrice}>฿{item.price}</Text>
-                            <TouchableOpacity style={styles.addButton} onPress={() => { setSelectedProductToAdd(item); setQuantityModalVisible(true); }}>
-                                <Ionicons name="add" size={24} color="#fff" />
-                            </TouchableOpacity>
-                        </View>
-                    )}
+                    renderItem={renderSearchItem}
                 />
             </View>
         );
@@ -856,8 +944,8 @@ export default function ScanScreen({ navigation, route }) {
                     style={[styles.wProductCard, isSelected && styles.wProductCardSelected]}
                     onPress={() => {
                         setSelectedItem(item);
-                        setWeightInput('1.0');
-                        setSelectedUnit(WEIGHT_UNITS[0]);
+                        setWeightInput('1');
+                        setSelectedUnit(WEIGHT_UNITS.find(u => u.label === item.unit_type) || WEIGHT_UNITS[0]);
                         setShowWeightInputModal(true);
                     }}
                     activeOpacity={0.7}
@@ -872,7 +960,7 @@ export default function ScanScreen({ navigation, route }) {
                         )}
                     </View>
                     <Text style={styles.wCardName} numberOfLines={1}>{item.name}</Text>
-                    <Text style={styles.wCardPrice}>฿{item.price}<Text style={styles.wCardUnit}>/กก.</Text></Text>
+                    <Text style={styles.wCardPrice}>฿{item.price}<Text style={styles.wCardUnit}>/{item.unit_type || 'กก.'}</Text></Text>
                 </TouchableOpacity>
             );
         };
@@ -939,7 +1027,11 @@ export default function ScanScreen({ navigation, route }) {
     // 6.5 WEIGHT INPUT MODAL
     const renderWeightInputModal = () => {
         if (!selectedItem) return null;
-        const total = (parseFloat(weightInput) || 0) * selectedUnit.multiplier * (selectedItem?.price || 0);
+        const productMultiplier = getUnitMultiplier(selectedItem?.unit_type);
+        const qtyInProductUnit = (parseFloat(weightInput) || 0) * selectedUnit.multiplier / productMultiplier;
+        const total = qtyInProductUnit * (selectedItem?.price || 0);
+        const stockInSelectedUnit = (parseFloat(selectedItem.stock_qty || 0) * getUnitMultiplier(selectedItem.unit_type)) / selectedUnit.multiplier;
+        const exceedsStock = (parseFloat(weightInput) || 0) > stockInSelectedUnit;
 
         return (
             <Modal
@@ -1000,9 +1092,8 @@ export default function ScanScreen({ navigation, route }) {
                                                 value={weightInput}
                                                 onChangeText={setWeightInput}
                                                 keyboardType="decimal-pad"
-                                                placeholder="0.0"
+                                                placeholder="0"
                                                 placeholderTextColor="#ccc"
-                                                autoFocus={true}
                                             />
                                             <Text style={styles.wInputUnitLabel}>{selectedUnit.label}</Text>
                                         </View>
@@ -1030,6 +1121,10 @@ export default function ScanScreen({ navigation, route }) {
                                             </TouchableOpacity>
                                         ))}
                                     </View>
+                                    {/* Stock remaining */}
+                                    <Text style={{ textAlign: 'center', color: exceedsStock ? '#FF3B30' : '#888', marginTop: 4, fontSize: 13 }}>
+                                        คงเหลือ: {stockInSelectedUnit.toFixed(2)} {selectedUnit.label}
+                                    </Text>
 
                                     {/* Total + Add to Cart */}
                                     <View style={styles.wModalTotal}>
@@ -1038,10 +1133,12 @@ export default function ScanScreen({ navigation, route }) {
                                     </View>
 
                                     <TouchableOpacity
-                                        style={styles.wCartBtn}
+                                        style={[styles.wCartBtn, exceedsStock && { opacity: 0.5 }]}
+                                        disabled={exceedsStock || (parseFloat(weightInput) || 0) <= 0}
                                         onPress={() => {
                                             const product = { ...selectedItem, unit: selectedUnit.label, isWeight: true };
-                                            const pricePerUnit = selectedItem.price * selectedUnit.multiplier;
+                                            const productMultiplier = getUnitMultiplier(selectedItem.unit_type);
+                                            const pricePerUnit = selectedItem.price * (selectedUnit.multiplier / productMultiplier);
                                             addToCart({
                                                 ...product,
                                                 id: `weight-${product.id}-${Date.now()}`,
@@ -1171,7 +1268,7 @@ export default function ScanScreen({ navigation, route }) {
                             <View style={{ flexDirection: 'row', gap: 10 }}>
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.inputLabel}>
-                                        <Ionicons name="layers-outline" size={14} /> สต็อก (กก.)
+                                        <Ionicons name="layers-outline" size={14} /> สต็อก ({newProductUnit.label})
                                     </Text>
                                     <TextInput
                                         style={styles.textInput}
@@ -1293,24 +1390,81 @@ export default function ScanScreen({ navigation, route }) {
                     <FlatList
                         data={products}
                         keyExtractor={item => item.id}
+                        removeClippedSubviews={true}
+                        maxToRenderPerBatch={10}
+                        windowSize={5}
                         style={{ marginTop: 10 }}
                         contentContainerStyle={{ paddingBottom: 20 }}
                         ListEmptyComponent={<Text style={{ textAlign: 'center', color: '#999', marginTop: 20 }}>ไม่มีสินค้าในตะกร้า</Text>}
                         renderItem={({ item }) => (
                             <View style={styles.cartItem}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                                    <Image source={{ uri: item.image_url || item.image || 'https://via.placeholder.com/50' }} style={styles.cartItemImage} />
+                                    {(item.image_url || item.image) ? (
+                                        <Image source={{ uri: item.image_url || item.image }} style={styles.cartItemImage} />
+                                    ) : (
+                                        <View style={[styles.cartItemImage, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#F0F0F0' }]}>
+                                            <Ionicons name="cube-outline" size={24} color="#ccc" />
+                                        </View>
+                                    )}
                                     <View style={{ marginLeft: 10, flex: 1 }}>
                                         <Text style={styles.cartItemName} numberOfLines={1}>{item.name}</Text>
                                         <Text style={styles.cartItemPrice}>฿{item.price}</Text>
                                     </View>
                                 </View>
-                                <View style={styles.qtyContainer}>
-                                    <TouchableOpacity onPress={() => handleDecreaseQty(item)} style={styles.qtyBtn}>
-                                        <Ionicons name={item.quantity > 1 ? "remove" : "trash"} size={16} color={item.quantity > 1 ? "#555" : "#FF3B30"} />
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    {/* ปุ่ม +/- กับช่องกรอกจำนวน */}
+                                    <View style={styles.qtyContainer}>
+                                        <TouchableOpacity
+                                            onPress={() => { if (item.quantity > 1) updateQuantity(item.id, item.quantity - 1); }}
+                                            style={[styles.qtyBtn, item.quantity <= 1 && { opacity: 0.3 }]}
+                                            disabled={item.quantity <= 1}
+                                        >
+                                            <Ionicons name="remove" size={16} color="#555" />
+                                        </TouchableOpacity>
+                                        <TextInput
+                                            style={[styles.qtyText, { textAlign: 'center', minWidth: 30, padding: 2 }]}
+                                            keyboardType="number-pad"
+                                            value={editingQty[item.id] !== undefined ? editingQty[item.id] : String(item.quantity)}
+                                            onFocus={() => {
+                                                setEditingQty(prev => ({ ...prev, [item.id]: String(item.quantity) }));
+                                            }}
+                                            onChangeText={(text) => {
+                                                setEditingQty(prev => ({ ...prev, [item.id]: text }));
+                                            }}
+                                            onEndEditing={() => {
+                                                const text = editingQty[item.id];
+                                                const num = parseInt(text) || 0;
+                                                if (num === 0) {
+                                                    Alert.alert('ลบสินค้า', `ต้องการลบ "${item.name}" ออกจากตะกร้าใช่หรือไม่?`, [
+                                                        { text: 'ยกเลิก', style: 'cancel', onPress: () => updateQuantity(item.id, 1) },
+                                                        { text: 'ลบ', style: 'destructive', onPress: () => removeFromCart(item.id) }
+                                                    ]);
+                                                } else {
+                                                    updateQuantity(item.id, num);
+                                                }
+                                                setEditingQty(prev => { const copy = { ...prev }; delete copy[item.id]; return copy; });
+                                            }}
+                                        />
+                                        <TouchableOpacity onPress={() => addToCart(item, 1)} style={styles.qtyBtn}>
+                                            <Ionicons name="add" size={16} color="#555" />
+                                        </TouchableOpacity>
+                                    </View>
+                                    {/* ปุ่มลบแยก */}
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            Alert.alert(
+                                                'ลบสินค้า',
+                                                `ต้องการลบ "${item.name}" ออกจากตะกร้าใช่หรือไม่?`,
+                                                [
+                                                    { text: 'ยกเลิก', style: 'cancel' },
+                                                    { text: 'ลบ', style: 'destructive', onPress: () => removeFromCart(item.id) }
+                                                ]
+                                            );
+                                        }}
+                                        style={{ padding: 6, marginLeft: 10 }}
+                                    >
+                                        <Ionicons name="trash" size={18} color="#FF3B30" />
                                     </TouchableOpacity>
-                                    <Text style={styles.qtyText}>{item.quantity}</Text>
-                                    <TouchableOpacity onPress={() => addToCart(item, 1)} style={styles.qtyBtn}><Ionicons name="add" size={16} color="#555" /></TouchableOpacity>
                                 </View>
                             </View>
                         )}
@@ -1483,7 +1637,7 @@ const styles = StyleSheet.create({
     tabWrapper: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 25, padding: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
     tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 22 },
     activeTab: { backgroundColor: '#F37021' },
-    tabText: { fontSize: 14, color: '#888', fontWeight: '500' },
+    tabText: { fontSize: 18, color: '#888', fontWeight: '500' },
     activeTabText: { color: '#fff', fontWeight: 'bold' },
 
     // Camera (Middle 1)
@@ -1500,7 +1654,7 @@ const styles = StyleSheet.create({
     modeContainer: { flexDirection: 'row', padding: 10 },
     modeButton: { flex: 1, paddingVertical: 10, alignItems: 'center', marginHorizontal: 5, borderRadius: 10, backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#eee', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 2 },
     activeModeButton: { backgroundColor: '#FFF3E0', borderColor: '#F37021' },
-    modeText: { color: '#666', fontWeight: '500' },
+    modeText: { color: '#666', fontWeight: '500', fontSize: 18 },
     activeModeText: { color: '#F37021', fontWeight: 'bold' },
 
     // Cart List
@@ -1508,14 +1662,14 @@ const styles = StyleSheet.create({
     emptyCart: { padding: 40, alignItems: 'center' },
     cartItem: { flexDirection: 'row', backgroundColor: '#fff', padding: 15, marginBottom: 8, borderRadius: 12, alignItems: 'center', borderWidth: 1.2, borderColor: '#eee' },
     cartItemImage: { width: 50, height: 50, borderRadius: 8, backgroundColor: '#eee' },
-    cartItemName: { fontSize: 16, fontWeight: '600', color: '#333' },
-    cartItemPrice: { fontSize: 16, color: '#F37021', fontWeight: 'bold' },
+    cartItemName: { fontSize: 18, fontWeight: '600', color: '#333' },
+    cartItemPrice: { fontSize: 18, color: '#F37021', fontWeight: 'bold' },
     qtyContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0F0F0', borderRadius: 20, padding: 5 },
     qtyBtn: { padding: 5 },
-    qtyText: { paddingHorizontal: 8, fontSize: 14, fontWeight: '600' },
+    qtyText: { paddingHorizontal: 8, fontSize: 18, fontWeight: '600' },
 
     // Footer
-    footer: { padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#eee', paddingBottom: Platform.OS === 'ios' ? 34 : 16 },
+    footer: { padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#eee', paddingBottom: Platform.OS === 'ios' ? 34 : '10%' },
     payButton: {
         backgroundColor: '#F37021',
         borderRadius: 50,
@@ -1527,34 +1681,34 @@ const styles = StyleSheet.create({
         shadowColor: '#F37021', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5
     },
     itemCountBadge: { backgroundColor: '#fff', width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-    itemCountText: { color: '#F37021', fontWeight: 'bold', fontSize: 12 },
-    payButtonText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
-    payTotalText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
+    itemCountText: { color: '#F37021', fontWeight: 'bold', fontSize: 18 },
+    payButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+    payTotalText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
 
     // Search & Grid Styles (Simplified)
-    searchHeader: { padding: 15, backgroundColor: '#fff' },
-    searchBar: { flexDirection: 'row', backgroundColor: '#F3F4F6', borderRadius: 12, padding: 10, alignItems: 'center' },
-    searchInput: { flex: 1, marginLeft: 10, fontSize: 16 },
+    searchHeader: { paddingHorizontal: 15 },
+    searchBar: { flexDirection: 'row', backgroundColor: '#F3F4F6', borderRadius: 12, padding: 5, alignItems: 'center' },
+    searchInput: { flex: 1, marginLeft: 10, fontSize: 18 },
     gridItem: { width: '48%', backgroundColor: '#fff', padding: 10, marginBottom: 15, borderRadius: 12, alignItems: 'center' },
     gridImage: { width: 80, height: 80, borderRadius: 8, marginBottom: 8 },
-    gridName: { fontWeight: '600', marginBottom: 5 },
-    gridPrice: { color: '#F37021', fontWeight: 'bold' },
+    gridName: { fontWeight: '600', marginBottom: 5, fontSize: 18 },
+    gridPrice: { color: '#F37021', fontWeight: 'bold', fontSize: 18 },
     addButton: { marginTop: 5, backgroundColor: '#F37021', borderRadius: 20, padding: 5 },
 
     // Weight Styles — Clean UX
     // Category bar
-    wCategoryBar: { backgroundColor: '#fff', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+    wCategoryBar: { backgroundColor: '#fff', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0F0F0', borderRadius: 50 },
     wCategoryChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F5F5F5' },
     wCategoryChipActive: { backgroundColor: '#FFF3E0', borderWidth: 1.5, borderColor: '#F37021' },
-    wCategoryEmoji: { fontSize: 16, marginRight: 5 },
-    wCategoryLabel: { fontSize: 13, color: '#777', fontWeight: '500' },
+    wCategoryEmoji: { fontSize: 18, marginRight: 5 },
+    wCategoryLabel: { fontSize: 18, color: '#777', fontWeight: '500' },
     wCategoryLabelActive: { color: '#F37021', fontWeight: '700' },
 
     // Section header
     wSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 18, paddingTop: 16, paddingBottom: 8 },
-    wSectionTitle: { fontSize: 16, fontWeight: '700', color: '#333' },
+    wSectionTitle: { fontSize: 18, fontWeight: '700', color: '#333' },
     wAddBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 16, backgroundColor: '#FFF3E0' },
-    wAddBtnText: { fontSize: 13, color: '#F37021', fontWeight: '600', marginLeft: 2 },
+    wAddBtnText: { fontSize: 18, color: '#F37021', fontWeight: '600', marginLeft: 2 },
 
     // Product grid
     wGridContainer: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 14, gap: 10 },
@@ -1564,54 +1718,54 @@ const styles = StyleSheet.create({
     wCardImageWrap: { width: '100%', aspectRatio: 1.3, borderRadius: 12, overflow: 'hidden', backgroundColor: '#F9FAFB', marginBottom: 8 },
     wCardImage: { width: '100%', height: '100%', resizeMode: 'cover' },
     wCardImagePlaceholder: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', backgroundColor: '#F5F5F5' },
-    wCardName: { fontSize: 13, fontWeight: '600', color: '#333', textAlign: 'center', marginBottom: 3 },
-    wCardPrice: { fontSize: 15, fontWeight: '700', color: '#F37021' },
-    wCardUnit: { fontSize: 11, fontWeight: '400', color: '#999' },
+    wCardName: { fontSize: 18, fontWeight: '600', color: '#333', textAlign: 'center', marginBottom: 3 },
+    wCardPrice: { fontSize: 18, fontWeight: '700', color: '#F37021' },
+    wCardUnit: { fontSize: 18, fontWeight: '400', color: '#999' },
 
     // Empty state
     wEmptyState: { alignItems: 'center', paddingVertical: 40 },
-    wEmptyText: { color: '#bbb', fontSize: 14, marginTop: 10, marginBottom: 16 },
+    wEmptyText: { color: '#bbb', fontSize: 18, marginTop: 10, marginBottom: 16 },
     wEmptyAddBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F37021', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, gap: 4 },
-    wEmptyAddText: { color: '#fff', fontWeight: '600', fontSize: 13 },
+    wEmptyAddText: { color: '#fff', fontWeight: '600', fontSize: 18 },
 
     // Weight input section
     wInputSection: { margin: 16, backgroundColor: '#fff', borderRadius: 20, padding: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 10, elevation: 3 },
     wInputHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
     wInputImageWrap: { width: 48, height: 48, borderRadius: 12, overflow: 'hidden' },
     wInputImage: { width: 48, height: 48, borderRadius: 12 },
-    wInputName: { fontSize: 16, fontWeight: '700', color: '#222', marginBottom: 2 },
-    wInputPrice: { fontSize: 15, fontWeight: '700', color: '#F37021' },
+    wInputName: { fontSize: 18, fontWeight: '700', color: '#222', marginBottom: 2 },
+    wInputPrice: { fontSize: 18, fontWeight: '700', color: '#F37021' },
     wInputFieldWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F9FAFB', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 4, borderWidth: 1.5, borderColor: '#F0F0F0' },
-    wInputField: { flex: 1, fontSize: 32, fontWeight: '700', color: '#333', textAlign: 'center', paddingVertical: 8 },
-    wInputUnitLabel: { fontSize: 14, color: '#999', fontWeight: '500' },
+    wInputField: { flex: 1, fontSize: 32, fontWeight: '700', color: '#333', textAlign: 'center', paddingVertical: 8, left: '5%' },
+    wInputUnitLabel: { fontSize: 18, color: '#999', fontWeight: '500', width: 70, textAlign: 'right' },
     wUnitRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 12, gap: 8 },
     wUnitBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, backgroundColor: '#F5F5F5' },
     wUnitBtnActive: { backgroundColor: '#F37021' },
-    wUnitBtnText: { fontSize: 13, color: '#777', fontWeight: '600' },
+    wUnitBtnText: { fontSize: 18, color: '#777', fontWeight: '600' },
     wUnitBtnTextActive: { color: '#fff' },
     wCartBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F37021', borderRadius: 14, paddingVertical: 14, marginTop: 16 },
-    wCartBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+    wCartBtnText: { color: '#fff', fontSize: 18, fontWeight: '700' },
     wCartBtnPrice: { backgroundColor: 'rgba(255,255,255,0.25)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10, marginLeft: 10 },
-    wCartBtnPriceText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+    wCartBtnPriceText: { color: '#fff', fontSize: 18, fontWeight: '700' },
 
     // Weight Input Modal styles
     wModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-    wModalContent: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingBottom: 10, paddingTop: 12 },
+    wModalContent: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingBottom: '50%', paddingTop: 12 },
     wModalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#DDD', alignSelf: 'center', marginBottom: 16 },
     wModalHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
     wModalImageWrap: { width: 56, height: 56, borderRadius: 14, overflow: 'hidden', backgroundColor: '#F3F4F6' },
     wModalImage: { width: 56, height: 56, borderRadius: 14 },
-    wModalName: { fontSize: 17, fontWeight: '700', color: '#222', marginBottom: 3 },
-    wModalPrice: { fontSize: 16, fontWeight: '700', color: '#F37021' },
+    wModalName: { fontSize: 18, fontWeight: '700', color: '#222', marginBottom: 3 },
+    wModalPrice: { fontSize: 18, fontWeight: '700', color: '#F37021' },
     wModalCloseBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center' },
     wModalTotal: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 4, borderTopWidth: 1, borderTopColor: '#F0F0F0', marginTop: 12 },
-    wModalTotalLabel: { fontSize: 15, color: '#999', fontWeight: '500' },
+    wModalTotalLabel: { fontSize: 18, color: '#999', fontWeight: '500' },
     wModalTotalAmount: { fontSize: 24, fontWeight: '800', color: '#F37021' },
 
     // Legacy weight styles (keep for add product modal)
     categoryPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, backgroundColor: '#fff', marginRight: 6, marginBottom: 8, borderWidth: 1, borderColor: '#eee' },
     activeCategoryPill: { backgroundColor: '#F37021', borderColor: '#F37021' },
-    categoryText: { color: '#666', fontSize: 13 },
+    categoryText: { color: '#666', fontSize: 18 },
     activeCategoryText: { color: '#fff', fontWeight: 'bold' },
     imagePickerButton: { width: '100%', height: 150, backgroundColor: '#f0f0f0', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 15, borderStyle: 'dashed', borderWidth: 1, borderColor: '#ccc' },
 
@@ -1622,13 +1776,13 @@ const styles = StyleSheet.create({
     modalTitle: { fontSize: 20, fontWeight: 'bold' },
     modalCloseButton: { padding: 5, backgroundColor: '#F3F4F6', borderRadius: 20 },
     handleIndicator: { width: 40, height: 4, backgroundColor: '#E0E0E0', borderRadius: 2, alignSelf: 'center', marginBottom: 20, position: 'absolute', top: 10 },
-    inputLabel: { marginTop: 15, marginBottom: 8, color: '#666', fontSize: 14, fontWeight: '600' },
-    inputField: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F9FAFB', borderRadius: 12, padding: 15, borderWidth: 1, borderColor: '#eee' },
-    textInput: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 15, borderWidth: 1, borderColor: '#eee', fontSize: 16 },
+    inputLabel: { marginTop: 18, marginBottom: 8, color: '#666', fontSize: 18, fontWeight: '600' },
+    inputField: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F9FAFB', borderRadius: 12, padding: 10, borderWidth: 1, borderColor: '#eee' },
+    textInput: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 10, borderWidth: 1, borderColor: '#eee', fontSize: 18 },
     unitSelectorContainer: { flexDirection: 'row', gap: 10 },
     unitOption: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 12, backgroundColor: '#F3F4F6' },
     activeUnitOption: { backgroundColor: '#F37021' },
-    unitOptionText: { fontSize: 14, color: '#666', fontWeight: 'bold' },
+    unitOptionText: { fontSize: 18, color: '#666', fontWeight: 'bold' },
     activeUnitOptionText: { color: '#fff' },
     modalMainButton: { backgroundColor: '#F37021', padding: 16, borderRadius: 16, alignItems: 'center', marginTop: 30 },
     modalMainButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
@@ -1636,8 +1790,8 @@ const styles = StyleSheet.create({
     // FAB — Draggable
     fab: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#F37021', justifyContent: 'center', alignItems: 'center', shadowColor: '#F37021', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 },
     fabBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#FF3B30', borderRadius: 10, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4, borderWidth: 1.5, borderColor: '#fff', zIndex: 3 },
-    fabBadgeText: { color: '#fff', fontSize: 9, fontWeight: 'bold' },
-    fabAmountText: { color: '#fff', fontSize: 8, fontWeight: '600', marginTop: 1 },
+    fabBadgeText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+    fabAmountText: { color: '#fff', fontSize: 12, fontWeight: '600', marginTop: 1 },
 
     wUnitBtnDisabled: {
         opacity: 0.4,

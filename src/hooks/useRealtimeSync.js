@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
-import { useProductStore } from '../stores/useProductStore';
 import { getCurrentStoreId } from '../services/api';
+import { useProductStore } from '../stores/useProductStore';
 
 /**
  * Hook to subscribe to Supabase Realtime changes for products and batches.
@@ -9,7 +9,6 @@ import { getCurrentStoreId } from '../services/api';
  */
 export const useRealtimeSync = () => {
     const channelRef = useRef(null);
-    const { refreshProducts, fetchWeightProducts } = useProductStore();
 
     useEffect(() => {
         const storeId = getCurrentStoreId();
@@ -32,20 +31,17 @@ export const useRealtimeSync = () => {
                 filter: `store_id=eq.${storeId}`
             }, (payload) => {
                 console.log('[RealtimeSync] Product change detected:', payload.eventType);
-                // Refresh products on any change
-                refreshProducts();
-                fetchWeightProducts();
+                useProductStore.getState().refreshProducts();
+                useProductStore.getState().fetchWeightProducts();
             })
             // Subscribe to product_batches table changes (for stock updates)
             .on('postgres_changes', {
                 event: '*',
                 schema: 'public',
                 table: 'product_batches'
-            }, async (payload) => {
+            }, (payload) => {
                 console.log('[RealtimeSync] Batch change detected:', payload.eventType);
-                // Check if this batch belongs to a product in our store
-                // For simplicity, just refresh all products
-                refreshProducts();
+                useProductStore.getState().refreshProducts();
             })
             .subscribe((status) => {
                 console.log('[RealtimeSync] Subscription status:', status);
@@ -61,7 +57,7 @@ export const useRealtimeSync = () => {
                 channelRef.current = null;
             }
         };
-    }, [refreshProducts, fetchWeightProducts]);
+    }, []);
 
     return null;
 };

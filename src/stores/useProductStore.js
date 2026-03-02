@@ -248,11 +248,12 @@ export const useProductStore = create(
                 set({ currentPage: 0, hasMore: true });
                 get().fetchProducts(true, true); // reset=true, keepPreviousData=true
                 get().fetchCategories();
+                get().fetchWeightProducts();
             },
 
             // Set search query and trigger fetch
             setSearchQuery: (query) => {
-                set({ searchQuery: query, selectedCategoryId: null, currentPage: 0, hasMore: true, products: [] });
+                set({ searchQuery: query, selectedCategoryId: null, currentPage: 0, hasMore: true });
                 get().fetchProducts(true);
             },
 
