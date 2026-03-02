@@ -208,6 +208,12 @@ export default function ReceiptModal({
 
                     {/* Items */}
                     <View style={styles.itemsContainer}>
+                        {/* Table Header */}
+                        <View style={styles.itemHeader}>
+                            <Text style={[styles.itemHeaderText, { flex: 1 }]}>ชื่อสินค้า</Text>
+                            <Text style={styles.itemHeaderText}>ราคา</Text>
+                            <Text style={[styles.itemHeaderText, { minWidth: 70, textAlign: 'right' }]}>รวม</Text>
+                        </View>
                         {loadingDetails ? (
                             <View style={{ padding: 20, alignItems: 'center' }}>
                                 <ActivityIndicator size="small" color="#F37021" />
@@ -217,8 +223,9 @@ export default function ReceiptModal({
                             <ScrollView style={styles.itemsList} nestedScrollEnabled>
                                 {items.map((item, index) => (
                                     <View key={index} style={styles.itemRow}>
-                                        <Text style={styles.itemName}>{item.name} x{item.quantity} {item.unit || 'ชิ้น'}</Text>
-                                        <Text style={styles.itemPrice}>฿{item.price.toFixed(2)}</Text>
+                                        <Text style={[styles.itemName, { flex: 1 }]}>{item.name} x{item.quantity} {item.unit || 'ชิ้น'}</Text>
+                                        <Text style={styles.itemPrice}>{item.price.toFixed(1)}</Text>
+                                        <Text style={styles.itemTotal}>{(item.price * item.quantity).toFixed(1)}</Text>
                                     </View>
                                 ))}
                             </ScrollView>
@@ -340,12 +347,12 @@ const styles = StyleSheet.create({
         marginBottom: 3,
     },
     storeAddress: {
-        fontSize: 12,
+        fontSize: 14,
         color: '#666',
         textAlign: 'center',
     },
     storePhone: {
-        fontSize: 12,
+        fontSize: 14,
         color: '#666',
     },
     receiptDetails: {
@@ -356,18 +363,32 @@ const styles = StyleSheet.create({
         marginBottom: 5,
     },
     detailLabel: {
-        fontSize: 13,
+        fontSize: 16,
         color: '#666',
         width: 100,
     },
     detailValue: {
-        fontSize: 13,
+        fontSize: 16,
         color: '#333',
         flex: 1,
     },
     itemsContainer: {
         maxHeight: 120,
         marginBottom: 15,
+    },
+    itemHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingBottom: 8,
+        marginBottom: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E0E0E0',
+        borderStyle: 'dashed',
+    },
+    itemHeaderText: {
+        fontSize: 16,
+        color: '#000',
+        fontWeight: '600',
     },
     itemsList: {
         flexGrow: 0,
@@ -378,11 +399,18 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     itemName: {
-        fontSize: 14,
+        fontSize: 16,
         color: '#333',
     },
+    itemTotal: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#333',
+        minWidth: 70,
+        textAlign: 'right',
+    },
     itemPrice: {
-        fontSize: 14,
+        fontSize: 16,
         color: '#333',
     },
     totalsContainer: {
@@ -407,15 +435,15 @@ const styles = StyleSheet.create({
         color: '#333',
     },
     totalLabelSmall: {
-        fontSize: 14,
+        fontSize: 16,
         color: '#666',
     },
     totalValueSmall: {
-        fontSize: 14,
+        fontSize: 16,
         color: '#666',
     },
     noteText: {
-        fontSize: 11,
+        fontSize: 14,
         color: '#888',
         textAlign: 'center',
         marginBottom: 15,
@@ -436,7 +464,7 @@ const styles = StyleSheet.create({
     },
     printButtonText: {
         color: '#fff',
-        fontSize: 14,
+        fontSize: 18,
         fontWeight: '600',
     },
     newTransactionButton: {
@@ -451,7 +479,7 @@ const styles = StyleSheet.create({
     },
     newTransactionButtonText: {
         color: '#fff',
-        fontSize: 14,
+        fontSize: 18,
         fontWeight: '600',
     },
 });
