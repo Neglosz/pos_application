@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
         paddingVertical: 8,
     },
     label: {
-        fontSize: 16,
+        fontSize: 18,
         color: '#999', // Inactive text color
         marginTop: 0,
     },
@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     centerLabel: {
-        fontSize: 12,
+        fontSize: 18,
         color: '#999',
         fontWeight: 'bold',
         fontSize: 16,

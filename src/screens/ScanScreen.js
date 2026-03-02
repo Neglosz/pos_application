@@ -128,6 +128,8 @@ export default function ScanScreen({ navigation, route }) {
     const [weightInput, setWeightInput] = useState('1');
     const [selectedUnit, setSelectedUnit] = useState(WEIGHT_UNITS[0]);
     const [showWeightInputModal, setShowWeightInputModal] = useState(false);
+    const [isAddingProduct, setIsAddingProduct] = useState(false);
+    const [isSelling, setIsSelling] = useState(false);
 
     // Computed Weight Categories
     const weightCategories = useMemo(() => {
@@ -303,10 +305,12 @@ export default function ScanScreen({ navigation, route }) {
     }, [showAddProductModal, currentWeightCategory]);
 
     const handleAddProduct = async () => {
+        if (isAddingProduct) return;
         if (!newProductName || !newProductPrice) {
             Alert.alert('ข้อมูลไม่ครบ', 'กรุณากรอกชื่อและราคา');
             return;
         }
+        setIsAddingProduct(true);
 
         // Resolve DB Category ID
         let dbCategoryId = null;
@@ -365,6 +369,7 @@ export default function ScanScreen({ navigation, route }) {
         } else {
             Alert.alert('ผิดพลาด', result.error);
         }
+        setIsAddingProduct(false);
     };
 
     // --- Effects: Sound & Permissions ---
@@ -573,6 +578,8 @@ export default function ScanScreen({ navigation, route }) {
 
     // --- Logic: Credit Sale ---
     const handleDebtConfirm = async (debtData) => {
+        if (isSelling) return;
+        setIsSelling(true);
         try {
             const response = await createCreditSale({
                 customer_id: debtData.customerId,
@@ -601,11 +608,15 @@ export default function ScanScreen({ navigation, route }) {
         } catch (error) {
             setShowDebtPaymentModal(false);
             Alert.alert('ผิดพลาด', `ไม่สามารถเชื่อมต่อ Server ได้\n\n${error.message}`);
+        } finally {
+            setIsSelling(false);
         }
     };
 
     // --- Logic: Normal Sale (Cash/QR) ---
     const handleNormalSale = async (paymentMethod, receivedAmount = 0) => {
+        if (isSelling) return;
+        setIsSelling(true);
         try {
             // Close modals first
             setShowPaymentModal(false);
@@ -638,13 +649,15 @@ export default function ScanScreen({ navigation, route }) {
                 });
 
                 clearCart();
-                refreshProducts();
                 setShowReceiptModal(true);
+                setTimeout(() => refreshProducts(), 500);
             } else {
                 Alert.alert('ผิดพลาด', response.error || 'ไม่สามารถบันทึกการขายได้');
             }
         } catch (error) {
             Alert.alert('ผิดพลาด', `เกิดข้อผิดพลาดในการเชื่อมต่อ\n${error.message}`);
+        } finally {
+            setIsSelling(false);
         }
     };
 
@@ -891,12 +904,13 @@ export default function ScanScreen({ navigation, route }) {
     // 5. SEARCH VIEW
     const renderSearchView = () => {
         if (activeTab !== 'search') return null;
-        const displayProducts = searchQueryLocal.trim()
+        const displayProducts = (searchQueryLocal.trim()
             ? storeProducts.filter(p =>
                 p.name?.toLowerCase().includes(searchQueryLocal.toLowerCase().trim()) ||
                 p.barcode?.toLowerCase().includes(searchQueryLocal.toLowerCase().trim())
             )
-            : storeProducts;
+            : storeProducts
+        ).filter(p => parseFloat(p.stock_qty || 0) > 0);
         return (
             <View style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
                 {/* Search Bar */}
@@ -1358,10 +1372,15 @@ export default function ScanScreen({ navigation, route }) {
                                 <Text style={[styles.modalMainButtonText, { color: '#666' }]}>ยกเลิก</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                                style={[styles.modalMainButton, { flex: 2, marginTop: 0 }]}
+                                style={[styles.modalMainButton, { flex: 2, marginTop: 0 }, isAddingProduct && { opacity: 0.6 }]}
                                 onPress={handleAddProduct}
+                                disabled={isAddingProduct}
                             >
-                                <Text style={styles.modalMainButtonText}>บันทึกสินค้า</Text>
+                                {isAddingProduct ? (
+                                    <ActivityIndicator color="#fff" size="small" />
+                                ) : (
+                                    <Text style={styles.modalMainButtonText}>บันทึกสินค้า</Text>
+                                )}
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -1590,12 +1609,14 @@ export default function ScanScreen({ navigation, route }) {
                 amount={totalAmount}
                 onConfirm={(received) => handleNormalSale('cash', received)}
                 onClose={() => setShowCashModal(false)}
+                isSubmitting={isSelling}
             />
             <QRPaymentModal
                 visible={showQRModal}
                 amount={totalAmount}
-                onConfirm={() => handleNormalSale('qr', totalAmount)}
+                onConfirm={() => handleNormalSale('qr')}
                 onClose={() => setShowQRModal(false)}
+                isSubmitting={isSelling}
             />
             <DebtPaymentModal visible={showDebtPaymentModal} amount={totalAmount} onConfirm={handleDebtConfirm} onCancel={() => setShowDebtPaymentModal(false)} />
             <ProductQuantityModal visible={quantityModalVisible} product={selectedProductToAdd} onClose={() => setQuantityModalVisible(false)} onConfirm={handleConfirmAddToCart} />
@@ -1625,6 +1646,25 @@ export default function ScanScreen({ navigation, route }) {
 
             {/* Floating Cart Button (New) */}
             {renderFloatingCartButton()}
+            {/* Loading Overlay ขณะกำลังขาย */}
+            {isSelling && (
+                <View style={{
+                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.4)',
+                    justifyContent: 'center', alignItems: 'center',
+                    zIndex: 9999
+                }}>
+                    <View style={{
+                        backgroundColor: '#fff', borderRadius: 16,
+                        padding: 30, alignItems: 'center',
+                        shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.2, shadowRadius: 10, elevation: 10
+                    }}>
+                        <ActivityIndicator size="large" color="#F37021" />
+                        <Text style={{ marginTop: 12, fontSize: 16, fontWeight: '600', color: '#333' }}>กำลังบันทึกการขาย...</Text>
+                    </View>
+                </View>
+            )}
         </View >
     );
 }

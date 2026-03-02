@@ -20,6 +20,7 @@ export default function QRPaymentModal({
     amount = 0,
     onConfirm,
     onClose,
+    isSubmitting = false,
 }) {
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
@@ -139,9 +140,15 @@ export default function QRPaymentModal({
 
                     {/* Footer Buttons */}
                     <View style={styles.footer}>
-                        <TouchableOpacity style={styles.confirmButton} onPress={onConfirm}>
-                            <Text style={styles.confirmButtonText}>ยืนยันการรับเงิน</Text>
-                            <AntDesign name="check" size={20} color="#fff" style={{ marginLeft: 8 }} />
+                        <TouchableOpacity style={[styles.confirmButton, isSubmitting && { opacity: 0.6 }]} onPress={onConfirm} disabled={isSubmitting}>
+                            {isSubmitting ? (
+                                <ActivityIndicator color="#fff" size="small" />
+                            ) : (
+                                <>
+                                    <Text style={styles.confirmButtonText}>ยืนยันการรับเงิน</Text>
+                                    <AntDesign name="check" size={20} color="#fff" style={{ marginLeft: 8 }} />
+                                </>
+                            )}
                         </TouchableOpacity>
                     </View>
                 </Animated.View>

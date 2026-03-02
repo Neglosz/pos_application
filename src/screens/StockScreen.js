@@ -385,7 +385,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     dashboardTitle: {
-        fontSize: 14,
+        fontSize: 18,
         color: '#444',
         marginRight: 8,
     },
@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
         marginRight: 4,
     },
     dashboardUnit: {
-        fontSize: 12,
+        fontSize: 18,
         color: '#666',
     },
     viewAllButton: {
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
     },
     viewAllText: {
         color: '#fff',
-        fontSize: 10,
+        fontSize: 18,
         marginRight: 4,
         fontWeight: '600',
     },
@@ -447,7 +447,7 @@ const styles = StyleSheet.create({
         marginBottom: 2,
     },
     statLabel: {
-        fontSize: 11, // Slightly larger
+        fontSize: 18, // Slightly larger
         color: '#444', // Darker for better contrast
         textAlign: 'center',
         fontWeight: 'bold', // Bold text as requested
@@ -478,13 +478,13 @@ const styles = StyleSheet.create({
     },
     scanButtonText: {
         color: '#fff',
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: 'bold',
         marginBottom: 4,
     },
     scanButtonSubText: {
         color: '#fff',
-        fontSize: 12,
+        fontSize: 16,
     },
     // Section Headers
     listContainer: {
@@ -507,19 +507,19 @@ const styles = StyleSheet.create({
         marginRight: 8,
     },
     listHeaderTitle: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: 'bold',
         color: '#1E2022',
         marginRight: 6,
     },
     listHeaderSubtitle: {
-        fontSize: 12,
+        fontSize: 18,
         color: '#888',
         fontWeight: '400',
     },
     seeAllLink: {
         color: '#FF7043',
-        fontSize: 12,
+        fontSize: 18,
         fontWeight: '600',
     },
     // List Items (Cards)
@@ -557,7 +557,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     itemName: {
-        fontSize: 14,
+        fontSize: 18,
         fontWeight: 'bold',
         color: '#1E2022',
         marginBottom: 4,
@@ -574,7 +574,7 @@ const styles = StyleSheet.create({
     },
     tagYellowText: {
         color: '#F57F17',
-        fontSize: 12,
+        fontSize: 16,
         fontWeight: '600',
     },
     tagRed: {
@@ -586,11 +586,11 @@ const styles = StyleSheet.create({
     },
     tagRedText: {
         color: '#D32F2F',
-        fontSize: 12,
+        fontSize: 16,
         fontWeight: '600',
     },
     priceText: {
-        fontSize: 12,
+        fontSize: 18,
         color: '#888',
     },
     itemRight: {
@@ -605,7 +605,7 @@ const styles = StyleSheet.create({
     },
     BadgeBlueText: {
         color: '#fff',
-        fontSize: 12,
+        fontSize: 18,
         fontWeight: 'bold',
     },
     quantityText: {
@@ -614,7 +614,7 @@ const styles = StyleSheet.create({
         color: '#1E2022',
     },
     unitText: {
-        fontSize: 10,
+        fontSize: 18,
         color: '#888',
     },
     moreButton: {
@@ -626,7 +626,7 @@ const styles = StyleSheet.create({
     },
     emptyText: {
         color: '#999',
-        fontSize: 14,
+        fontSize: 18,
         marginTop: 5,
     },
     // FAB

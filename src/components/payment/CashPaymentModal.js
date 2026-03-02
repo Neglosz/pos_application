@@ -11,6 +11,7 @@ import {
     Keyboard,
     KeyboardAvoidingView,
     Platform,
+    ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -19,6 +20,7 @@ export default function CashPaymentModal({
     amount,
     onConfirm,
     onClose,
+    isSubmitting = false,
 }) {
     const [receivedAmount, setReceivedAmount] = useState('');
     const [change, setChange] = useState(0);
@@ -126,11 +128,15 @@ export default function CashPaymentModal({
 
                         {/* Confirm Button */}
                         <TouchableOpacity
-                            style={[styles.confirmBtn, (parseFloat(receivedAmount) || 0) < amount && styles.disabledBtn]}
+                            style={[styles.confirmBtn, ((parseFloat(receivedAmount) || 0) < amount || isSubmitting) && styles.disabledBtn]}
                             onPress={handleConfirm}
-                            disabled={(parseFloat(receivedAmount) || 0) < amount}
+                            disabled={(parseFloat(receivedAmount) || 0) < amount || isSubmitting}
                         >
-                            <Text style={styles.confirmBtnText}>ยืนยันการชำระเงิน</Text>
+                            {isSubmitting ? (
+                                <ActivityIndicator color="#fff" size="small" />
+                            ) : (
+                                <Text style={styles.confirmBtnText}>ยืนยันการชำระเงิน</Text>
+                            )}
                         </TouchableOpacity>
                     </View>
                 </KeyboardAvoidingView>

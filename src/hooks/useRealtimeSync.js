@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
 import { getCurrentStoreId } from '../services/api';
 import { useProductStore } from '../stores/useProductStore';
+import { useNotificationStore } from '../stores/useNotificationStore';
 
 /**
  * Hook to subscribe to Supabase Realtime changes for products and batches.
@@ -42,6 +43,17 @@ export const useRealtimeSync = () => {
             }, (payload) => {
                 console.log('[RealtimeSync] Batch change detected:', payload.eventType);
                 useProductStore.getState().refreshProducts();
+            })
+            // Subscribe to notifications table changes
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'notifications',
+                filter: `store_id=eq.${storeId}`
+            }, (payload) => {
+                console.log('[RealtimeSync] Notification change:', payload.eventType);
+                useNotificationStore.getState().fetchNotifications();
+                useNotificationStore.getState().fetchUnreadCount();
             })
             .subscribe((status) => {
                 console.log('[RealtimeSync] Subscription status:', status);
