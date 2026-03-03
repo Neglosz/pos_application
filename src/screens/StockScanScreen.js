@@ -74,9 +74,41 @@ export default function StockScanScreen({ navigation }) {
     // Valid barcode types for products
     const VALID_BARCODE_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'codabar'];
 
-    const handleBarCodeScanned = ({ type, data }) => {
+    const handleBarCodeScanned = async ({ type, data }) => {
         if (scannedRef.current) return;
         scannedRef.current = true;
+        // ==========================================
+        // 2. ก๊อปปี้โค้ดส่วนนี้ไปวางแทรกได้เลย
+        const hasLetters = /[a-zA-Zก-ฮ]/.test(data);
+        if (hasLetters) {
+            setScanned(true);
+            Alert.alert(
+                "ข้อมูลไม่ถูกต้อง",
+                "บาร์โค้ดที่สแกนมีตัวอักษรผสมอยู่ กรุณาสแกนใหม่อีกครั้ง",
+                [{ text: "ตกลง", onPress: () => { setScanned(false); scannedRef.current = false; } }]
+            );
+            return; // หยุดการทำงานทันที ให้สแกนใหม่
+        }
+        if (data.length !== 13) {
+            setScanned(true);
+            // สร้างกล่องข้อความแบบหยุดรอให้คนกดเลือก ว่าจะเอายังไง
+            const confirmed = await new Promise((resolve) => {
+                Alert.alert(
+                    "รูปแบบบาร์โค้ดไม่คุ้นเคย",
+                    `ปกติบาร์โค้ดมี 13 หลัก รหัสนี้มี ${data.length} หลัก (${data})\nต้องการใช้งานต่อหรือไม่?`,
+                    [
+                        { text: "สแกนใหม่", style: "cancel", onPress: () => resolve(false) },
+                        { text: "ใช้งานต่อ", onPress: () => resolve(true) }
+                    ]
+                );
+            });
+            if (!confirmed) {
+                // ถ้าเลือก "สแกนใหม่" คืนค่าให้กล้องพร้อมสแกน แล้วหยุดการทำงาน
+                setScanned(false);
+                scannedRef.current = false;
+                return;
+            }
+        }
 
 
         // Filter out non-barcode types (e.g. QR codes)
