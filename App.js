@@ -6,7 +6,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator, TransitionPresets } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { Alert, Linking } from 'react-native';
+import { Alert, Linking, AppState } from 'react-native';
 import { enableScreens } from 'react-native-screens';
 import { StoreProvider } from './src/contexts/StoreContext';
 import { setCurrentStoreId, setCurrentUserId } from './src/services/api';
@@ -149,7 +149,7 @@ export default function App() {
           });
 
           if (error) throw error;
-          
+
           // If it's a recovery link, the auth state change listener will pick it up
           if (type === 'recovery') {
             setCurrentScreen('ResetPassword');
@@ -193,6 +193,15 @@ export default function App() {
     return () => {
       subscription?.unsubscribe();
     };
+  }, []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (state) => {
+      if (state === 'active') {
+        await supabase.auth.refreshSession();
+      }
+    });
+    return () => subscription.remove();
   }, []);
 
 

@@ -99,27 +99,21 @@ export const uploadCustomerImage = async (uri, storeId) => {
 };
 
 /**
- * ดึง Signed URL สำหรับ private bucket (customers)
+ * ดึง Public URL ถาวร สำหรับ bucket
  * @param {string} path - Path ของไฟล์ใน bucket
- * @param {number} expiresIn - เวลาหมดอายุ (วินาที) default 3600 = 1 ชม.
  * @returns {Promise<{success: boolean, url?: string, error?: string}>}
  */
-export const getSignedUrl = async (path, expiresIn = 3600) => {
+export const getSignedUrl = async (path) => {
+    // ^ (เก็บชื่อฟังก์ชันเดิมไว้แอปจะได้ไม่พัง แต่ไส้ในดึง Public URL แทน)
     try {
         if (!path) {
             return { success: false, error: 'Missing path' };
         }
-
-        const { data, error } = await supabase.storage
+        // ดึง public URL แทนการสร้าง signed URL (ไม่มีหมดอายุ)
+        const { data } = supabase.storage
             .from('customers')
-            .createSignedUrl(path, expiresIn);
-
-        if (error) {
-            console.error('getSignedUrl error:', error);
-            return { success: false, error: error.message };
-        }
-
-        return { success: true, url: data.signedUrl };
+            .getPublicUrl(path);
+        return { success: true, url: data.publicUrl };
     } catch (error) {
         console.error('getSignedUrl error:', error);
         return { success: false, error: error.message };

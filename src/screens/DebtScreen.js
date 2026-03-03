@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Modal, Animated, Dimensions, KeyboardAvoidingView, Platform, FlatList, Keyboard, TouchableWithoutFeedback, Image } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Modal, Animated, Dimensions, KeyboardAvoidingView, Platform, FlatList, Keyboard, TouchableWithoutFeedback, Image, ActivityIndicator } from 'react-native';
 import { AntDesign, Ionicons, Feather } from '@expo/vector-icons';
 import { PaymentMethodModal, QRPaymentModal, ReceiptModal } from '../components/payment';
 import { getCustomersWithDebt, createCreditPayment, getCustomerPendingBills } from '../services/api';
@@ -308,126 +308,133 @@ export default function DebtScreen() {
 
     return (
         <View style={styles.container}>
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                {/* Unified Dashboard Card */}
-                <View style={styles.dashboardCard}>
-                    <View style={styles.dashboardTop}>
-                        <View>
-                            <Text style={styles.dashboardLabel}>ยอดค้างชำระทั้งหมด</Text>
-                            <Text style={styles.dashboardTotalAmount}>฿{totalDebt.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</Text>
-                        </View>
-                        <View style={styles.walletIconContainer}>
-                            <Ionicons name="wallet-outline" size={24} color="#F37021" />
-                        </View>
-                    </View>
-                    <View style={styles.divider} />
-                    <View style={styles.dashboardStatsRow}>
-                        <View style={styles.statItem}>
-                            <View style={[styles.statIconCircle, { backgroundColor: '#212121' }]}>
-                                <Feather name="users" size={16} color="#fff" />
-                            </View>
-                            <View style={styles.statTextContainer}>
-                                <Text style={styles.statValue}>{filterCounts.all}</Text>
-                                <Text style={styles.statLabel}>รายการทั้งหมด</Text>
-                            </View>
-                        </View>
-                        <View style={styles.statItem}>
-                            <View style={[styles.statIconCircle, { backgroundColor: '#FFF8E1' }]}>
-                                <Feather name="alert-circle" size={16} color="#F57F17" />
-                            </View>
-                            <View style={styles.statTextContainer}>
-                                <Text style={[styles.statValue, { color: '#F57F17' }]}>{filterCounts.nearDue}</Text>
-                                <Text style={styles.statLabel}>ใกล้ครบกำหนด</Text>
-                            </View>
-                        </View>
-                    </View>
+            {loading ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color="#F37021" />
+                    <Text style={{ marginTop: 10, color: '#888' }}>กำลังโหลดข้อมูล...</Text>
                 </View>
-
-                {/* Search & Filter Section */}
-                <View style={styles.searchSection}>
-                    <View style={styles.searchBar}>
-                        <Feather name="search" size={20} color="#666" style={styles.searchIcon} />
-                        <TextInput
-                            style={styles.searchInput}
-                            placeholder="ค้นหาชื่อ, เบอร์โทร..."
-                            placeholderTextColor="#666"
-                            value={searchText}
-                            onChangeText={setSearchText}
-                        />
+            ) : (
+                <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                    {/* Unified Dashboard Card */}
+                    <View style={styles.dashboardCard}>
+                        <View style={styles.dashboardTop}>
+                            <View>
+                                <Text style={styles.dashboardLabel}>ยอดค้างชำระทั้งหมด</Text>
+                                <Text style={styles.dashboardTotalAmount}>฿{totalDebt.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</Text>
+                            </View>
+                            <View style={styles.walletIconContainer}>
+                                <Ionicons name="wallet-outline" size={24} color="#F37021" />
+                            </View>
+                        </View>
+                        <View style={styles.divider} />
+                        <View style={styles.dashboardStatsRow}>
+                            <View style={styles.statItem}>
+                                <View style={[styles.statIconCircle, { backgroundColor: '#212121' }]}>
+                                    <Feather name="users" size={16} color="#fff" />
+                                </View>
+                                <View style={styles.statTextContainer}>
+                                    <Text style={styles.statValue}>{filterCounts.all}</Text>
+                                    <Text style={styles.statLabel}>รายการทั้งหมด</Text>
+                                </View>
+                            </View>
+                            <View style={styles.statItem}>
+                                <View style={[styles.statIconCircle, { backgroundColor: '#FFF8E1' }]}>
+                                    <Feather name="alert-circle" size={16} color="#F57F17" />
+                                </View>
+                                <View style={styles.statTextContainer}>
+                                    <Text style={[styles.statValue, { color: '#F57F17' }]}>{filterCounts.nearDue}</Text>
+                                    <Text style={styles.statLabel}>ใกล้ครบกำหนด</Text>
+                                </View>
+                            </View>
+                        </View>
                     </View>
 
-                    <View style={styles.filterRow}>
-                        {filterOptions.map(option => {
-                            const isActive = filterType === option.id;
-                            const count = filterCounts[option.id];
+                    {/* Search & Filter Section */}
+                    <View style={styles.searchSection}>
+                        <View style={styles.searchBar}>
+                            <Feather name="search" size={20} color="#666" style={styles.searchIcon} />
+                            <TextInput
+                                style={styles.searchInput}
+                                placeholder="ค้นหาชื่อ, เบอร์โทร..."
+                                placeholderTextColor="#666"
+                                value={searchText}
+                                onChangeText={setSearchText}
+                            />
+                        </View>
+
+                        <View style={styles.filterRow}>
+                            {filterOptions.map(option => {
+                                const isActive = filterType === option.id;
+                                const count = filterCounts[option.id];
+                                return (
+                                    <TouchableOpacity
+                                        key={option.id}
+                                        style={[styles.filterPill, isActive && styles.filterPillActive]}
+                                        onPress={() => setFilterType(option.id)}
+                                    >
+                                        <Text style={[styles.filterText, isActive && styles.filterTextActive]}>{option.label}</Text>
+                                        <View style={[styles.filterCountBadge, isActive && styles.filterCountBadgeActive]}>
+                                            <Text style={[styles.filterCountText, isActive && styles.filterCountTextActive]}>{count}</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+                    </View>
+
+                    {/* Debtors List */}
+                    <View style={styles.listSection}>
+                        {filteredDebtors.map((debtor) => {
+                            const status = getStatusInfo(debtor);
+                            const latestDue = getLatestDueDate(debtor);
                             return (
-                                <TouchableOpacity
-                                    key={option.id}
-                                    style={[styles.filterPill, isActive && styles.filterPillActive]}
-                                    onPress={() => setFilterType(option.id)}
-                                >
-                                    <Text style={[styles.filterText, isActive && styles.filterTextActive]}>{option.label}</Text>
-                                    <View style={[styles.filterCountBadge, isActive && styles.filterCountBadgeActive]}>
-                                        <Text style={[styles.filterCountText, isActive && styles.filterCountTextActive]}>{count}</Text>
+                                <TouchableOpacity key={debtor.id} style={styles.debtorCard} onPress={() => handleEdit(debtor)}>
+                                    <View style={styles.cardHeader}>
+                                        <View style={styles.userInfo}>
+                                            {debtor.image_url ? (
+                                                <Image source={{ uri: debtor.image_url }} style={[styles.avatar, { backgroundColor: '#f0f0f0' }]} />
+                                            ) : (
+                                                <View style={[styles.avatar, { backgroundColor: getAvatarColor(debtor.name) }]}>
+                                                    <Text style={styles.avatarText}>{debtor.name ? debtor.name.charAt(0).toUpperCase() : '?'}</Text>
+                                                </View>
+                                            )}
+                                            <View>
+                                                <Text style={styles.userName}>{debtor.name}</Text>
+                                                <Text style={styles.userPhone}>
+                                                    <Feather name="phone" size={12} /> {debtor.phone || 'ไม่ระบุเบอร์'}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                        <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
+                                            <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+                                        </View>
+                                    </View>
+
+                                    <View style={styles.cardFooter}>
+                                        <View>
+                                            <Text style={styles.debtLabel}>ยอดค้าง</Text>
+                                            <Text style={styles.debtAmount}>฿{parseFloat(debtor.total_debt).toLocaleString()}</Text>
+                                        </View>
+                                        {latestDue && (
+                                            <View style={styles.dueContainer}>
+                                                <Feather name="clock" size={14} color="#F57F17" style={{ marginRight: 4 }} />
+                                                <View style={styles.dueTextContainer}>
+                                                    <Text style={styles.dueLabel}>ครบกำหนด</Text>
+                                                    <Text style={styles.dueValue}>{formatDate(latestDue, 'full')}</Text>
+                                                </View>
+                                            </View>
+                                        )}
+                                        <TouchableOpacity style={styles.cardArrow} onPress={() => handleEdit(debtor)}>
+                                            <Feather name="chevron-right" size={20} color="#ccc" />
+                                        </TouchableOpacity>
                                     </View>
                                 </TouchableOpacity>
                             );
                         })}
+                        <View style={{ height: 100 }} />
                     </View>
-                </View>
-
-                {/* Debtors List */}
-                <View style={styles.listSection}>
-                    {filteredDebtors.map((debtor) => {
-                        const status = getStatusInfo(debtor);
-                        const latestDue = getLatestDueDate(debtor);
-                        return (
-                            <TouchableOpacity key={debtor.id} style={styles.debtorCard} onPress={() => handleEdit(debtor)}>
-                                <View style={styles.cardHeader}>
-                                    <View style={styles.userInfo}>
-                                        {debtor.image_url ? (
-                                            <Image source={{ uri: debtor.image_url }} style={[styles.avatar, { backgroundColor: '#f0f0f0' }]} />
-                                        ) : (
-                                            <View style={[styles.avatar, { backgroundColor: getAvatarColor(debtor.name) }]}>
-                                                <Text style={styles.avatarText}>{debtor.name ? debtor.name.charAt(0).toUpperCase() : '?'}</Text>
-                                            </View>
-                                        )}
-                                        <View>
-                                            <Text style={styles.userName}>{debtor.name}</Text>
-                                            <Text style={styles.userPhone}>
-                                                <Feather name="phone" size={12} /> {debtor.phone || 'ไม่ระบุเบอร์'}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                    <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
-                                        <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
-                                    </View>
-                                </View>
-
-                                <View style={styles.cardFooter}>
-                                    <View>
-                                        <Text style={styles.debtLabel}>ยอดค้าง</Text>
-                                        <Text style={styles.debtAmount}>฿{parseFloat(debtor.total_debt).toLocaleString()}</Text>
-                                    </View>
-                                    {latestDue && (
-                                        <View style={styles.dueContainer}>
-                                            <Feather name="clock" size={14} color="#F57F17" style={{ marginRight: 4 }} />
-                                            <View style={styles.dueTextContainer}>
-                                                <Text style={styles.dueLabel}>ครบกำหนด</Text>
-                                                <Text style={styles.dueValue}>{formatDate(latestDue, 'full')}</Text>
-                                            </View>
-                                        </View>
-                                    )}
-                                    <TouchableOpacity style={styles.cardArrow} onPress={() => handleEdit(debtor)}>
-                                        <Feather name="chevron-right" size={20} color="#ccc" />
-                                    </TouchableOpacity>
-                                </View>
-                            </TouchableOpacity>
-                        );
-                    })}
-                    <View style={{ height: 100 }} />
-                </View>
-            </ScrollView>
+                </ScrollView>
+            )}
 
             {/* Edit Modal */}
             <Modal
