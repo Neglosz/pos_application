@@ -60,21 +60,21 @@ const TransactionItem = React.memo(({ item, onPress }) => {
     return (
         <TouchableOpacity style={styles.card} onPress={() => onPress(item)}>
             <View style={styles.iconContainer}>
-                <Ionicons 
-                    name={item.paymentStatus === 'paid' ? 'checkmark-circle' : 'time'} 
-                    size={36} 
-                    color={item.paymentStatus === 'paid' ? '#4CAF50' : '#FF9800'} 
+                <Ionicons
+                    name={item.paymentStatus === 'paid' ? 'checkmark-circle' : 'time'}
+                    size={36}
+                    color={item.paymentStatus === 'paid' ? '#4CAF50' : '#FF9800'}
                 />
             </View>
             <View style={styles.info}>
-                <View style={{flexDirection: 'row', justifyContent: 'space-between'}}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <Text style={styles.customer}>{item.customer}</Text>
                     <Text style={styles.amount}>฿{item.amount.toLocaleString()}</Text>
                 </View>
-                
-                <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 8}}>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 8 }}>
                     <Text style={styles.date}>{item.date} • {item.time}</Text>
-                    
+
                     {/* Payment Method Badge */}
                     <View style={[styles.methodBadge, { backgroundColor: bgBadge }]}>
                         <Ionicons name={methodIcon} size={10} color={methodColor} style={{ marginRight: 2 }} />
@@ -83,9 +83,9 @@ const TransactionItem = React.memo(({ item, onPress }) => {
                 </View>
 
                 {item.paymentStatus !== 'paid' && (
-                     <Text style={[styles.statusText, { color: '#FF9800', marginTop: 4 }]}>
+                    <Text style={[styles.statusText, { color: '#FF9800', marginTop: 4 }]}>
                         สถานะ: ค้างชำระ
-                     </Text>
+                    </Text>
                 )}
             </View>
             <Ionicons name="chevron-forward" size={20} color="#E0E0E0" />
@@ -102,6 +102,7 @@ export default function AllTransactionsScreen({ navigation }) {
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [loadingReceipt, setLoadingReceipt] = useState(false);
 
     // Filter State - Default to 'today' for performance
     const [activeFilters, setActiveFilters] = useState({
@@ -111,7 +112,7 @@ export default function AllTransactionsScreen({ navigation }) {
         sort: 'newest'
     });
     const [filterModalVisible, setFilterModalVisible] = useState(false);
-    const [tempFilters, setTempFilters] = useState({...activeFilters}); // For modal edits
+    const [tempFilters, setTempFilters] = useState({ ...activeFilters }); // For modal edits
 
     // Receipt Modal State
     const [receiptVisible, setReceiptVisible] = useState(false);
@@ -121,7 +122,7 @@ export default function AllTransactionsScreen({ navigation }) {
     const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
     const openFilterModal = () => {
-        setTempFilters({...activeFilters});
+        setTempFilters({ ...activeFilters });
         setFilterModalVisible(true);
         Animated.spring(slideAnim, {
             toValue: 0,
@@ -151,7 +152,7 @@ export default function AllTransactionsScreen({ navigation }) {
 
     const getFilterParams = (filters) => {
         const params = {
-            page: 1, 
+            page: 1,
             limit: 20,
             sort: filters.sort
         };
@@ -166,14 +167,14 @@ export default function AllTransactionsScreen({ navigation }) {
 
         const now = new Date();
         const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
-        
+
         if (filters.date === 'today') {
             const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
             params.startDate = startOfDay;
             params.endDate = endOfDay;
         } else if (filters.date === 'week') {
             // Start of week (Monday) or 7 days ago? Let's use start of week.
-            const day = now.getDay() || 7; 
+            const day = now.getDay() || 7;
             if (day !== 1) now.setHours(-24 * (day - 1));
             now.setHours(0, 0, 0, 0);
             params.startDate = now.toISOString();
@@ -190,7 +191,7 @@ export default function AllTransactionsScreen({ navigation }) {
     const fetchOrders = async (pageNum = 1, shouldRefresh = false, filtersOverride = null) => {
         // If loading more, don't show full screen loader
         if (pageNum === 1 && !refreshing) setLoading(true);
-        
+
         const currentFilters = filtersOverride || activeFilters;
         const params = {
             ...getFilterParams(currentFilters),
@@ -237,6 +238,7 @@ export default function AllTransactionsScreen({ navigation }) {
 
     const handleTransactionPress = useCallback(async (order) => {
         try {
+            setLoadingReceipt(true);
             const res = await getOrderDetails(order.id);
             if (res.success) {
                 setSelectedTransaction(res.data);
@@ -246,6 +248,8 @@ export default function AllTransactionsScreen({ navigation }) {
             }
         } catch (error) {
             Alert.alert('Error', 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
+        } finally {
+            setLoadingReceipt(false);
         }
     }, []);
 
@@ -263,7 +267,7 @@ export default function AllTransactionsScreen({ navigation }) {
                                 styles.chip,
                                 tempFilters[stateKey] === opt.id && styles.activeChip
                             ]}
-                            onPress={() => setTempFilters({...tempFilters, [stateKey]: opt.id})}
+                            onPress={() => setTempFilters({ ...tempFilters, [stateKey]: opt.id })}
                         >
                             <Text style={[
                                 styles.chipText,
@@ -285,12 +289,12 @@ export default function AllTransactionsScreen({ navigation }) {
         return (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.activeFiltersBar} contentContainerStyle={{ paddingHorizontal: 20, alignItems: 'center' }}>
                 <Text style={{ marginRight: 8, fontSize: 12, color: '#666' }}>กำลังแสดง:</Text>
-                
+
                 {activeFilters.date !== 'all' && (
                     <View style={styles.activeFilterChip}>
                         <Text style={styles.activeFilterText}>{DATE_OPTIONS.find(o => o.id === activeFilters.date)?.label}</Text>
                         <TouchableOpacity onPress={() => {
-                            const newFilters = {...activeFilters, date: 'all'};
+                            const newFilters = { ...activeFilters, date: 'all' };
                             setActiveFilters(newFilters);
                             fetchOrders(1, true, newFilters);
                         }}>
@@ -303,7 +307,7 @@ export default function AllTransactionsScreen({ navigation }) {
                     <View style={styles.activeFilterChip}>
                         <Text style={styles.activeFilterText}>{STATUS_OPTIONS.find(o => o.id === activeFilters.status)?.label}</Text>
                         <TouchableOpacity onPress={() => {
-                            const newFilters = {...activeFilters, status: 'all'};
+                            const newFilters = { ...activeFilters, status: 'all' };
                             setActiveFilters(newFilters);
                             fetchOrders(1, true, newFilters);
                         }}>
@@ -316,7 +320,7 @@ export default function AllTransactionsScreen({ navigation }) {
                     <View style={styles.activeFilterChip}>
                         <Text style={styles.activeFilterText}>{PAYMENT_METHOD_OPTIONS.find(o => o.id === activeFilters.paymentMethod)?.label}</Text>
                         <TouchableOpacity onPress={() => {
-                            const newFilters = {...activeFilters, paymentMethod: 'all'};
+                            const newFilters = { ...activeFilters, paymentMethod: 'all' };
                             setActiveFilters(newFilters);
                             fetchOrders(1, true, newFilters);
                         }}>
@@ -329,7 +333,7 @@ export default function AllTransactionsScreen({ navigation }) {
                     <View style={styles.activeFilterChip}>
                         <Text style={styles.activeFilterText}>เรียง: {SORT_OPTIONS.find(o => o.id === activeFilters.sort)?.label}</Text>
                         <TouchableOpacity onPress={() => {
-                            const newFilters = {...activeFilters, sort: 'newest'};
+                            const newFilters = { ...activeFilters, sort: 'newest' };
                             setActiveFilters(newFilters);
                             fetchOrders(1, true, newFilters);
                         }}>
@@ -337,7 +341,7 @@ export default function AllTransactionsScreen({ navigation }) {
                         </TouchableOpacity>
                     </View>
                 )}
-                
+
                 <TouchableOpacity onPress={() => {
                     const newFilters = { date: 'all', status: 'all', paymentMethod: 'all', sort: 'newest' };
                     setActiveFilters(newFilters);
@@ -411,6 +415,15 @@ export default function AllTransactionsScreen({ navigation }) {
                 />
             )}
 
+            {loadingReceipt && (
+                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center', zIndex: 999 }}>
+                    <View style={{ backgroundColor: '#fff', padding: 30, borderRadius: 16, alignItems: 'center' }}>
+                        <ActivityIndicator size="large" color="#F37021" />
+                        <Text style={{ marginTop: 10, color: '#666' }}>กำลังโหลดบิล...</Text>
+                    </View>
+                </View>
+            )}
+
             {/* Receipt Modal */}
             <ReceiptModal
                 visible={receiptVisible}
@@ -473,7 +486,7 @@ const styles = StyleSheet.create({
     backBtn: { padding: 4 },
     filterBtn: { padding: 4, position: 'relative' },
     filterBadge: { position: 'absolute', top: 4, right: 4, width: 8, height: 8, borderRadius: 4, backgroundColor: 'red', borderWidth: 1, borderColor: '#fff' },
-    
+
     // Active Filters
     activeFiltersBar: { maxHeight: 50, backgroundColor: '#FAFAFA', borderBottomWidth: 1, borderBottomColor: '#eee' },
     activeFilterChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F37021', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 16, marginRight: 8 },
@@ -506,7 +519,7 @@ const styles = StyleSheet.create({
     modalTitle: { fontSize: 18, fontWeight: 'bold' },
     modalBody: { padding: 20 },
     modalFooter: { flexDirection: 'row', padding: 20, borderTopWidth: 1, borderTopColor: '#f0f0f0', gap: 15 },
-    
+
     // Filter Chips inside Modal
     filterSection: { marginBottom: 25 },
     filterLabel: { fontSize: 16, fontWeight: '600', marginBottom: 12, color: '#333' },

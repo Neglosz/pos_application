@@ -31,6 +31,7 @@ export default function ReportScreen() {
     const [paymentStats, setPaymentStats] = useState({ cash: {}, qr: {}, credit: {} });
     const [recentOrders, setRecentOrders] = useState([]);
     const [aiStats, setAiStats] = useState(null);
+    const [loadingReceipt, setLoadingReceipt] = useState(false);
 
     // Modal State
     const [receiptVisible, setReceiptVisible] = useState(false);
@@ -73,6 +74,7 @@ export default function ReportScreen() {
 
     const handleTransactionPress = async (order) => {
         try {
+            setLoadingReceipt(true);
             const res = await getOrderDetails(order.id);
             if (res.success) {
                 setSelectedTransaction(res.data);
@@ -82,6 +84,8 @@ export default function ReportScreen() {
             }
         } catch (error) {
             Alert.alert('Error', 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
+        } finally {
+            setLoadingReceipt(false);
         }
     };
 
@@ -317,71 +321,88 @@ export default function ReportScreen() {
             <View style={{ paddingBottom: 10, paddingHorizontal: 20, backgroundColor: '#FAFAFA' }}>
 
             </View>
+            {renderHeader()}
+            {loading && !refreshing ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color="#F37021" />
+                    <Text style={{ marginTop: 10, color: '#888' }}>กำลังโหลดข้อมูล...</Text>
+                </View>
+            ) : (
 
-            <ScrollView
-                contentContainerStyle={{ paddingBottom: 100 }}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-                showsVerticalScrollIndicator={false}
-            >
-                {renderHeader()}
-                {renderSummaryCard()}
-                {renderPaymentBreakdown()}
-                {renderChart()}
-                {renderRecentOrders()}
+                <ScrollView
+                    contentContainerStyle={{ paddingBottom: 100 }}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+                    showsVerticalScrollIndicator={false}
+                >
 
-                {/* AI Weekly Summary */}
-                {aiStats && (
-                    <View style={styles.aiSummaryCard}>
-                        <View style={styles.aiSummaryHeader}>
-                            <View style={styles.aiSummaryDot} />
-                            <Text style={styles.aiSummaryLabel}>สรุปสัปดาห์ที่ {aiStats.weekNumber || 1}</Text>
-                        </View>
+                    {renderSummaryCard()}
+                    {renderPaymentBreakdown()}
+                    {renderChart()}
+                    {renderRecentOrders()}
 
-                        <View style={styles.aiSummaryMain}>
-                            <Text style={styles.aiSummaryAmount}>
-                                {(aiStats.moneyEarned || 0).toLocaleString()} <Text style={styles.aiSummaryUnit}>บาท</Text>
-                            </Text>
-                        </View>
-                        <Text style={styles.aiSummarySubtitle}>เงินที่ได้เพิ่มจากการทำตาม AI</Text>
-
-                        <View style={styles.aiProgressSection}>
-                            <View style={styles.aiProgressBarContainer}>
-                                <View style={[styles.aiProgressFill, { width: `${aiStats.followedPercent || 0}%` }]} />
+                    {/* AI Weekly Summary */}
+                    {aiStats && (
+                        <View style={styles.aiSummaryCard}>
+                            <View style={styles.aiSummaryHeader}>
+                                <View style={styles.aiSummaryDot} />
+                                <Text style={styles.aiSummaryLabel}>สรุปสัปดาห์ที่ {aiStats.weekNumber || 1}</Text>
                             </View>
-                            <View style={styles.aiProgressLabels}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <Ionicons name="checkmark-circle" size={14} color="#4CAF50" />
-                                    <Text style={styles.aiProgressText}> ทำตามแล้ว {aiStats.followedCount || 0}/{aiStats.totalRecommendations || 0}</Text>
+
+                            <View style={styles.aiSummaryMain}>
+                                <Text style={styles.aiSummaryAmount}>
+                                    {(aiStats.moneyEarned || 0).toLocaleString()} <Text style={styles.aiSummaryUnit}>บาท</Text>
+                                </Text>
+                            </View>
+                            <Text style={styles.aiSummarySubtitle}>เงินที่ได้เพิ่มจากการทำตาม AI</Text>
+
+                            <View style={styles.aiProgressSection}>
+                                <View style={styles.aiProgressBarContainer}>
+                                    <View style={[styles.aiProgressFill, { width: `${aiStats.followedPercent || 0}%` }]} />
                                 </View>
-                                <Text style={styles.aiProgressPercent}>{aiStats.followedPercent || 0}%</Text>
+                                <View style={styles.aiProgressLabels}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Ionicons name="checkmark-circle" size={14} color="#4CAF50" />
+                                        <Text style={styles.aiProgressText}> ทำตามแล้ว {aiStats.followedCount || 0}/{aiStats.totalRecommendations || 0}</Text>
+                                    </View>
+                                    <Text style={styles.aiProgressPercent}>{aiStats.followedPercent || 0}%</Text>
+                                </View>
                             </View>
-                        </View>
 
-                        <View style={styles.aiStatsRow}>
-                            <View style={styles.aiStatItem}>
-                                <Text style={styles.aiStatValue}>{aiStats.byType?.expiry || 0}</Text>
-                                <Text style={styles.aiStatLabel}>ลดของเสีย</Text>
-                            </View>
-                            <View style={styles.aiStatDivider} />
-                            <View style={styles.aiStatItem}>
-                                <Text style={styles.aiStatValue}>{aiStats.byType?.debt || 0}</Text>
-                                <Text style={styles.aiStatLabel}>เก็บหนี้ได้</Text>
-                            </View>
-                            <View style={styles.aiStatDivider} />
-                            <View style={styles.aiStatItem}>
-                                <Text style={styles.aiStatValue}>{aiStats.byType?.stock || 0}</Text>
-                                <Text style={styles.aiStatLabel}>สต็อกไม่ขาด</Text>
+                            <View style={styles.aiStatsRow}>
+                                <View style={styles.aiStatItem}>
+                                    <Text style={styles.aiStatValue}>{aiStats.byType?.expiry || 0}</Text>
+                                    <Text style={styles.aiStatLabel}>ลดของเสีย</Text>
+                                </View>
+                                <View style={styles.aiStatDivider} />
+                                <View style={styles.aiStatItem}>
+                                    <Text style={styles.aiStatValue}>{aiStats.byType?.debt || 0}</Text>
+                                    <Text style={styles.aiStatLabel}>เก็บหนี้ได้</Text>
+                                </View>
+                                <View style={styles.aiStatDivider} />
+                                <View style={styles.aiStatItem}>
+                                    <Text style={styles.aiStatValue}>{aiStats.byType?.stock || 0}</Text>
+                                    <Text style={styles.aiStatLabel}>สต็อกไม่ขาด</Text>
+                                </View>
                             </View>
                         </View>
+                    )}
+                </ScrollView>
+            )}
+
+            {loadingReceipt && (
+                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center', zIndex: 999 }}>
+                    <View style={{ backgroundColor: '#fff', padding: 30, borderRadius: 16, alignItems: 'center' }}>
+                        <ActivityIndicator size="large" color="#F37021" />
+                        <Text style={{ marginTop: 10, color: '#666' }}>กำลังโหลดบิล...</Text>
                     </View>
-                )}
-            </ScrollView>
+                </View>
+            )}
 
             <ReceiptModal
                 visible={receiptVisible}
                 transaction={selectedTransaction}
                 onClose={() => setReceiptVisible(false)}
-                onPrint={ async () => {
+                onPrint={async () => {
                     try {
                         await printReceipt(selectedTransaction);
                         Alert.alert('สำเร็จ', 'พิมพ์ใบเสร็จเรียบร้อยแล้ว');
