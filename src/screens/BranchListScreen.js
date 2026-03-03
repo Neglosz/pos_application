@@ -8,7 +8,9 @@ import {
     StatusBar,
     ActivityIndicator,
     Dimensions,
-    Image
+    Image,
+    Switch,
+    Alert
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -36,7 +38,6 @@ export default function BranchListScreen({ userProfile, onSelectBranch, onLogout
                 .from('stores')
                 .select('*')
                 .eq('owner_id', user.id)
-                .eq('is_active', true)
                 .order('created_at', { ascending: true });
 
             if (error) throw error;
@@ -53,41 +54,91 @@ export default function BranchListScreen({ userProfile, onSelectBranch, onLogout
         fetchBranches();
     };
 
+    const toggleStoreActive = async (storeId, currentValue) => {
+        const newValue = !currentValue;
+        const action = newValue ? 'เปิด' : 'ปิด';
+        Alert.alert(
+            `${action}ให้บริการ`,
+            `ต้องการ${action}สาขานี้ใช่หรือไม่?`,
+            [
+                { text: 'ยกเลิก', style: 'cancel' },
+                {
+                    text: 'ยืนยัน',
+                    onPress: async () => {
+                        try {
+                            const { error } = await supabase
+                                .from('stores')
+                                .update({ is_active: newValue })
+                                .eq('id', storeId);
+                            if (error) throw error;
+                            setBranches(prev =>
+                                prev.map(b => b.id === storeId ? { ...b, is_active: newValue } : b)
+                            );
+                        } catch (error) {
+                            Alert.alert('ผิดพลาด', 'ไม่สามารถเปลี่ยนสถานะได้');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const getCurrentDate = () => {
         const options = { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' };
         const date = new Date();
         return date.toLocaleDateString('th-TH', options);
     };
 
-    const renderBranchItem = ({ item, index }) => (
-        <TouchableOpacity
-            style={styles.branchCard}
-            onPress={() => onSelectBranch && onSelectBranch(item)}
-            activeOpacity={0.7}
-        >
-            <View style={styles.cardLeft}>
-                <View style={[styles.branchIconWrap, { backgroundColor: `rgba(243,112,33,${0.10 + (index % 3) * 0.05})`, overflow: 'hidden' }]}>
-                    {item.image_url ? (
-                        <Image source={{ uri: item.image_url }} style={{ width: '100%', height: '100%' }} />
-                    ) : (
-                        <Ionicons name="storefront" size={22} color={THEME} />
-                    )}
-                </View>
-                <View style={styles.branchInfo}>
-                    <Text style={styles.branchName} numberOfLines={1}>{item.name}</Text>
-                    {item.address ? (
-                        <View style={styles.addressRow}>
-                            <Ionicons name="location-outline" size={13} color="#999" />
-                            <Text style={styles.branchAddress} numberOfLines={1}>{item.address}</Text>
-                        </View>
-                    ) : null}
+    const renderBranchItem = ({ item, index }) => {
+        const isOpen = item.is_active;
+        return (
+            <View style={[styles.branchCard, { borderLeftWidth: 4, borderLeftColor: isOpen ? THEME : '#ccc' }]}>
+                <TouchableOpacity
+                    style={{ flexDirection: 'row', alignItems: 'center' }}
+                    onPress={() => onSelectBranch && onSelectBranch(item)}
+                    activeOpacity={0.7}
+                >
+                    <View style={[styles.branchIconWrap, { backgroundColor: `rgba(243,112,33,${0.10 + (index % 3) * 0.05})`, overflow: 'hidden' }]}>
+                        {item.image_url ? (
+                            <Image source={{ uri: item.image_url }} style={{ width: '100%', height: '100%' }} />
+                        ) : (
+                            <Ionicons name="storefront" size={22} color={THEME} />
+                        )}
+                    </View>
+                    <View style={styles.branchInfo}>
+                        <Text style={styles.branchName} numberOfLines={1}>{item.name}</Text>
+                        {item.address ? (
+                            <View style={styles.addressRow}>
+                                <Ionicons name="location-outline" size={13} color="#999" />
+                                <Text style={styles.branchAddress} numberOfLines={1}>{item.address}</Text>
+                            </View>
+                        ) : null}
+                    </View>
+                    <View style={styles.chevronWrap}>
+                        <Ionicons name="chevron-forward" size={20} color="#ccc" />
+                    </View>
+                </TouchableOpacity>
+                <View style={styles.statusRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: isOpen ? '#4CAF50' : '#999', marginRight: 6 }} />
+                        <Text style={{ fontSize: 13, color: isOpen ? '#4CAF50' : '#999', fontWeight: '500' }}>
+                            {isOpen ? 'เปิดให้บริการ' : 'ปิดให้บริการ'}
+                        </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 13, color: '#999', marginRight: 8 }}>{isOpen ? 'เปิด' : 'ปิด'}</Text>
+                        <Switch
+                            value={isOpen}
+                            onValueChange={() => toggleStoreActive(item.id, isOpen)}
+                            trackColor={{ false: '#ddd', true: '#4CAF50' }}
+                            thumbColor="#fff"
+                        />
+                    </View>
                 </View>
             </View>
-            <View style={styles.chevronWrap}>
-                <Ionicons name="chevron-forward" size={20} color="#ccc" />
-            </View>
-        </TouchableOpacity>
-    );
+        );
+    };
+
 
     if (loading) {
         return (
@@ -129,6 +180,16 @@ export default function BranchListScreen({ userProfile, onSelectBranch, onLogout
                     <View>
                         <Text style={styles.sectionTitle}>สาขาของฉัน</Text>
                         <Text style={styles.sectionSubtitle}>{branches.length} สาขา</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#4CAF50', marginRight: 4 }} />
+                            <Text style={{ fontSize: 13, color: '#666' }}>เปิด {branches.filter(b => b.is_active).length}</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#999', marginRight: 4 }} />
+                            <Text style={{ fontSize: 13, color: '#666' }}>ปิด {branches.filter(b => !b.is_active).length}</Text>
+                        </View>
                     </View>
                 </View>
 
@@ -269,9 +330,6 @@ const styles = StyleSheet.create({
         paddingBottom: 90,
     },
     branchCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
         backgroundColor: '#fff',
         paddingVertical: 14,
         paddingHorizontal: 14,
@@ -323,6 +381,15 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         marginLeft: 8,
+    },
+    statusRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 10,
+        paddingTop: 10,
+        borderTopWidth: 1,
+        borderTopColor: '#f0f0f0',
     },
     // ── Empty State ──
     emptyState: {
