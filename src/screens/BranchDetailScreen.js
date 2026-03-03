@@ -13,6 +13,16 @@ const ENCRYPTION_KEY = 'yourpos-secret-key-2026';
 const THEME_COLOR = '#F37021'; // Orange
 const BG_COLOR = '#F8F9FA'; // Light Gray Background
 
+const validateThaiID = (id) => {
+    if (id.length !== 13) return false;
+    let sum = 0;
+    for (let i = 0; i < 12; i++) {
+        sum += parseInt(id.charAt(i)) * (13 - i);
+    }
+    const checkDigit = (11 - (sum % 11)) % 10;
+    return checkDigit === parseInt(id.charAt(12));
+};
+
 export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
     const [isOwner, setIsOwner] = useState(false);
     const [credentials, setCredentials] = useState(null);
@@ -36,22 +46,63 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
 
     const [deleting, setDeleting] = useState(false);
     const [uploadingImage, setUploadingImage] = useState(false);
-    const handlePickAndUploadImage = async () => {
+    const handlePickAndUploadImage = () => {
+        Alert.alert(
+            'เลือกรูปภาพ',
+            'กรุณาเลือกแหล่งที่มาของรูปภาพ',
+            [
+                { text: 'ยกเลิก', style: 'cancel' },
+                { text: 'ถ่ายภาพ', onPress: takePhoto },
+                { text: 'เลือกจากคลังภาพ', onPress: pickFromLibrary },
+            ]
+        );
+    };
+    // ฟังก์ชันเช็คขนาดไฟล์ (ไม่ให้เกิน 5MB)
+    const validateAndUploadImage = async (asset) => {
+        // file size จาก ImagePicker มีหน่วยเป็น bytes
+        // 5MB = 5 * 1024 * 1024 bytes = 5242880 bytes
+        const MAX_FILE_SIZE = 5 * 1024 * 1024;
+
+        if (asset.fileSize && asset.fileSize > MAX_FILE_SIZE) {
+            Alert.alert('ไฟล์ขนาดใหญ่เกินไป', 'รูปภาพต้องมีขนาดไม่เกิน 5MB กรุณาเลือกรูปภาพใหม่หรือลดขนาดรูปภาพ');
+            return;
+        }
+
+        // ถ้าไฟล์ขนาดผ่านเกณฑ์ ให้ส่งไปอัปโหลด
+        uploadStorageImage(asset.uri);
+    };
+    // เปิดกล้องถ่ายภาพ
+    const takePhoto = async () => {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('ต้องการสิทธิ์', 'ขอสิทธิ์เข้าถึงกล้องถ่ายรูปเพื่อเปลี่ยนรูปร้าน');
+            return;
+        }
+        const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8, // ลด quality เพื่อช่วยให้ขนาดไฟล์เล็กลง
+        });
+        if (!result.canceled) {
+            validateAndUploadImage(result.assets[0]);
+        }
+    };
+    // เลือกจากคลังภาพ (อันเดิม)
+    const pickFromLibrary = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
             Alert.alert('ต้องการสิทธิ์', 'ขอสิทธิ์เข้าถึงคลังรูปภาพเพื่อเปลี่ยนรูปร้าน');
             return;
         }
-
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
             aspect: [1, 1],
             quality: 0.8,
         });
-
         if (!result.canceled) {
-            uploadStorageImage(result.assets[0].uri);
+            validateAndUploadImage(result.assets[0]);
         }
     };
 
@@ -142,17 +193,45 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
         }
     };
 
+    const handlePromptPayChange = (text) => {
+        const hasNonNumeric = /[^0-9]/.test(text);
+        if (hasNonNumeric) {
+            Alert.alert('รูปแบบไม่ถูกต้อง', 'กรุณากรอกเฉพาะตัวเลขเท่านั้น');
+        }
+        const numericOnly = text.replace(/[^0-9]/g, '');
+        setPpId(numericOnly);
+    };
     const handleUpdatePromptPay = async () => {
         if (!ppId || !ppName) {
             Alert.alert('ข้อมูลไม่ครบ', 'กรุณากรอกเลขพร้อมเพย์และชื่อบัญชี');
             return;
         }
-
+        // --- เพิ่มเงื่อนไขตรวจสอบทั้งหมดไว้ตรงนี้ ---
+        if (ppId.length !== 10 && ppId.length !== 13) {
+            Alert.alert('ข้อมูลไม่ถูกต้อง', 'เลขพร้อมเพย์ต้องเป็น 10 หลัก (เบอร์โทร) หรือ 13 หลัก (เลขบัตรประชาชน) เท่านั้น');
+            return;
+        }
+        let currentType = ppType;
+        if (ppId.length === 10) {
+            if (!ppId.startsWith('06') && !ppId.startsWith('08') && !ppId.startsWith('09')) {
+                Alert.alert('เบอร์โทรไม่ถูกต้อง', 'เบอร์โทรศัพท์ต้องขึ้นต้นด้วย 06, 08 หรือ 09');
+                return;
+            }
+            currentType = 'phone';
+        }
+        if (ppId.length === 13) {
+            if (!validateThaiID(ppId)) {
+                Alert.alert('รูปแบบไม่ถูกต้อง', 'รูปแบบเลขบัตรประชาชนไม่ถูกต้องตามรูปแบบของกรมการปกครอง กรุณาตรวจสอบอีกครั้ง');
+                return;
+            }
+            currentType = 'id_card';
+        }
+        // --- จบเงื่อนไขตรวจสอบ ---
         setPpLoading(true);
         try {
             const res = await updateStoreSettings({
                 promptpay_id: ppId,
-                promptpay_type: ppType,
+                promptpay_type: currentType, // <--- ใช้ currentType ที่เช็คมาแล้ว
                 promptpay_name: ppName
             }, branch.id);
 
@@ -215,20 +294,20 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
 
     const thaiToRoman = (text) => {
         const map = {
-            'ก':'k','ข':'kh','ฃ':'kh','ค':'kh','ฅ':'kh','ฆ':'kh',
-            'ง':'ng','จ':'ch','ฉ':'ch','ช':'ch','ซ':'s','ฌ':'ch',
-            'ญ':'y','ฎ':'d','ฏ':'t','ฐ':'th','ฑ':'th','ฒ':'th',
-            'ณ':'n','ด':'d','ต':'t','ถ':'th','ท':'th','ธ':'th',
-            'น':'n','บ':'b','ป':'p','ผ':'ph','ฝ':'f','พ':'ph',
-            'ฟ':'f','ภ':'ph','ม':'m','ย':'y','ร':'r','ล':'l',
-            'ว':'w','ศ':'s','ษ':'s','ส':'s','ห':'h','ฬ':'l',
-            'อ':'o','ฮ':'h',
-            'ะ':'a','า':'a','ิ':'i','ี':'i','ึ':'ue','ื':'ue',
-            'ุ':'u','ู':'u','เ':'e','แ':'ae','โ':'o','ใ':'ai','ไ':'ai',
-            '็':'','่':'','้':'','๊':'','๋':'','์':'','ั':'a','ำ':'am',
+            'ก': 'k', 'ข': 'kh', 'ฃ': 'kh', 'ค': 'kh', 'ฅ': 'kh', 'ฆ': 'kh',
+            'ง': 'ng', 'จ': 'ch', 'ฉ': 'ch', 'ช': 'ch', 'ซ': 's', 'ฌ': 'ch',
+            'ญ': 'y', 'ฎ': 'd', 'ฏ': 't', 'ฐ': 'th', 'ฑ': 'th', 'ฒ': 'th',
+            'ณ': 'n', 'ด': 'd', 'ต': 't', 'ถ': 'th', 'ท': 'th', 'ธ': 'th',
+            'น': 'n', 'บ': 'b', 'ป': 'p', 'ผ': 'ph', 'ฝ': 'f', 'พ': 'ph',
+            'ฟ': 'f', 'ภ': 'ph', 'ม': 'm', 'ย': 'y', 'ร': 'r', 'ล': 'l',
+            'ว': 'w', 'ศ': 's', 'ษ': 's', 'ส': 's', 'ห': 'h', 'ฬ': 'l',
+            'อ': 'o', 'ฮ': 'h',
+            'ะ': 'a', 'า': 'a', 'ิ': 'i', 'ี': 'i', 'ึ': 'ue', 'ื': 'ue',
+            'ุ': 'u', 'ู': 'u', 'เ': 'e', 'แ': 'ae', 'โ': 'o', 'ใ': 'ai', 'ไ': 'ai',
+            '็': '', '่': '', '้': '', '๊': '', '๋': '', '์': '', 'ั': 'a', 'ำ': 'am',
         };
         let result = '';
-        for(const ch of text) {
+        for (const ch of text) {
             result += map[ch] || ch;
         }
         return result;
@@ -243,11 +322,11 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
         );
     };
 
-    const performResetCredentials = async ()=> {
+    const performResetCredentials = async () => {
         setLoading(true);
-        try{
+        try {
             const { data: { session } } = await supabase.auth.getSession();
-            if(!session) throw new Error('Session หมดอายุ');
+            if (!session) throw new Error('Session หมดอายุ');
             //หา OldUser
             const { data: member } = await supabase
                 .from('store_members')
@@ -256,7 +335,7 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
                 .eq('role', 'manager')
                 .limit(1)
                 .single();
-            
+
             const oldUserId = member?.user_id || null;
             // สร้าง credient ใหม่
             const storeName = thaiToRoman(branch.name)
@@ -269,7 +348,7 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
 
             const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
             let newPassword = '';
-            for(let i = 0; i < 10; i++){
+            for (let i = 0; i < 10; i++) {
                 newPassword += chars.charAt(Math.floor(Math.random() * chars.length));
             }
 
@@ -289,13 +368,13 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
             });
 
             const result = await response.json();
-            if(!response.ok) throw new Error(result.error || 'รีเซ็ตไม่สำเร็จ');
+            if (!response.ok) throw new Error(result.error || 'รีเซ็ตไม่สำเร็จ');
 
             setCredentials({ email: newEmail, password: newPassword });
             Alert.alert('สำเร็จ', `รีเซ็ตเรียบร้อย\n\nEmail: ${newEmail}\nPassword: ${newPassword}`);
-        }catch(error){
+        } catch (error) {
             Alert.alert('ผิดพลาด', error.message);
-        }finally{
+        } finally {
             setLoading(false);
         }
     };
@@ -526,28 +605,15 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
                                 onChangeText={setPpName}
                                 placeholder="เช่น นายสมชาย ขายดี"
                             />
-                            <Text style={styles.inputLabel}>เลขพร้อมเพย์ / เบอร์โทร</Text>
+                            <Text style={styles.inputLabel}>เลขพร้อมเพย์</Text>
                             <TextInput
                                 style={styles.input}
                                 value={ppId}
-                                onChangeText={setPpId}
-                                placeholder="เช่น 0812345678"
+                                onChangeText={handlePromptPayChange} // <--- เรียกใช้ฟังก์ชันที่สร้างไว้ดักจับตัวหนังสือ
+                                placeholder="เบอร์โทร/เลขบัตรประชาชน"
                                 keyboardType="number-pad"
+                                maxLength={13} // <--- ป้องกันไม่ให้พิมพ์เกิน 13 หลักแบบอัตโนมัติ
                             />
-                            <View style={styles.typeSelector}>
-                                <TouchableOpacity
-                                    style={[styles.typeBtn, ppType === 'phone' && styles.typeBtnActive]}
-                                    onPress={() => setPpType('phone')}
-                                >
-                                    <Text style={[styles.typeBtnText, ppType === 'phone' && styles.typeBtnTextActive]}>เบอร์โทร</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.typeBtn, ppType === 'id_card' && styles.typeBtnActive]}
-                                    onPress={() => setPpType('id_card')}
-                                >
-                                    <Text style={[styles.typeBtnText, ppType === 'id_card' && styles.typeBtnTextActive]}>เลขบัตร ปชช.</Text>
-                                </TouchableOpacity>
-                            </View>
 
                             <View style={styles.editActions}>
                                 <TouchableOpacity
@@ -718,14 +784,14 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     storeAddress: {
-        fontSize: 14,
+        fontSize: 16,
         color: '#666',
         textAlign: 'center',
         maxWidth: '80%',
         lineHeight: 20,
     },
     storePhone: {
-        fontSize: 14,
+        fontSize: 16,
         color: '#666',
         textAlign: 'center',
         marginTop: 4,
@@ -744,7 +810,7 @@ const styles = StyleSheet.create({
     editLinkText: {
         marginLeft: 4,
         color: THEME_COLOR,
-        fontSize: 13,
+        fontSize: 18,
         fontWeight: '600',
     },
     // Primary Action
@@ -777,12 +843,12 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     primaryActionSubtitle: {
-        fontSize: 14,
+        fontSize: 18,
         color: 'rgba(255,255,255,0.9)',
     },
     // Section Headers
     sectionHeader: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: 'bold',
         color: '#333',
         marginBottom: 12,
@@ -835,12 +901,12 @@ const styles = StyleSheet.create({
         marginRight: 12,
     },
     infoRowLabel: {
-        fontSize: 12,
+        fontSize: 18,
         color: '#999',
         marginBottom: 2,
     },
     infoRowValue: {
-        fontSize: 15,
+        fontSize: 18,
         color: '#333',
     },
     iconBtn: {
@@ -857,7 +923,7 @@ const styles = StyleSheet.create({
     },
     cardActionText: {
         color: THEME_COLOR,
-        fontSize: 14,
+        fontSize: 18,
         fontWeight: '600',
     },
     textActionBtn: {
@@ -865,7 +931,7 @@ const styles = StyleSheet.create({
         paddingVertical: 8,
     },
     textActionLabel: {
-        fontSize: 14,
+        fontSize: 18,
         fontWeight: '600',
     },
     emptyText: {
@@ -887,7 +953,7 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     inputLabel: {
-        fontSize: 13,
+        fontSize: 18,
         color: '#666',
         marginBottom: 8,
         fontWeight: '500',
@@ -915,6 +981,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     cancelBtnText: {
+        fontSize: 18,
         color: '#666',
         fontWeight: '600',
     },
@@ -926,6 +993,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     saveBtnText: {
+        fontSize: 18,
         color: '#fff',
         fontWeight: '600',
     },
@@ -951,7 +1019,7 @@ const styles = StyleSheet.create({
         elevation: 1,
     },
     typeBtnText: {
-        fontSize: 13,
+        fontSize: 18,
         color: '#666',
     },
     typeBtnTextActive: {
@@ -969,7 +1037,7 @@ const styles = StyleSheet.create({
     deleteLinkText: {
         color: '#FF3B30',
         marginLeft: 8,
-        fontSize: 14,
+        fontSize: 18,
         fontWeight: '500',
     },
 });

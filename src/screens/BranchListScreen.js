@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
     },
     dateText: {
         color: 'rgba(255,255,255,0.75)',
-        fontSize: 13,
+        fontSize: 18,
         marginTop: 2,
     },
     logoutBtn: {
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
         color: '#1E2022',
     },
     sectionSubtitle: {
-        fontSize: 13,
+        fontSize: 18,
         color: '#999',
         marginTop: 2,
     },
@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     branchName: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: '600',
         color: '#1E2022',
     },
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
         marginTop: 3,
     },
     branchAddress: {
-        fontSize: 13,
+        fontSize: 16,
         color: '#999',
         marginLeft: 3,
         flex: 1,
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
         color: '#333',
     },
     emptySubtext: {
-        fontSize: 14,
+        fontSize: 18,
         color: '#999',
         marginTop: 6,
         marginBottom: 24,
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
     },
     emptyAddBtnText: {
         color: '#fff',
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: '600',
         marginLeft: 6,
     },

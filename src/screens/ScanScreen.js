@@ -251,6 +251,7 @@ export default function ScanScreen({ navigation, route }) {
     const [newProductExpireDate, setNewProductExpireDate] = useState(null); // New: Expire Date
     const [showDatePicker, setShowDatePicker] = useState(false); // New: Date Picker Visibility
     const [newProductUnit, setNewProductUnit] = useState(WEIGHT_UNITS[0]);
+    const [fieldErrors, setFieldErrors] = useState({});
 
     const searchTimerRef = useRef(null);
     // Image Picker Helper
@@ -306,10 +307,33 @@ export default function ScanScreen({ navigation, route }) {
 
     const handleAddProduct = async () => {
         if (isAddingProduct) return;
-        if (!newProductName || !newProductPrice) {
-            Alert.alert('ข้อมูลไม่ครบ', 'กรุณากรอกชื่อและราคา');
+        // Validation
+        const errors = {};
+        if (!newProductName.trim()) errors.name = true;
+        if (!newProductPrice || parseFloat(newProductPrice) <= 0) errors.price = true;
+        if (!newProductStock || parseFloat(newProductStock) <= 0) errors.stock = true;
+        if (newProductCost === '' || newProductCost === null || newProductCost === undefined) errors.cost = true;
+        // วันหมดอายุ: ต้องเลือก + ห้ามย้อนหลัง
+        if (!newProductExpireDate) {
+            errors.expireDate = true;
+        } else {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const expDate = new Date(newProductExpireDate);
+            expDate.setHours(0, 0, 0, 0);
+            if (expDate < today) {
+                errors.expireDate = true;
+                Alert.alert('วันหมดอายุไม่ถูกต้อง', 'ไม่สามารถเลือกวันที่ย้อนหลังได้');
+                return;
+            }
+        }
+        // ราคาทุน 0 ได้ ไม่ต้องเช็ค
+        if (Object.keys(errors).length > 0) {
+            setFieldErrors(errors);
+            Alert.alert('ข้อมูลไม่ครบ', 'กรุณากรอกข้อมูลที่จำเป็นให้ครบ');
             return;
         }
+        setFieldErrors({});
         setIsAddingProduct(true);
 
         // Resolve DB Category ID
@@ -439,6 +463,33 @@ export default function ScanScreen({ navigation, route }) {
         // Use ref instead of state for immediate synchronous blocking
         if (isProcessingRef.current) return;
         isProcessingRef.current = true;
+        const hasLetters = /[a-zA-Zก-ฮ]/.test(data);
+
+        if (hasLetters) {
+            Alert.alert(
+                "ข้อมูลไม่ถูกต้อง",
+                "บาร์โค้ดที่สแกนมีตัวอักษรผสมอยู่ กรุณาสแกนใหม่อีกครั้ง",
+                [{ text: "ตกลง" }]
+            );
+            setTimeout(() => { isProcessingRef.current = false; }, 2000);
+            return; // หยุดการทำงาน
+        }
+        if (data.length !== 13) {
+            const confirmed = await new Promise((resolve) => {
+                Alert.alert(
+                    "รูปแบบบาร์โค้ดไม่คุ้นเคย",
+                    `ปกติบาร์โค้ดมี 13 หลัก รหัสนี้มี ${data.length} หลัก (${data})\nต้องการใช้งานต่อหรือไม่?`,
+                    [
+                        { text: "สแกนใหม่", style: "cancel", onPress: () => resolve(false) },
+                        { text: "ใช้งานต่อ", onPress: () => resolve(true) }
+                    ]
+                );
+            });
+            if (!confirmed) {
+                setTimeout(() => { isProcessingRef.current = false; }, 2000);
+                return; // หยุดการทำงาน
+            }
+        }
 
         resetInactivityTimer();
         playSound();
@@ -446,27 +497,108 @@ export default function ScanScreen({ navigation, route }) {
 
         try {
             const product = await getProductByBarcode(data);
+
+            // 1. ถ้าไม่เจอสินค้าในระบบ
             if (!product) {
-                Alert.alert("ไม่พบสินค้า", `บาร์โค้ด: ${data} ไม่มีในระบบ`);
-            } else {
-                if (scanMode === 'sale') {
-                    addToCart(product, 1);
-                } else {
-                    // Price Check Mode
-                    let priceMsg = `ราคา: ฿${product.price}`;
-                    const promo = product.promotion;
+                Alert.alert("ไม่พบสินค้า", `บาร์โค้ด: ${data} ไม่มีระบบ`);
+                return; // หยุดการทำงานเลย สำคัญมาก!
+            }
 
-                    if (promo && promo.type === 'buy_x_get_y') {
-                        priceMsg = `🔥 โปร: ซื้อ ${promo.min_qty} แถม ${promo.free_qty}\nราคาปกติ: ฿${product.price}`;
-                    } else if (product.discount_percent > 0) {
-                        priceMsg = `🔥 ราคาโปร: ฿${product.price} (ปกติ ฿${product.original_price})\nลด ${product.discount_percent}%`;
-                    }
+            // 2. ดึงจำนวนสต็อกมาเช็ค (รองรับทั้งชื่อตัวแปร stock_qty หรือ quantity)
+            const stockQty = parseFloat(product.stock_qty || product.quantity || 0);
+            // ==========================================
+            // [เงื่อนไขสต็อก 0] -> ห้ามขายเด็ดขาด
+            // ==========================================
+            if (stockQty <= 0 && scanMode === 'sale') {
+                Alert.alert(
+                    "❌ สินค้าหมดสต็อก",
+                    `"${product.name}" หมดสต็อกแล้ว ไม่สามารถสแกนขายได้`,
+                    [{ text: "ตกลง" }]
+                );
+                return; // คืนค่ากลับไปเลย ไม่ต้องเอาลงตะกร้า (ตัวสกัดกั้น)
+            }
+            // ==========================================
+            // [ตรวจสอบวันหมดอายุ]
+            // ==========================================
+            let isExpired = false;
+            // ดึงค่าวันหมดอายุมาจากฐานข้อมูล (อาจจะมาในชื่อ expire_date หรือ expireDate)
+            let expireDateStr = product.expire_date || product.expireDate;
+            if (!expireDateStr && product.batches && product.batches.length > 0) {
+                const batchesWithExpiry = product.batches
+                    .filter(b => b.expire_date || b.expireDate)
+                    .sort((a, b) => new Date(a.expire_date || a.expireDate) - new Date(b.expire_date || b.expireDate));
 
-                    Alert.alert(
-                        product.name,
-                        `${priceMsg}\nสต็อก: ${product.stock_qty || 0} ${product.unit_type || 'ชิ้น'}`
-                    );
+                if (batchesWithExpiry.length > 0) {
+                    expireDateStr = batchesWithExpiry[0].expire_date || batchesWithExpiry[0].expireDate;
                 }
+            }
+
+            if (expireDateStr) {
+                let expireDate;
+                if (expireDateStr.includes('/')) {
+                    const parts = expireDateStr.split('/');
+                    if (parts[0].length === 4) { // YYYY/MM/DD
+                        expireDate = new Date(parts[0], parts[1] - 1, parts[2]);
+                    } else { // DD/MM/YYYY
+                        expireDate = new Date(parts[2], parts[1] - 1, parts[0]);
+                    }
+                } else if (expireDateStr.includes('-')) {
+                    const parts = expireDateStr.split('T')[0].split('-');
+                    if (parts[0].length === 4) { // YYYY-MM-DD
+                        expireDate = new Date(parts[0], parts[1] - 1, parts[2]);
+                    } else { // DD-MM-YYYY
+                        expireDate = new Date(parts[2], parts[1] - 1, parts[0]);
+                    }
+                } else {
+                    expireDate = new Date(expireDateStr);
+                }
+
+                if (!isNaN(expireDate.getTime())) {
+                    expireDate.setHours(0, 0, 0, 0); // ตัดเศษเวลาทิ้ง เอาแค่วันที่
+
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+
+                    if (expireDate < today) {
+                        isExpired = true; // แปลว่าหมดอายุแล้ว
+                    }
+                }
+            }
+            // ==========================================
+            // เช็คว่าถ้าเป็นโหมดขายสินค้า
+            // ==========================================
+            if (scanMode === 'sale') {
+
+                // ถ้าระบบตรวจเจอว่า "หมดอายุ"
+                if (isExpired) {
+                    Alert.alert(
+                        "❌ สินค้าหมดอายุ",
+                        `"${product.name}" หมดอายุแล้ว ไม่สามารถสแกนขายได้`,
+                        [{ text: "ตกลง" }]
+                    );
+                    return;
+                }
+
+                // ถ้าฝ่าด่านด้านบนมาได้ทั้งหมด (ไม่หมดอายุ หรือ ดึงดันกดขายต่อ) ให้ดรอปลงตะกร้า
+                addToCart(product, 1);
+
+            } else {
+                // ==========================================
+                // โหมดสแกนเช็คราคา (Price Check Mode) โค้ดหน้าตาเดิมครับ
+                // ==========================================
+                let priceMsg = `ราคา: ฿${product.price}`;
+                const promo = product.promotion;
+                if (promo && promo.type === 'buy_x_get_y') {
+                    priceMsg = `🔥 โปร: ซื้อ ${promo.min_qty} แถม ${promo.free_qty}\nราคาปกติ: ฿${product.price}`;
+                } else if (product.discount_percent > 0) {
+                    priceMsg = `🔥 ราคาโปร: ฿${product.price} (ปกติ ฿${product.original_price})\nลด ${product.discount_percent}%`;
+                }
+                // แอบเพิ่มแจ้งเตือนข้างท้ายให้ด้วยว่าหมดอายุ ตอนพนักงานเช็คราคาจะได้รู้
+                let expireWarning = isExpired ? "\n⚠️ (สินค้านี้หมดอายุแล้ว!)" : "";
+                Alert.alert(
+                    product.name,
+                    `${priceMsg}\nสต็อก: ${stockQty} ${product.unit_type || 'ชิ้น'}${expireWarning}`
+                );
             }
         } catch (error) {
             console.log(error);
@@ -844,11 +976,16 @@ export default function ScanScreen({ navigation, route }) {
                                     onEndEditing={() => {
                                         const text = editingQty[item.id];
                                         const num = parseInt(text) || 0;
+                                        const maxStock = parseFloat(item.stock_qty || item.quantity || 0);
+
                                         if (num === 0) {
                                             Alert.alert('ลบสินค้า', `ต้องการลบ "${item.name}" ออกจากตะกร้าใช่หรือไม่?`, [
                                                 { text: 'ยกเลิก', style: 'cancel', onPress: () => updateQuantity(item.id, 1) },
                                                 { text: 'ลบ', style: 'destructive', onPress: () => removeFromCart(item.id) }
                                             ]);
+                                        } else if (num > maxStock) {
+                                            Alert.alert('เกินจำนวนสต็อก', `"${item.name}" มีสต็อกเพียง ${maxStock} ชิ้น`);
+                                            updateQuantity(item.id, maxStock);
                                         } else {
                                             updateQuantity(item.id, num);
                                         }
@@ -856,7 +993,17 @@ export default function ScanScreen({ navigation, route }) {
                                     }}
                                 />
 
-                                <TouchableOpacity onPress={() => addToCart(item, 1)} style={styles.qtyBtn}>
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        const maxStock = parseFloat(item.stock_qty || item.quantity || 0);
+                                        if (item.quantity + 1 > maxStock) {
+                                            Alert.alert('เกินจำนวนสต็อก', `"${item.name}" มีสต็อกเพียง ${maxStock} ชิ้น`);
+                                        } else {
+                                            addToCart(item, 1);
+                                        }
+                                    }}
+                                    style={styles.qtyBtn}
+                                >
                                     <Ionicons name="add" size={16} color="#555" />
                                 </TouchableOpacity>
                             </View>
@@ -884,22 +1031,86 @@ export default function ScanScreen({ navigation, route }) {
         );
     };
 
-    const renderSearchItem = useCallback(({ item }) => (
-        <View style={styles.gridItem}>
-            {item.image_url ? (
-                <Image source={{ uri: item.image_url }} style={styles.gridImage} />
-            ) : (
-                <View style={[styles.gridImage, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#F0F0F0' }]}>
-                    <Ionicons name="cube-outline" size={32} color="#ccc" />
-                </View>
-            )}
-            <Text numberOfLines={1} style={styles.gridName}>{item.name}</Text>
-            <Text style={styles.gridPrice}>฿{item.price}</Text>
-            <TouchableOpacity style={styles.addButton} onPress={() => { setSelectedProductToAdd(item); setQuantityModalVisible(true); }}>
-                <Ionicons name="add" size={24} color="#fff" />
-            </TouchableOpacity>
-        </View>
-    ), []);
+    const renderSearchItem = useCallback(({ item }) => {
+        const handleAddFromSearch = async () => {
+            const stockQty = parseFloat(item.stock_qty || item.quantity || 0);
+
+            // 1. Check Zero Stock
+            if (stockQty <= 0) {
+                Alert.alert(
+                    "❌ สินค้าหมดสต็อก",
+                    `"${item.name}" หมดสต็อกแล้ว ไม่สามารถเพิ่มลงตะกร้าได้`,
+                    [{ text: "ตกลง" }]
+                );
+                return;
+            }
+
+            // 2. Check Expiry
+            let isExpired = false;
+            const expireDateStr = item.expire_date || item.expireDate;
+
+            if (expireDateStr) {
+                let expireDate;
+                if (expireDateStr.includes('/')) {
+                    const parts = expireDateStr.split('/');
+                    if (parts[0].length === 4) { // YYYY/MM/DD
+                        expireDate = new Date(parts[0], parts[1] - 1, parts[2]);
+                    } else { // DD/MM/YYYY
+                        expireDate = new Date(parts[2], parts[1] - 1, parts[0]);
+                    }
+                } else if (expireDateStr.includes('-')) {
+                    const parts = expireDateStr.split('T')[0].split('-');
+                    if (parts[0].length === 4) { // YYYY-MM-DD
+                        expireDate = new Date(parts[0], parts[1] - 1, parts[2]);
+                    } else { // DD-MM-YYYY
+                        expireDate = new Date(parts[2], parts[1] - 1, parts[0]);
+                    }
+                } else {
+                    expireDate = new Date(expireDateStr);
+                }
+
+                if (!isNaN(expireDate.getTime())) {
+                    expireDate.setHours(0, 0, 0, 0);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+
+                    if (expireDate < today) {
+                        isExpired = true;
+                    }
+                }
+            }
+
+            if (isExpired) {
+                Alert.alert(
+                    "❌ สินค้าหมดอายุ",
+                    `"${item.name}" หมดอายุแล้ว ไม่สามารถเพิ่มลงตะกร้าได้`,
+                    [{ text: "ตกลง" }]
+                );
+                return;
+            }
+
+            // All checks passed, proceed to show quantity modal
+            setSelectedProductToAdd(item);
+            setQuantityModalVisible(true);
+        };
+
+        return (
+            <View style={styles.gridItem}>
+                {item.image_url ? (
+                    <Image source={{ uri: item.image_url }} style={styles.gridImage} />
+                ) : (
+                    <View style={[styles.gridImage, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#F0F0F0' }]}>
+                        <Ionicons name="cube-outline" size={32} color="#ccc" />
+                    </View>
+                )}
+                <Text numberOfLines={1} style={styles.gridName}>{item.name}</Text>
+                <Text style={styles.gridPrice}>฿{item.price}</Text>
+                <TouchableOpacity style={styles.addButton} onPress={handleAddFromSearch}>
+                    <Ionicons name="add" size={24} color="#fff" />
+                </TouchableOpacity>
+            </View>
+        );
+    }, []);
 
     // 5. SEARCH VIEW
     const renderSearchView = () => {
@@ -1149,7 +1360,51 @@ export default function ScanScreen({ navigation, route }) {
                                     <TouchableOpacity
                                         style={[styles.wCartBtn, exceedsStock && { opacity: 0.5 }]}
                                         disabled={exceedsStock || (parseFloat(weightInput) || 0) <= 0}
-                                        onPress={() => {
+                                        onPress={async () => {
+                                            // Check Expiry
+                                            let isExpired = false;
+                                            const expireDateStr = selectedItem.expire_date || selectedItem.expireDate;
+
+                                            if (expireDateStr) {
+                                                let expireDate;
+                                                if (expireDateStr.includes('/')) {
+                                                    const parts = expireDateStr.split('/');
+                                                    if (parts[0].length === 4) { // YYYY/MM/DD
+                                                        expireDate = new Date(parts[0], parts[1] - 1, parts[2]);
+                                                    } else { // DD/MM/YYYY
+                                                        expireDate = new Date(parts[2], parts[1] - 1, parts[0]);
+                                                    }
+                                                } else if (expireDateStr.includes('-')) {
+                                                    const parts = expireDateStr.split('T')[0].split('-');
+                                                    if (parts[0].length === 4) { // YYYY-MM-DD
+                                                        expireDate = new Date(parts[0], parts[1] - 1, parts[2]);
+                                                    } else { // DD-MM-YYYY
+                                                        expireDate = new Date(parts[2], parts[1] - 1, parts[0]);
+                                                    }
+                                                } else {
+                                                    expireDate = new Date(expireDateStr);
+                                                }
+
+                                                if (!isNaN(expireDate.getTime())) {
+                                                    expireDate.setHours(0, 0, 0, 0);
+                                                    const today = new Date();
+                                                    today.setHours(0, 0, 0, 0);
+
+                                                    if (expireDate < today) {
+                                                        isExpired = true;
+                                                    }
+                                                }
+                                            }
+
+                                            if (isExpired) {
+                                                Alert.alert(
+                                                    "❌ สินค้าหมดอายุ",
+                                                    `"${selectedItem.name}" หมดอายุแล้ว ไม่สามารถเพิ่มลงตะกร้าได้`,
+                                                    [{ text: "ตกลง" }]
+                                                );
+                                                return;
+                                            }
+
                                             const product = { ...selectedItem, unit: selectedUnit.label, isWeight: true };
                                             const productMultiplier = getUnitMultiplier(selectedItem.unit_type);
                                             const pricePerUnit = selectedItem.price * (selectedUnit.multiplier / productMultiplier);
@@ -1223,43 +1478,54 @@ export default function ScanScreen({ navigation, route }) {
                             </View>
 
                             {/* Name Input */}
-                            <Text style={styles.inputLabel}>
-                                <Ionicons name="cube-outline" size={14} /> ชื่อสินค้า
+                            <Text style={[styles.inputLabel, fieldErrors.name && { color: '#E53935' }]}>
+                                <Ionicons name="cube-outline" size={14} /> ชื่อสินค้า *
                             </Text>
                             <TextInput
-                                style={styles.textInput}
+                                style={[styles.textInput, fieldErrors.name && { borderColor: '#E53935', borderWidth: 1.5 }]}
                                 placeholder="เช่น สามชั้นสไลด์"
                                 value={newProductName}
-                                onChangeText={setNewProductName}
+                                onChangeText={(text) => {
+                                    setNewProductName(text);
+                                    if (text.trim()) setFieldErrors(prev => { const c = { ...prev }; delete c.name; return c; });
+                                }}
                             />
 
-                            {/* Price Input */}
-                            <Text style={styles.inputLabel}>
-                                <Ionicons name="cash-outline" size={14} /> ราคาขาย (บาท)
-                            </Text>
-                            <View style={[styles.textInput, { flexDirection: 'row', alignItems: 'center' }]}>
-                                <Text style={{ fontSize: 16, color: '#999', marginRight: 10 }}>฿</Text>
-                                <TextInput
-                                    style={{ flex: 1, fontSize: 16 }}
-                                    keyboardType="numeric"
-                                    value={newProductPrice}
-                                    onChangeText={setNewProductPrice}
-                                />
-                            </View>
-
                             {/* Cost Price */}
-                            <Text style={styles.inputLabel}>
-                                <Ionicons name="pricetags-outline" size={14} /> ต้นทุน (บาท)
+                            <Text style={[styles.inputLabel, fieldErrors.cost && { color: '#E53935' }]}>
+                                <Ionicons name="pricetags-outline" size={14} /> ต้นทุน (บาท) *
                             </Text>
-                            <View style={[styles.textInput, { flexDirection: 'row', alignItems: 'center' }]}>
+                            <View style={[styles.textInput, { flexDirection: 'row', alignItems: 'center' }, fieldErrors.cost && { borderColor: '#E53935', borderWidth: 1.5 }]}>
                                 <Text style={{ fontSize: 16, color: '#999', marginRight: 10 }}>฿</Text>
                                 <TextInput
                                     style={{ flex: 1, fontSize: 16 }}
                                     keyboardType="numeric"
                                     value={newProductCost}
-                                    onChangeText={setNewProductCost}
+                                    onChangeText={(text) => {
+                                        setNewProductCost(text);
+                                        if (text !== '') setFieldErrors(prev => { const c = { ...prev }; delete c.cost; return c; });
+                                    }}
                                 />
                             </View>
+
+                            {/* Price Input */}
+                            <Text style={[styles.inputLabel, fieldErrors.price && { color: '#E53935' }]}>
+                                <Ionicons name="cash-outline" size={14} /> ราคาขาย (บาท) *
+                            </Text>
+                            <View style={[styles.textInput, { flexDirection: 'row', alignItems: 'center' }, fieldErrors.price && { borderColor: '#E53935', borderWidth: 1.5 }]}>
+                                <Text style={{ fontSize: 16, color: '#999', marginRight: 10 }}>฿</Text>
+                                <TextInput
+                                    style={{ flex: 1, fontSize: 16 }}
+                                    keyboardType="numeric"
+                                    value={newProductPrice}
+                                    onChangeText={(text) => {
+                                        setNewProductPrice(text);
+                                        if (parseFloat(text) > 0) setFieldErrors(prev => { const c = { ...prev }; delete c.price; return c; });
+                                    }}
+                                />
+                            </View>
+
+
 
 
 
@@ -1281,15 +1547,18 @@ export default function ScanScreen({ navigation, route }) {
                             {/* Row: Stock & Low Stock */}
                             <View style={{ flexDirection: 'row', gap: 10 }}>
                                 <View style={{ flex: 1 }}>
-                                    <Text style={styles.inputLabel}>
-                                        <Ionicons name="layers-outline" size={14} /> สต็อก ({newProductUnit.label})
+                                    <Text style={[styles.inputLabel, fieldErrors.stock && { color: '#E53935' }]}>
+                                        <Ionicons name="layers-outline" size={14} /> สต็อก ({newProductUnit.label}) *
                                     </Text>
                                     <TextInput
-                                        style={styles.textInput}
+                                        style={[styles.textInput, fieldErrors.stock && { borderColor: '#E53935', borderWidth: 1.5 }]}
                                         placeholder="0"
                                         keyboardType="numeric"
                                         value={newProductStock}
-                                        onChangeText={setNewProductStock}
+                                        onChangeText={(text) => {
+                                            setNewProductStock(text);
+                                            if (parseFloat(text) > 0) setFieldErrors(prev => { const c = { ...prev }; delete c.stock; return c; });
+                                        }}
                                     />
                                 </View>
                                 <View style={{ flex: 1 }}>
@@ -1307,12 +1576,13 @@ export default function ScanScreen({ navigation, route }) {
                             </View>
 
                             {/* Expiry Date */}
-                            <Text style={styles.inputLabel}>
-                                <Ionicons name="calendar-outline" size={14} /> วันหมดอายุ
+
+                            <Text style={[styles.inputLabel, fieldErrors.expireDate && { color: '#E53935' }]}>
+                                <Ionicons name="calendar-outline" size={14} /> วันหมดอายุ *
                             </Text>
-                            <TouchableOpacity style={styles.textInput} onPress={() => setShowDatePicker(true)}>
+                            <TouchableOpacity style={[styles.textInput, fieldErrors.expireDate && { borderColor: '#E53935', borderWidth: 1.5 }]} onPress={() => setShowDatePicker(true)}>
                                 <Text style={{ color: newProductExpireDate ? '#333' : '#aaa' }}>
-                                    {newProductExpireDate ? newProductExpireDate.toLocaleDateString('th-TH') : 'เลือกวันที่ (ถ้ามี)'}
+                                    {newProductExpireDate ? newProductExpireDate.toLocaleDateString('th-TH') : 'เลือกวันหมดอายุ'}
                                 </Text>
                             </TouchableOpacity>
                             {/* Date Picker Modal (iOS Style) */}
@@ -1322,17 +1592,20 @@ export default function ScanScreen({ navigation, route }) {
                                         value={newProductExpireDate || new Date()}
                                         mode="date"
                                         display="default"
+                                        minimumDate={new Date()}
                                         onChange={(event, selectedDate) => {
                                             if (Platform.OS === 'android') {
                                                 setShowDatePicker(false);
                                                 if (event.type === 'set' && selectedDate) {
                                                     setNewProductExpireDate(selectedDate);
+                                                    setFieldErrors(prev => { const c = { ...prev }; delete c.expireDate; return c; });
                                                 }
                                             } else {
                                                 // iOS
                                                 setShowDatePicker(false);
                                                 if (selectedDate) {
                                                     setNewProductExpireDate(selectedDate);
+                                                    setFieldErrors(prev => { const c = { ...prev }; delete c.expireDate; return c; });
                                                 }
                                             }
                                         }}
@@ -1453,18 +1726,32 @@ export default function ScanScreen({ navigation, route }) {
                                             onEndEditing={() => {
                                                 const text = editingQty[item.id];
                                                 const num = parseInt(text) || 0;
+                                                const maxStock = parseFloat(item.stock_qty || 0);
                                                 if (num === 0) {
                                                     Alert.alert('ลบสินค้า', `ต้องการลบ "${item.name}" ออกจากตะกร้าใช่หรือไม่?`, [
                                                         { text: 'ยกเลิก', style: 'cancel', onPress: () => updateQuantity(item.id, 1) },
                                                         { text: 'ลบ', style: 'destructive', onPress: () => removeFromCart(item.id) }
                                                     ]);
+                                                } else if (num > maxStock) {
+                                                    Alert.alert('เกินจำนวนสต็อก', `"${item.name}" มีสต็อกเพียง ${maxStock} ชิ้น`);
+                                                    updateQuantity(item.id, maxStock);
                                                 } else {
                                                     updateQuantity(item.id, num);
                                                 }
                                                 setEditingQty(prev => { const copy = { ...prev }; delete copy[item.id]; return copy; });
                                             }}
                                         />
-                                        <TouchableOpacity onPress={() => addToCart(item, 1)} style={styles.qtyBtn}>
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                const maxStock = parseFloat(item.stock_qty || 0);
+                                                if (item.quantity + 1 > maxStock) {
+                                                    Alert.alert('เกินจำนวนสต็อก', `"${item.name}" มีสต็อกเพียง ${maxStock} ชิ้น`);
+                                                } else {
+                                                    addToCart(item, 1);
+                                                }
+                                            }}
+                                            style={styles.qtyBtn}
+                                        >
                                             <Ionicons name="add" size={16} color="#555" />
                                         </TouchableOpacity>
                                     </View>

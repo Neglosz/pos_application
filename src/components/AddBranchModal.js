@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, TextInput, Modal, StyleSheet, ActivityIndicator, Alert } from "react-native";
+import { View, Text, TouchableOpacity, TextInput, Modal, StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../services/supabase";
-import * as Crypto from 'expo-crypto';
 import { Buffer } from 'buffer';
 
 import { API_BASE_URL as API_URL } from '../config';
@@ -43,20 +42,20 @@ export default function AddBranchModal({ visible, onClose, onSuccess }) {
 
     const thaiToRoman = (text) => {
         const map = {
-            'ก':'k','ข':'kh','ฃ':'kh','ค':'kh','ฅ':'kh','ฆ':'kh',
-            'ง':'ng','จ':'ch','ฉ':'ch','ช':'ch','ซ':'s','ฌ':'ch',
-            'ญ':'y','ฎ':'d','ฏ':'t','ฐ':'th','ฑ':'th','ฒ':'th',
-            'ณ':'n','ด':'d','ต':'t','ถ':'th','ท':'th','ธ':'th',
-            'น':'n','บ':'b','ป':'p','ผ':'ph','ฝ':'f','พ':'ph',
-            'ฟ':'f','ภ':'ph','ม':'m','ย':'y','ร':'r','ล':'l',
-            'ว':'w','ศ':'s','ษ':'s','ส':'s','ห':'h','ฬ':'l',
-            'อ':'o','ฮ':'h',
-            'ะ':'a','า':'a','ิ':'i','ี':'i','ึ':'ue','ื':'ue',
-            'ุ':'u','ู':'u','เ':'e','แ':'ae','โ':'o','ใ':'ai','ไ':'ai',
-            '็':'','่':'','้':'','๊':'','๋':'','์':'','ั':'a','ำ':'am',
+            'ก': 'k', 'ข': 'kh', 'ฃ': 'kh', 'ค': 'kh', 'ฅ': 'kh', 'ฆ': 'kh',
+            'ง': 'ng', 'จ': 'ch', 'ฉ': 'ch', 'ช': 'ch', 'ซ': 's', 'ฌ': 'ch',
+            'ญ': 'y', 'ฎ': 'd', 'ฏ': 't', 'ฐ': 'th', 'ฑ': 'th', 'ฒ': 'th',
+            'ณ': 'n', 'ด': 'd', 'ต': 't', 'ถ': 'th', 'ท': 'th', 'ธ': 'th',
+            'น': 'n', 'บ': 'b', 'ป': 'p', 'ผ': 'ph', 'ฝ': 'f', 'พ': 'ph',
+            'ฟ': 'f', 'ภ': 'ph', 'ม': 'm', 'ย': 'y', 'ร': 'r', 'ล': 'l',
+            'ว': 'w', 'ศ': 's', 'ษ': 's', 'ส': 's', 'ห': 'h', 'ฬ': 'l',
+            'อ': 'o', 'ฮ': 'h',
+            'ะ': 'a', 'า': 'a', 'ิ': 'i', 'ี': 'i', 'ึ': 'ue', 'ื': 'ue',
+            'ุ': 'u', 'ู': 'u', 'เ': 'e', 'แ': 'ae', 'โ': 'o', 'ใ': 'ai', 'ไ': 'ai',
+            '็': '', '่': '', '้': '', '๊': '', '๋': '', '์': '', 'ั': 'a', 'ำ': 'am',
         };
         let result = '';
-        for(const ch of text) {
+        for (const ch of text) {
             result += map[ch] || ch;
         }
         return result;
@@ -169,102 +168,112 @@ export default function AddBranchModal({ visible, onClose, onSuccess }) {
             onRequestClose={onClose}
             statusBarTranslucent={true}
         >
-            <View style={styles.overlay}>
-                <View style={styles.modal}>
-                    {/* Header */}
-                    <View style={styles.header}>
-                        <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                            <Ionicons name="close" size={24} color="#666" />
-                        </TouchableOpacity>
-                        <Text style={styles.title}>เพิ่มสาขาใหม่</Text>
-                        <View style={styles.closeBtn} />
+            <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                style={{ flex: 1 }}
+            >
+                <ScrollView
+                    contentContainerStyle={{ flexGrow: 1 }}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    <View style={styles.overlay}>
+                        <View style={styles.modal}>
+                            {/* Header */}
+                            <View style={styles.header}>
+                                <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+                                    <Ionicons name="close" size={24} color="#666" />
+                                </TouchableOpacity>
+                                <Text style={styles.title}>เพิ่มสาขาใหม่</Text>
+                                <View style={styles.closeBtn} />
+                            </View>
+
+                            {/* Form */}
+                            <View style={styles.form}>
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.label}>ชื่อสาขา</Text>
+                                    <View style={styles.inputContainer}>
+                                        <Ionicons name="storefront-outline" size={20} color="#999" style={styles.inputIcon} />
+                                        <TextInput
+                                            style={styles.input}
+                                            placeholder="สาขา"
+                                            value={branchName}
+                                            onChangeText={(text) => {
+                                                setBranchName(text);
+                                                generateEmailFromName(text);
+                                            }}
+                                        />
+                                    </View>
+                                </View>
+
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.label}>ที่ตั้ง</Text>
+                                    <View style={styles.inputContainer}>
+                                        <Ionicons name="location-outline" size={20} color="#999" style={styles.inputIcon} />
+                                        <TextInput
+                                            style={styles.input}
+                                            placeholder="เลขที่, ถนน, แขวง/ตำบล, เขต/อำเภอ"
+                                            value={address}
+                                            onChangeText={setAddress}
+                                        />
+                                    </View>
+                                </View>
+
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.label}>เบอร์โทรศัพท์</Text>
+                                    <View style={styles.inputContainer}>
+                                        <Ionicons name="call-outline" size={20} color="#999" style={styles.inputIcon} />
+                                        <TextInput
+                                            style={styles.input}
+                                            placeholder="0xx-xxx-xxxx"
+                                            value={phone}
+                                            onChangeText={setPhone}
+                                            keyboardType="phone-pad"
+                                        />
+                                    </View>
+                                </View>
+
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.label}>Email ผู้จัดการ</Text>
+                                    <View style={[styles.inputContainer, styles.readOnly]}>
+                                        <Ionicons name="mail-outline" size={20} color="#999" style={styles.inputIcon} />
+                                        <TextInput
+                                            style={[styles.input, styles.readOnlyText]}
+                                            value={generatedEmail}
+                                            editable={false}
+                                        />
+                                    </View>
+                                </View>
+
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.label}>รหัสผ่าน</Text>
+                                    <View style={[styles.inputContainer, styles.readOnly]}>
+                                        <Ionicons name="lock-closed-outline" size={20} color="#999" style={styles.inputIcon} />
+                                        <TextInput
+                                            style={[styles.input, styles.readOnlyText]}
+                                            value={generatedPassword}
+                                            editable={false}
+                                            secureTextEntry={false}
+                                        />
+                                    </View>
+                                </View>
+                            </View>
+
+                            {/* Submit Button */}
+                            <TouchableOpacity
+                                style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
+                                onPress={handleSubmit}
+                                disabled={loading}
+                            >
+                                {loading ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <Text style={styles.submitBtnText}>ยืนยัน</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
                     </View>
-
-                    {/* Form */}
-                    <View style={styles.form}>
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>ชื่อสาขา</Text>
-                            <View style={styles.inputContainer}>
-                                <Ionicons name="storefront-outline" size={20} color="#999" style={styles.inputIcon} />
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="สาขา"
-                                    value={branchName}
-                                    onChangeText={(text) => {
-                                        setBranchName(text);
-                                        generateEmailFromName(text);
-                                    }}
-                                />
-                            </View>
-                        </View>
-
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>ที่ตั้ง</Text>
-                            <View style={styles.inputContainer}>
-                                <Ionicons name="location-outline" size={20} color="#999" style={styles.inputIcon} />
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="เลขที่, ถนน, แขวง/ตำบล, เขต/อำเภอ"
-                                    value={address}
-                                    onChangeText={setAddress}
-                                />
-                            </View>
-                        </View>
-
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>เบอร์โทรศัพท์</Text>
-                            <View style={styles.inputContainer}>
-                                <Ionicons name="call-outline" size={20} color="#999" style={styles.inputIcon} />
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="0xx-xxx-xxxx"
-                                    value={phone}
-                                    onChangeText={setPhone}
-                                    keyboardType="phone-pad"
-                                />
-                            </View>
-                        </View>
-
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Email ผู้จัดการ</Text>
-                            <View style={[styles.inputContainer, styles.readOnly]}>
-                                <Ionicons name="mail-outline" size={20} color="#999" style={styles.inputIcon} />
-                                <TextInput
-                                    style={[styles.input, styles.readOnlyText]}
-                                    value={generatedEmail}
-                                    editable={false}
-                                />
-                            </View>
-                        </View>
-
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>รหัสผ่าน</Text>
-                            <View style={[styles.inputContainer, styles.readOnly]}>
-                                <Ionicons name="lock-closed-outline" size={20} color="#999" style={styles.inputIcon} />
-                                <TextInput
-                                    style={[styles.input, styles.readOnlyText]}
-                                    value={generatedPassword}
-                                    editable={false}
-                                    secureTextEntry={false}
-                                />
-                            </View>
-                        </View>
-                    </View>
-
-                    {/* Submit Button */}
-                    <TouchableOpacity
-                        style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
-                        onPress={handleSubmit}
-                        disabled={loading}
-                    >
-                        {loading ? (
-                            <ActivityIndicator color="#fff" />
-                        ) : (
-                            <Text style={styles.submitBtnText}>ยืนยัน</Text>
-                        )}
-                    </TouchableOpacity>
-                </View>
-            </View>
+                </ScrollView>
+            </KeyboardAvoidingView>
         </Modal>
     );
 }
@@ -308,7 +317,7 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     label: {
-        fontSize: 14,
+        fontSize: 18,
         fontWeight: '500',
         color: '#333',
         marginBottom: 8,
@@ -326,7 +335,7 @@ const styles = StyleSheet.create({
     input: {
         flex: 1,
         paddingVertical: 14,
-        fontSize: 15,
+        fontSize: 18,
         color: '#333',
     },
     readOnly: {
@@ -336,7 +345,7 @@ const styles = StyleSheet.create({
         color: '#666',
     },
     submitBtn: {
-        backgroundColor: '#1E2022',
+        backgroundColor: '#F37021',
         borderRadius: 10,
         paddingVertical: 16,
         alignItems: 'center',
@@ -346,7 +355,7 @@ const styles = StyleSheet.create({
     },
     submitBtnText: {
         color: '#fff',
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: '600',
     },
 });
