@@ -302,7 +302,7 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
                         หมวดหมู่: {existingProduct?.product_categories?.name || 'ไม่ระบุ'}
                     </Text>
                     <Text style={styles.productDetail}>
-                        สต็อกปัจจุบัน: {existingProduct?.stock_qty || 0} ชิ้น
+                        สต็อกปัจจุบัน: {existingProduct?.stock_qty || 0} {existingProduct?.unit_type || 'ชิ้น'}
                     </Text>
                     <Text style={styles.productDetail}>
                         ราคาขาย: ฿{existingProduct?.price?.toFixed(2) || '0.00'}
@@ -314,7 +314,7 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
             <Text style={styles.sectionTitle}>เติมสต็อก (Lot ใหม่)</Text>
 
             <View style={styles.inputGroup}>
-                <Text style={[styles.label, fieldErrors.quantity && styles.errorLabel]}>จำนวนที่เติม *</Text>
+                <Text style={[styles.label, fieldErrors.quantity && styles.errorLabel]}>จำนวนที่เติม ({existingProduct?.unit_type || 'ชิ้น'}) *</Text>
                 <TextInput
                     style={[styles.input, fieldErrors.quantity && styles.errorInput]}
                     value={quantity}

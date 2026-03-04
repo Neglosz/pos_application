@@ -4,7 +4,7 @@ import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-ico
 import { LineChart } from 'react-native-chart-kit';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { getSalesSummary, getSalesChartData, getPaymentMethodStats, getOrders, getOrderDetails, getRecommendationStats } from '../services/api';
+import { getSalesSummary, getSalesChartData, getPaymentMethodStats, getOrders, getOrderDetails, getRecommendationStats, getAIRecommendations } from '../services/api';
 import ReceiptModal from '../components/payment/ReceiptModal';
 import { useBluetooth } from '../contexts/BluetoothContext';
 
@@ -31,6 +31,7 @@ export default function ReportScreen() {
     const [paymentStats, setPaymentStats] = useState({ cash: {}, qr: {}, credit: {} });
     const [recentOrders, setRecentOrders] = useState([]);
     const [aiStats, setAiStats] = useState(null);
+    const [aiRecommendations, setAiRecommendations] = useState([]);
     const [loadingReceipt, setLoadingReceipt] = useState(false);
 
     // Modal State
@@ -40,12 +41,13 @@ export default function ReportScreen() {
     const fetchData = async () => {
         try {
             setLoading(true);
-            const [sumRes, chartRes, payRes, recentRes, aiStatsRes] = await Promise.all([
+            const [sumRes, chartRes, payRes, recentRes, aiStatsRes, aiRecsRes] = await Promise.all([
                 getSalesSummary(period),
                 getSalesChartData(period),
                 getPaymentMethodStats(period),
                 getOrders({ limit: 3 }), // Recent 3 orders
-                getRecommendationStats()
+                getRecommendationStats(period),
+                getAIRecommendations(0, 0, period)
             ]);
 
             if (sumRes.success) setSummary(sumRes.data);
@@ -53,6 +55,7 @@ export default function ReportScreen() {
             if (payRes.success) setPaymentStats(payRes.data);
             if (recentRes.success) setRecentOrders(recentRes.data);
             if (aiStatsRes.success) setAiStats(aiStatsRes.data);
+            if (aiRecsRes.success) setAiRecommendations(aiRecsRes.data?.slice(0, 3) || []);
         } catch (error) {
             console.error('Fetch Report Error:', error);
         } finally {
@@ -112,9 +115,9 @@ export default function ReportScreen() {
         <View style={styles.summaryCard}>
             <View style={styles.summaryHeader}>
                 <Text style={styles.summaryLabel}>ยอดขาย{period === 'today' ? 'วันนี้' : period === 'week' ? 'สัปดาห์นี้' : 'เดือนนี้'}</Text>
-                <View style={[styles.growthTag, { backgroundColor: summary.growth >= 0 ? 'rgba(76, 175, 80, 0.2)' : 'rgba(244, 67, 54, 0.2)' }]}>
-                    <Ionicons name={summary.growth >= 0 ? "trending-up" : "trending-down"} size={14} color={summary.growth >= 0 ? "#4CAF50" : "#F44336"} />
-                    <Text style={[styles.growthText, { color: summary.growth >= 0 ? "#4CAF50" : "#F44336" }]}>
+                <View style={[styles.growthTag, { backgroundColor: summary.growth >= 0 ? '#E8F5E9' : '#FFEBEE' }]}>
+                    <Ionicons name={summary.growth >= 0 ? "trending-up" : "trending-down"} size={14} color={summary.growth >= 0 ? "#10B981" : "#EF4444"} />
+                    <Text style={[styles.growthText, { color: summary.growth >= 0 ? "#10B981" : "#EF4444" }]}>
                         {Math.abs(summary.growth)}%
                     </Text>
                 </View>
@@ -123,22 +126,11 @@ export default function ReportScreen() {
             <Text style={styles.totalSalesText}>฿{summary.totalSales?.toLocaleString()}</Text>
 
             <View style={styles.summaryFooter}>
-                <View style={styles.orderCountBadge}>
-                    <MaterialCommunityIcons name="cube-outline" size={18} color="#000" />
+                <View style={[styles.orderCountBadge, { backgroundColor: '#FFF3E0' }]}>
+                    <MaterialCommunityIcons name="cube-outline" size={16} color="#F37021" />
                 </View>
-                <View style={{ marginLeft: 10 }}>
-                    <Text style={styles.orderCountText}>{summary.totalOrders}</Text>
-                    <Text style={styles.orderLabelText}>คำสั่งซื้อ</Text>
-                </View>
-                {/* <TouchableOpacity style={styles.detailButton}>
-                    <Text style={styles.detailButtonText}>ดูรายละเอียด</Text>
-                    <Ionicons name="arrow-forward" size={14} color="#ccc" />
-                </TouchableOpacity> */}
+                <Text style={styles.orderCountText}>{summary.totalOrders} <Text style={styles.orderLabelText}>คำสั่งซื้อ</Text></Text>
             </View>
-
-            {/* Background Decoration */}
-            <View style={styles.cardDecoration1} />
-            <View style={styles.cardDecoration2} />
         </View>
     );
 
@@ -336,58 +328,82 @@ export default function ReportScreen() {
                 >
 
                     {renderSummaryCard()}
-                    {renderPaymentBreakdown()}
-                    {renderChart()}
-                    {renderRecentOrders()}
+
 
                     {/* AI Weekly Summary */}
                     {aiStats && (
-                        <View style={styles.aiSummaryCard}>
-                            <View style={styles.aiSummaryHeader}>
-                                <View style={styles.aiSummaryDot} />
-                                <Text style={styles.aiSummaryLabel}>สรุปสัปดาห์ที่ {aiStats.weekNumber || 1}</Text>
-                            </View>
-
-                            <View style={styles.aiSummaryMain}>
-                                <Text style={styles.aiSummaryAmount}>
-                                    {(aiStats.moneyEarned || 0).toLocaleString()} <Text style={styles.aiSummaryUnit}>บาท</Text>
-                                </Text>
-                            </View>
-                            <Text style={styles.aiSummarySubtitle}>เงินที่ได้เพิ่มจากการทำตาม AI</Text>
-
-                            <View style={styles.aiProgressSection}>
-                                <View style={styles.aiProgressBarContainer}>
-                                    <View style={[styles.aiProgressFill, { width: `${aiStats.followedPercent || 0}%` }]} />
-                                </View>
-                                <View style={styles.aiProgressLabels}>
+                        <>
+                            <View style={styles.newAiCardContainer}>
+                                {/* Top Orange */}
+                                <View style={styles.newAiCardTop}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <Ionicons name="checkmark-circle" size={14} color="#4CAF50" />
-                                        <Text style={styles.aiProgressText}> ทำตามแล้ว {aiStats.followedCount || 0}/{aiStats.totalRecommendations || 0}</Text>
+                                        <MaterialCommunityIcons name="star-four-points-outline" size={18} color="#fff" />
+                                        <Text style={styles.aiSummaryLabelWhite}> สรุปยอดจาก AI {period === 'today' ? 'วันนี้' : period === 'week' ? 'สัปดาห์นี้' : 'เดือนนี้'}</Text>
                                     </View>
-                                    <Text style={styles.aiProgressPercent}>{aiStats.followedPercent || 0}%</Text>
+                                </View>
+
+                                {/* Bottom White */}
+                                <View style={styles.newAiCardBottom}>
+                                    <Text style={styles.aiSummarySubtitleGray}>เงินที่ได้เพิ่มจากการทำตาม AI</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+                                        <Text style={styles.aiSummaryAmountOrange}>
+                                            {(aiStats.moneyEarned || 0).toLocaleString()} <Text style={styles.aiSummaryUnitOrange}>บาท</Text>
+                                        </Text>
+                                    </View>
+
+                                    {/* Three Sub-cards */}
+                                    <View style={styles.aiStatsGrid}>
+                                        <View style={[styles.aiStatBox, { backgroundColor: '#FFFDF9', borderColor: '#FDF1DF', borderWidth: 1 }]}>
+                                            <View style={[styles.aiStatIconWrap, { backgroundColor: 'transparent' }]}>
+                                                <MaterialCommunityIcons name="shield-outline" size={20} color="#F37021" />
+                                            </View>
+                                            <Text style={styles.aiStatBoxValue}>{aiStats.byType?.expiry || 0}</Text>
+                                            <Text style={styles.aiStatBoxLabel}>ลดของเสีย</Text>
+                                        </View>
+                                        <View style={[styles.aiStatBox, { backgroundColor: '#F9FFF9', borderColor: '#E8F5E9', borderWidth: 1 }]}>
+                                            <View style={[styles.aiStatIconWrap, { backgroundColor: 'transparent' }]}>
+                                                <MaterialCommunityIcons name="wallet-outline" size={20} color="#4CAF50" />
+                                            </View>
+                                            <Text style={styles.aiStatBoxValue}>{aiStats.byType?.debt || 0}</Text>
+                                            <Text style={styles.aiStatBoxLabel}>เก็บหนี้ได้</Text>
+                                        </View>
+                                        <View style={[styles.aiStatBox, { backgroundColor: '#F9FCFF', borderColor: '#E3F2FD', borderWidth: 1 }]}>
+                                            <View style={[styles.aiStatIconWrap, { backgroundColor: 'transparent' }]}>
+                                                <MaterialCommunityIcons name="cube-outline" size={20} color="#2196F3" />
+                                            </View>
+                                            <Text style={styles.aiStatBoxValue}>{aiStats.byType?.stock || 0}</Text>
+                                            <Text style={styles.aiStatBoxLabel}>สต็อกไม่ขาด</Text>
+                                        </View>
+                                    </View>
                                 </View>
                             </View>
 
-                            <View style={styles.aiStatsRow}>
-                                <View style={styles.aiStatItem}>
-                                    <Text style={styles.aiStatValue}>{aiStats.byType?.expiry || 0}</Text>
-                                    <Text style={styles.aiStatLabel}>ลดของเสีย</Text>
+                            {/* Recommendations Part */}
+                            {aiRecommendations.length > 0 && (
+                                <View style={styles.aiRecommendationsCard}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 15 }}>
+                                        <MaterialCommunityIcons name="lightbulb-outline" size={20} color="#F37021" />
+                                        <Text style={styles.sectionTitleAiRec}> คำแนะนำจาก AI</Text>
+                                    </View>
+                                    {aiRecommendations.map((rec, index) => (
+                                        <View key={rec.id} style={styles.aiRecItem}>
+                                            <View style={styles.aiRecNumberWrap}>
+                                                <Text style={styles.aiRecNumberText}>{index + 1}</Text>
+                                            </View>
+                                            <Text style={styles.aiRecText}>{rec.title || rec.message}</Text>
+                                        </View>
+                                    ))}
                                 </View>
-                                <View style={styles.aiStatDivider} />
-                                <View style={styles.aiStatItem}>
-                                    <Text style={styles.aiStatValue}>{aiStats.byType?.debt || 0}</Text>
-                                    <Text style={styles.aiStatLabel}>เก็บหนี้ได้</Text>
-                                </View>
-                                <View style={styles.aiStatDivider} />
-                                <View style={styles.aiStatItem}>
-                                    <Text style={styles.aiStatValue}>{aiStats.byType?.stock || 0}</Text>
-                                    <Text style={styles.aiStatLabel}>สต็อกไม่ขาด</Text>
-                                </View>
-                            </View>
-                        </View>
+                            )}
+                        </>
                     )}
+
+                    {renderPaymentBreakdown()}
+                    {renderChart()}
+                    {renderRecentOrders()}
                 </ScrollView>
             )}
+
 
             {loadingReceipt && (
                 <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center', zIndex: 999 }}>
@@ -460,12 +476,11 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         marginHorizontal: 20,
         borderRadius: 20,
-        padding: 24,
+        padding: 20,
         marginBottom: 25,
-        position: 'relative',
-        overflow: 'hidden',
-        minHeight: 180,
-        borderWidth: 1, borderColor: '#F37021',
+        borderWidth: 1,
+        borderColor: '#eee',
+        shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5, elevation: 2,
     },
     summaryHeader: {
         flexDirection: 'row',
@@ -474,7 +489,7 @@ const styles = StyleSheet.create({
         marginBottom: 10,
     },
     summaryLabel: {
-        color: '#000',
+        color: '#666',
         fontSize: 14,
         fontWeight: '500',
     },
@@ -491,60 +506,32 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
     totalSalesText: {
-        color: '#000',
-        fontSize: 42,
-        fontWeight: 'bold',
+        color: '#111',
+        fontSize: 38,
+        fontWeight: '900',
         marginBottom: 20,
     },
     summaryFooter: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 'auto',
+        marginTop: 10,
     },
     orderCountBadge: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: 'rgba(0,0,0,0.15)',
+        width: 28,
+        height: 28,
+        borderRadius: 8,
         justifyContent: 'center',
         alignItems: 'center',
+        marginRight: 8,
     },
     orderCountText: {
-        color: '#000',
-        fontSize: 16,
+        color: '#111',
+        fontSize: 14,
         fontWeight: 'bold',
     },
     orderLabelText: {
-        color: '#888',
-        fontSize: 12,
-    },
-    detailButton: {
-        marginLeft: 'auto',
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    detailButtonText: {
-        color: '#ccc',
-        fontSize: 12,
-    },
-    cardDecoration1: {
-        position: 'absolute',
-        top: -20,
-        right: -20,
-        width: 150,
-        height: 150,
-        borderRadius: 75,
-        backgroundColor: 'rgba(243,112,33,0.03)',
-    },
-    cardDecoration2: {
-        position: 'absolute',
-        bottom: -40,
-        left: -40,
-        width: 200,
-        height: 200,
-        borderRadius: 100,
-        backgroundColor: 'rgba(243,112,33,0.02)',
+        color: '#666',
+        fontWeight: 'normal',
     },
 
     // Section
@@ -623,16 +610,12 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderRadius: 20,
         padding: 15,
-        shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5, elevation: 2
+        paddingBottom: 20,
+        shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5, elevation: 2,
+        borderWidth: 1, borderColor: '#eee',
     },
     chartSummaryFooter: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-        marginTop: 15,
-        paddingTop: 15,
-        borderTopWidth: 1,
-        borderTopColor: '#F3F4F6',
+        display: 'none', // As per the newest mockup, hiding the footer
     },
     dividerVertical: {
         width: 1,
@@ -654,8 +637,8 @@ const styles = StyleSheet.create({
 
     // Recent Transactions
     seeAllText: {
-        fontSize: 12,
-        color: '#10B981',
+        fontSize: 14,
+        color: '#F37021',
         fontWeight: '600',
     },
     transactionRow: {
@@ -689,103 +672,142 @@ const styles = StyleSheet.create({
         color: '#111',
     },
 
-    // AI Summary Card
-    aiSummaryCard: {
-        backgroundColor: '#FFF3E0',
-        borderRadius: 20,
-        padding: 20,
+    // AI Summary Card & Layout
+    newAiCardContainer: {
         marginHorizontal: 20,
-        marginBottom: 25,
-        borderWidth: 1,
-        borderColor: '#FFE0B2',
+        marginBottom: 15,
+        borderRadius: 20,
+        shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.1, shadowRadius: 6, elevation: 3,
+        overflow: 'hidden',
     },
-    aiSummaryHeader: {
+    newAiCardTop: {
+        backgroundColor: '#F37021',
+        paddingHorizontal: 20,
+        paddingVertical: 12,
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 10,
+        justifyContent: 'space-between',
     },
-    aiSummaryDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: '#4CAF50',
-        marginRight: 8,
-    },
-    aiSummaryLabel: {
-        flex: 1,
-        fontSize: 14,
-        color: '#666',
-        fontWeight: '500',
-    },
-    aiSummaryMain: {
-        flexDirection: 'row',
-        alignItems: 'baseline',
-    },
-    aiSummaryAmount: {
-        fontSize: 32,
+    aiSummaryLabelWhite: {
+        color: '#fff',
         fontWeight: 'bold',
-        color: '#E65100',
+        fontSize: 16,
     },
-    aiSummaryUnit: {
-        fontSize: 18,
-        fontWeight: 'normal',
+    aiBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.25)',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 16,
+        gap: 4,
     },
-    aiSummarySubtitle: {
+    aiBadgeText: {
+        color: '#fff',
         fontSize: 12,
-        color: '#888',
-        marginTop: 4,
-        marginBottom: 15,
+        fontWeight: 'bold',
     },
-    aiProgressSection: {
-        marginBottom: 15,
+    newAiCardBottom: {
+        backgroundColor: '#fff',
+        padding: 20,
+    },
+    aiSummarySubtitleGray: {
+        fontSize: 13,
+        color: '#888',
+        marginBottom: 8,
+    },
+    aiSummaryAmountOrange: {
+        fontSize: 28,
+        fontWeight: 'bold',
+        color: '#F37021',
+    },
+    aiSummaryUnitOrange: {
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    aiSummaryPercentOrange: {
+        color: '#F37021',
+        fontSize: 18,
+        fontWeight: '900',
     },
     aiProgressBarContainer: {
         height: 8,
-        backgroundColor: '#fff',
+        backgroundColor: '#F3F4F6',
         borderRadius: 4,
-        overflow: 'hidden',
+        marginTop: 10,
+        marginBottom: 20,
     },
     aiProgressFill: {
         height: '100%',
         backgroundColor: '#4CAF50',
         borderRadius: 4,
     },
-    aiProgressLabels: {
+    aiStatsGrid: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginTop: 8,
+        gap: 12,
     },
-    aiProgressText: {
-        fontSize: 12,
-        color: '#666',
-    },
-    aiProgressPercent: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        color: '#4CAF50',
-    },
-    aiStatsRow: {
-        flexDirection: 'row',
-        backgroundColor: '#fff',
-        borderRadius: 12,
-        paddingVertical: 12,
-        paddingHorizontal: 20,
-    },
-    aiStatItem: {
+    aiStatBox: {
         flex: 1,
+        borderRadius: 12,
+        padding: 12,
         alignItems: 'center',
+        justifyContent: 'center',
     },
-    aiStatValue: {
-        fontSize: 18,
+    aiStatIconWrap: {
+        marginBottom: 6,
+    },
+    aiStatBoxValue: {
+        fontSize: 16,
+        fontWeight: '900',
+        color: '#111',
+    },
+    aiStatBoxLabel: {
+        fontSize: 10,
+        color: '#666',
+        marginTop: 2,
+    },
+
+    // Recommendations Section
+    aiRecommendationsCard: {
+        marginHorizontal: 20,
+        marginBottom: 25,
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 20,
+        shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5, elevation: 2,
+        borderWidth: 1, borderColor: '#eee',
+    },
+    sectionTitleAiRec: {
+        fontSize: 16,
         fontWeight: 'bold',
-        color: '#222',
+        color: '#111',
     },
-    aiStatLabel: {
-        fontSize: 11,
-        color: '#888',
+    aiRecItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F9FAFB',
+        borderRadius: 16,
+        padding: 12,
+        marginBottom: 10,
     },
-    aiStatDivider: {
-        width: 1,
-        backgroundColor: '#eee',
+    aiRecNumberWrap: {
+        width: 24, height: 24,
+        borderRadius: 12,
+        backgroundColor: '#FFE0B2',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 10,
     },
+    aiRecNumberText: {
+        color: '#F37021',
+        fontSize: 12,
+        fontWeight: 'bold',
+    },
+    aiRecText: {
+        flex: 1,
+        fontSize: 13,
+        color: '#444',
+        lineHeight: 20,
+    }
 });

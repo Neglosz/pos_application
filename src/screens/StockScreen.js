@@ -160,6 +160,22 @@ export default function StockScreen() {
                     <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.5)" />
                 </TouchableOpacity>
 
+                {/* Empty State when no products */}
+                {stats.total === 0 && (
+                    <View style={styles.emptyStateContainerCentered}>
+                        <Ionicons name="storefront-outline" size={60} color="#E0E0E0" />
+                        <Text style={styles.emptyStateTitle}>คลังสินค้ายังว่างเปล่า</Text>
+                        <Text style={styles.emptyStateSubtitle}>สแกนบาร์โค้ดสินค้าเพื่อเพิ่มเข้าคลัง แนะนำเริ่มจากสินค้าที่ขายประจำ</Text>
+                        <TouchableOpacity
+                            style={styles.emptyAddButton}
+                            onPress={() => navigation.navigate('StockScan')}
+                        >
+                            <Ionicons name="add" size={20} color="#fff" style={{ marginRight: 6 }} />
+                            <Text style={styles.emptyAddButtonText}>สแกนเพิ่มสินค้าชิ้นแรก</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+
                 {/* Out of Stock List */}
                 {
                     outOfStockItems.length > 0 && (
@@ -645,5 +661,54 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.4,
         shadowRadius: 8,
         elevation: 8,
+    },
+    // Empty State Center
+    emptyStateContainerCentered: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 50,
+        paddingHorizontal: 20,
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#f0f0f0',
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 5,
+        marginTop: 10,
+    },
+    emptyStateTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#444',
+        marginTop: 15,
+        marginBottom: 8,
+    },
+    emptyStateSubtitle: {
+        fontSize: 16,
+        color: '#888',
+        textAlign: 'center',
+        lineHeight: 24,
+        marginBottom: 20,
+    },
+    emptyAddButton: {
+        flexDirection: 'row',
+        backgroundColor: '#F37021',
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 25,
+        alignItems: 'center',
+        shadowColor: '#F37021',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
+        elevation: 4,
+    },
+    emptyAddButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
     },
 });
