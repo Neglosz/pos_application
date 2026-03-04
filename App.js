@@ -198,12 +198,34 @@ export default function App() {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async (state) => {
       if (state === 'active') {
-        await supabase.auth.refreshSession();
+        try {
+          // <-- ส่วนที่แก้ไขใหม่ เริ่ม -->
+          const lastActiveStr = await AsyncStorage.getItem('lastActiveTime');
+          const now = Date.now();
+          const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000; // คิดเป็นมิลลิวินาที
+          if (lastActiveStr) {
+            const lastActive = parseInt(lastActiveStr, 10);
+            if (now - lastActive > ONE_MONTH_MS) {
+              // ถ้าไม่ได้เข้าแอปเกิน 30 วัน -> บังคับ Logout
+              console.log("พักแอปนานเกิน 1 เดือน กำลังเตะออกจากระบบ...");
+              await supabase.auth.signOut();
+              await AsyncStorage.multiRemove(['authData', 'currentStoreId', 'lastActiveTime']);
+              setIsLoggedIn(false);
+              return; // สั่งหยุด ไม่ให้ลงไปอัปเดต Session หรือเวลาด้านล่าง
+            }
+          }
+
+          // ถ้ายังไม่เกิน หรือพึ่งเข้าครั้งแรก -> แอบต่ออายุ Session แล้วรีเซ็ตเวลาใหม่!
+          await supabase.auth.refreshSession();
+          await AsyncStorage.setItem('lastActiveTime', now.toString());
+          // <-- ส่วนที่แก้ไขใหม่ จบ -->
+        } catch (error) {
+          console.error("Error checking activity:", error);
+        }
       }
     });
     return () => subscription.remove();
   }, []);
-
 
   // Restore session & Init Network
   useEffect(() => {
@@ -262,6 +284,7 @@ export default function App() {
     }
     // Persist login
     AsyncStorage.setItem('authData', JSON.stringify(data));
+    AsyncStorage.setItem('lastActiveTime', Date.now().toString());
   };
 
   const handleBranchSelect = (branch) => {
