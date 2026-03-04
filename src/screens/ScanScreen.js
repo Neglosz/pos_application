@@ -22,6 +22,7 @@ import { createCreditSale, createSale } from '../services/api';
 // Components
 import { PaymentMethodModal, QRPaymentModal, DebtPaymentModal, ReceiptModal, CashPaymentModal } from '../components/payment';
 import ProductQuantityModal from '../components/ProductQuantityModal';
+import AddStockModal from '../components/AddStockModal';
 
 const { width, height } = Dimensions.get('window');
 
@@ -242,6 +243,8 @@ export default function ScanScreen({ navigation, route }) {
     // --- State: Add Product Modal ---
     const [showAddProductModal, setShowAddProductModal] = useState(false);
     const [newProductCategory, setNewProductCategory] = useState(null);
+    const [showRestockModal, setShowRestockModal] = useState(false);
+    const [restockBarcode, setRestockBarcode] = useState('');
     const [newProductName, setNewProductName] = useState('');
     const [newProductPrice, setNewProductPrice] = useState('');
     const [newProductCost, setNewProductCost] = useState('');
@@ -1183,6 +1186,16 @@ export default function ScanScreen({ navigation, route }) {
                                 <Ionicons name="cube-outline" size={28} color="#ccc" />
                             </View>
                         )}
+                        <TouchableOpacity
+                            style={styles.wCardRestockBtn}
+                            onPress={(e) => {
+                                e.stopPropagation();
+                                setRestockBarcode(item.barcode);
+                                setShowRestockModal(true);
+                            }}
+                        >
+                            <Ionicons name="add-circle" size={26} color="#F37021" />
+                        </TouchableOpacity>
                     </View>
                     <Text style={styles.wCardName} numberOfLines={1}>{item.name}</Text>
                     <Text style={styles.wCardPrice}>฿{item.price}<Text style={styles.wCardUnit}>/{item.unit_type || 'กก.'}</Text></Text>
@@ -1928,6 +1941,22 @@ export default function ScanScreen({ navigation, route }) {
             {/* Weight Input Modal */}
             {renderWeightInputModal()}
 
+            {/* Restock Existing Product Modal */}
+            <AddStockModal
+                visible={showRestockModal}
+                scannedCode={restockBarcode}
+                onClose={() => {
+                    setShowRestockModal(false);
+                    setRestockBarcode('');
+                }}
+                onConfirm={(data) => {
+                    Alert.alert("สำเร็จ", `เพิ่มสต็อก ${data.name} สำเร็จ`);
+                    setShowRestockModal(false);
+                    setRestockBarcode('');
+                    useProductStore.getState().refreshProducts();
+                }}
+            />
+
             {/* Cart Modal (New) */}
             {renderCartModal()}
 
@@ -2095,6 +2124,23 @@ const styles = StyleSheet.create({
     categoryText: { color: '#666', fontSize: 18 },
     activeCategoryText: { color: '#fff', fontWeight: 'bold' },
     imagePickerButton: { width: '100%', height: 150, backgroundColor: '#f0f0f0', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 15, borderStyle: 'dashed', borderWidth: 1, borderColor: '#ccc' },
+
+    wCardRestockBtn: {
+        position: 'absolute',
+        top: 6,
+        right: 6,
+        backgroundColor: '#fff',
+        borderRadius: 15,
+        width: 30,
+        height: 30,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 3,
+        elevation: 3,
+    },
 
     // Modal Styles
     modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end', zIndex: 100 },

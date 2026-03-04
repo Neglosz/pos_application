@@ -414,9 +414,9 @@ export const sendAIChat = async (message, lat, lon, history = []) => {
 };
 
 // AI Recommendations (New)
-export const getAIRecommendations = async (lat, lon) => {
-    let endpoint = '/ai/recommendations';
-    if (lat && lon) endpoint += `?lat=${lat}&lon=${lon}`;
+export const getAIRecommendations = async (lat, lon, period = 'today') => {
+    let endpoint = `/ai/recommendations?period=${period}`;
+    if (lat && lon) endpoint += `&lat=${lat}&lon=${lon}`;
     return apiRequest(endpoint);
 };
 
@@ -431,8 +431,8 @@ export const getRecommendationHistory = async (days = 30) => {
     return apiRequest(`/ai/recommendations/history?days=${days}`);
 };
 
-export const getRecommendationStats = async () => {
-    return apiRequest('/ai/recommendations/stats');
+export const getRecommendationStats = async (period = 'week') => {
+    return apiRequest(`/ai/recommendations/stats?period=${period}`);
 };
 
 // AI Action Endpoints

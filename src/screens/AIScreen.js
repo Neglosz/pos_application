@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, Linking, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
 import { getAIRecommendations, getRecommendationStats, getRecommendationHistory, takeRecommendationAction, sendAIChat, applyPromotion, disposeProduct, getActivePromotions, deactivatePromotion } from '../services/api';
 import { useFocusEffect } from '@react-navigation/native';
 import { useProductStore } from '../stores/useProductStore'
+import { useCartStore } from '../stores/useCartStore';
 import { useStore } from 'zustand';
 
-export default function AIScreen() {
+export default function AIScreen({ navigation }) {
     const [activeTab, setActiveTab] = useState('today'); // today, history, chat
     const [chatMessage, setChatMessage] = useState('');
     const [recommendations, setRecommendations] = useState([]);
@@ -18,6 +20,69 @@ export default function AIScreen() {
     const [chatHistory, setChatHistory] = useState([]);
     const [loading, setLoading] = useState(false);
     const [chatLoading, setChatLoading] = useState(false);
+    const [isEmptyStore, setIsEmptyStore] = useState(false);
+
+    // Persona Prompt
+    const NONG_CHECK_PERSONA = `Role (บทบาท): "คุณคือ AI ผู้ช่วยเจ้าของร้านค้า ชื่อ 'น้องเช็คกี้'
+นิสัย: ร่าเริง สุภาพ เป็นกันเอง (ใช้ ครับ/ค่ะ) เหมือนเพื่อนคู่คิดเจ้าของร้าน
+กฏเหล็ก (สำคัญมาก): 
+1. ห้ามแนะนำโปรโมชั่นสำหรับสินค้าที่สต็อกเป็น 0 (ไม่ว่าหน่วยจะเป็น กิโลกรัม, กรัม, หรือชิ้น) เด็ดขาด!!! เพราะไม่มีของขายแล้ว ให้สั่ง "ต้องรีบเติมสินค้า" เท่านั้น และห้ามใส่ [ACTION:{"type":"promotion",...}]
+2. สินค้าหมดอายุ (0 วัน): ให้ใช้คำว่า "หมดวันนี้" หรือ "หมดอายุแล้ว" และห้ามแนะนำโปรโมชั่น ให้สั่ง "ตัดสต็อกทิ้ง" [ACTION:{"type":"dispose",...}] เท่านั้น
+3. ห้ามลดราคาจนต่ำกว่าทุน หรือลดราคาสินค้าที่ขายดี (Top 5) โดยไม่จำเป็น
+4. สั้น กระชับ: ตอบไม่เกิน 2-3 ประโยค (ยกเว้นถูกถามรายละเอียด)
+5. Emoji: ใส่เสมอ 😊✌️
+6. Action Recommendation: ใส่ [ACTION:...] ต่อท้ายหัวข้อที่แนะนำทันที ห้ามกองรวมท้ายแชท ใช้ Double Quotes เท่านั้น"`;
+
+    // Load Chat History on Mount
+    useEffect(() => {
+        const loadChatHistory = async () => {
+            try {
+                const savedHistory = await AsyncStorage.getItem('ai_chat_history');
+                if (savedHistory) {
+                    const parsed = JSON.parse(savedHistory);
+                    setChatHistory(Array.isArray(parsed) ? parsed : []);
+                }
+            } catch (error) {
+                console.error("Load Chat History Error:", error);
+                setChatHistory([]);
+            }
+        };
+        loadChatHistory();
+    }, []);
+
+    // Save Chat History whenever it changes
+    useEffect(() => {
+        const saveChatHistory = async () => {
+            try {
+                if (Array.isArray(chatHistory)) {
+                    await AsyncStorage.setItem('ai_chat_history', JSON.stringify(chatHistory));
+                }
+            } catch (error) {
+                console.error("Save Chat History Error:", error);
+            }
+        };
+        if (chatHistory && chatHistory.length > 0) {
+            saveChatHistory();
+        }
+    }, [chatHistory]);
+
+    const resetChat = () => {
+        Alert.alert(
+            'เริ่มแชทใหม่ 🆕',
+            'แน่ใจใช่ไหมว่าต้องการล้างประวัติการคุยทั้งหมด?',
+            [
+                { text: 'ยกเลิก', style: 'cancel' },
+                {
+                    text: 'ล้างประวัติ',
+                    style: 'destructive',
+                    onPress: async () => {
+                        setChatHistory([]);
+                        await AsyncStorage.removeItem('ai_chat_history');
+                    }
+                }
+            ]
+        );
+    };
 
 
     // Modal states
@@ -63,11 +128,12 @@ export default function AIScreen() {
             setLoading(true);
             const [recResponse, statsResponse] = await Promise.all([
                 getAIRecommendations(location.lat, location.lon),
-                getRecommendationStats()
+                getRecommendationStats('month')
             ]);
 
             if (recResponse.success) {
                 setRecommendations(recResponse.data || []);
+                setIsEmptyStore(recResponse.emptyStore || false);
             }
             if (statsResponse.success) {
                 setStats(statsResponse.data);
@@ -108,42 +174,80 @@ export default function AIScreen() {
     };
 
     const handleDeactivatePromo = (promo) => {
-        Alert.alert(
-            'ปิดโปรโมชั่น',
-            `ต้องการปิด "${promo.name}" ใช่ไหม`,
-            [
-                { text: 'ยกเลิก', style: 'cancel' },
-                {
-                    text: 'ปิดโปรโมชั่น', style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            const result = await deactivatePromotion(promo.id);
-                            if (result.success) {
-                                setPromotions(prev => prev.filter(p => p.id !== promo.id));
-                                useProductStore.getState().refreshProducts();
-                                Alert.alert('สำเร็จ', 'ปิดโปรโมชั่นแล้ว');
-                            }
-                        } catch (error) {
-                            Alert.alert('ผิดพลาด', error.message);
-                        }
-                    }
+        // ตรวจสอบตะกร้าสินค้าปัจจุบันในเครื่องนี้
+        const cartItems = useCartStore.getState().cart || [];
+        const hasActiveCart = cartItems.length > 0;
+
+        const performDeactivation = async () => {
+            if (actionLoading) return;
+            setActionLoading(true);
+            try {
+                const result = await deactivatePromotion(promo.id);
+                if (result.success) {
+                    setPromotions(prev => prev.filter(p => p.id !== promo.id));
+                    useProductStore.getState().refreshProducts();
+                    Alert.alert('สำเร็จ ✅', 'ปิดโปรโมชั่นแล้ว');
+                } else {
+                    // กรณี Backend แจ้งว่าปิดไม่ได้ (เช่น มียอดขายค้างอยู่ตาม policy)
+                    Alert.alert(
+                        'ไม่สามารถปิดได้ ⚠️',
+                        result.error === 'ACTIVE_SALES'
+                            ? 'ไม่สามารถปิดโปรโมชั่นได้เนื่องจากมียอดขายที่กำลังดำเนินการอยู่ กรุณารอให้รายการขายเสร็จสิ้นหรือยกเลิกก่อน'
+                            : (result.error || result.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อ')
+                    );
                 }
-            ]
-        );
+            } catch (error) {
+                Alert.alert('ผิดพลาด', 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้');
+            } finally {
+                setActionLoading(false);
+            }
+        };
+
+        if (hasActiveCart) {
+            Alert.alert(
+                'คำเตือน: มีรายการขายค้างอยู่',
+                `ขณะนี้มีสินค้าในตะกร้า ${cartItems.length} รายการ การปิดโปรโมชั่น "${promo.name}" อาจส่งผลต่อราคาสินค้าที่กำลังจะขาย\n\nคุณต้องการปิดโปรโมชั่นนี้ทันทีหรือไม่?`,
+                [
+                    { text: 'ภายหลัง', style: 'cancel' },
+                    {
+                        text: 'ยืนยันปิดโปรโมชั่น',
+                        style: 'destructive',
+                        onPress: performDeactivation
+                    }
+                ]
+            );
+        } else {
+            Alert.alert(
+                'ปิดโปรโมชั่น',
+                `ต้องการปิด "${promo.name}" ใช่ไหม`,
+                [
+                    { text: 'ยกเลิก', style: 'cancel' },
+                    {
+                        text: 'ปิดโปรโมชั่น',
+                        style: 'destructive',
+                        onPress: performDeactivation
+                    }
+                ]
+            );
+        }
     };
 
     const handleAction = async (item, action) => {
+        if (actionLoading) return;
+        setActionLoading(true);
         try {
             const response = await takeRecommendationAction(item.id, action);
             if (response.success) {
                 // Remove from current list
-                setRecommendations(prev => prev.filter(r => r.id !== item.id));
+                setRecommendations(prev => (prev || []).filter(r => r.id !== item.id));
                 // Reload stats
-                const statsResponse = await getRecommendationStats();
+                const statsResponse = await getRecommendationStats('month');
                 if (statsResponse.success) setStats(statsResponse.data);
             }
         } catch (error) {
             console.error("Action Error:", error);
+        } finally {
+            setActionLoading(false);
         }
     };
 
@@ -151,7 +255,8 @@ export default function AIScreen() {
     const handleAcceptAction = (item) => {
         setSelectedItem(item);
 
-        if (item.type === 'expiry' || item.type === 'stock' || item.type === 'promotion') {
+        if ((item.type === 'expiry' || item.type === 'promotion') ||
+            (item.type === 'stock' && item.action_label !== 'เติมสต็อก' && item.payload?.recommended_discount)) {
             // Check if AI recommends dispose (expired product)
             const aiDiscount = item.payload?.recommended_discount;
             if (aiDiscount?.action === 'dispose' || aiDiscount?.percent === 100) {
@@ -234,9 +339,9 @@ export default function AIScreen() {
             }
 
             // Remove from pending list
-            setRecommendations(prev => prev.filter(r => r.id !== selectedItem.id));
+            setRecommendations(prev => (prev || []).filter(r => r.id !== selectedItem.id));
             // Reload stats
-            const statsResponse = await getRecommendationStats();
+            const statsResponse = await getRecommendationStats('month');
             if (statsResponse.success) setStats(statsResponse.data);
 
             setProductModalVisible(false);
@@ -261,27 +366,101 @@ export default function AIScreen() {
         }
     };
 
-    const handleSendMessage = async () => {
-        if (!chatMessage.trim() || chatLoading) return;
+    const handleSendMessage = async (customPrompt = null, displayLabel = null) => {
+        const messageToUser = displayLabel || chatMessage;
+        const actualPrompt = customPrompt || chatMessage;
 
-        const userMsg = { role: 'user', parts: [{ text: chatMessage }] };
-        const newHistory = [...chatHistory, userMsg];
+        if (!actualPrompt || !actualPrompt.trim() || chatLoading) return;
+
+        // Ensure chatHistory is an array
+        const safeChatHistory = Array.isArray(chatHistory) ? chatHistory : [];
+
+        // If it's a new chat, we prepend the Persona Instructions
+        const isNewChat = safeChatHistory.length === 0;
+        const personaPrefix = isNewChat ? `${NONG_CHECK_PERSONA}\n\nคำถามจากเจ้าของร้าน: ` : '';
+
+        const userMsg = { role: 'user', parts: [{ text: messageToUser }] };
+        const newHistory = [...safeChatHistory, userMsg];
 
         setChatHistory(newHistory);
-        const currentMsg = chatMessage;
+        const currentMsg = personaPrefix + actualPrompt;
         setChatMessage('');
         setChatLoading(true);
 
         try {
-            const response = await sendAIChat(currentMsg, location.lat, location.lon, chatHistory);
+            const response = await sendAIChat(currentMsg, location.lat, location.lon, safeChatHistory);
             if (response.success) {
                 const aiMsg = { role: 'model', parts: [{ text: response.answer }] };
-                setChatHistory(prev => [...prev, aiMsg]);
+                setChatHistory(prev => [...(Array.isArray(prev) ? prev : []), aiMsg]);
             }
         } catch (error) {
             console.error("Chat Error:", error);
+            Alert.alert('เกิดข้อผิดพลาด', 'ขออภัยครับ ' + (error.message || 'ไม่สามารถติดต่อ AI ได้ในขณะนี้'));
         } finally {
             setChatLoading(false);
+        }
+    };
+
+    const handleQuickAction = (action) => {
+        if (!action) return;
+        let prompt = "";
+        let label = action.label;
+
+        if (action.id === 'promo_hit') {
+            prompt = `ช่วยวิเคราะห์ข้อมูลร้านแล้วแนะนำ 'โปรโมชั่นที่เหมาะสมที่สุด 1-2 อย่าง' ในตอนนี้ (เช่น ลด%, ซื้อคู่ถูกกว่า, หรือ 1 แถม 1)
+คำสั่ง:
+1. วิเคราะห์ว่าควรทำโปรโมชั่นประเภทไหนถึงจะดีต่อกำไรและยอดขายที่สุด
+2. ระบุชื่อสินค้าและเหตุผลที่เลือกทำโปรนี้
+3. ปิดท้ายด้วยปุ่ม [ACTION:...] โดยเลือกประเภทโปรโมชั่น (promotionType) ให้ตรงกับที่แนะนำจริงๆ`;
+        } else if (action.id === 'stock_clear') {
+            prompt = `รับบทเป็นผู้เชี่ยวชาญด้านบริหารสต็อก ช่วยคิดกลยุทธ์ระบายสินค้า (Dead Stock)
+คำสั่ง:
+1.เสนอวิธีระบายสินค้าเหล่านี้ให้เร็วที่สุด (เช่น 1 แถม 1, ลดราคา, หรือจับคู่)
+2.(สำคัญ) ระบุ 'ระดับความเร่งด่วน': บอกเหตุผลชัดเจนว่าทำไมต้องรีบระบายตัวนี้ (เช่น หมดอายุเดือนหน้า, เงินจมมา 3 เดือนแล้ว)
+รูปแบบคำตอบ: แยกรายสินค้า: ชื่อกลยุทธ์, ⚠️ สถานะความเร่งด่วน, 🛠 วิธีจัดโปร
+อย่าลืมใส่ [ACTION:{"type":"promotion",...}] หรือ [ACTION:{"type":"dispose",...}] เพื่อให้เจ้าของร้านดำเนินการได้ง่ายๆ ด้วยนะ`;
+        } else if (action.id === 'analyze_sales') {
+            prompt = `รับบทเป็นที่ปรึกษาธุรกิจส่วนตัว สรุปยอดขายสัปดาห์นี้เทียบกับสัปดาห์ก่อน
+คำสั่ง:
+1.สรุปยอดขายรวมว่า 'ขึ้น' หรือ 'ลง' กี่ %
+2.(สำคัญ) วิเคราะห์ 'สาเหตุ': เชื่อมโยงตัวเลขกับบริบท (เช่น ยอดตกเพราะฝนตก, ยอดขึ้นเพราะหวยออก)
+3.ระบุช่วงเวลาที่ขายดีที่สุด (Peak Hour)
+4.แนะนำกลยุทธ์สำหรับสัปดาห์หน้า 1 ข้อ
+รูปแบบคำตอบ: พาดหัวสรุป, 🔍 เจาะลึกสาเหตุ, ⏰ ช่วงเวลาทอง, 💡 คำแนะนำสัปดาห์หน้า`;
+        } else {
+            prompt = action.label;
+        }
+
+        handleSendMessage(prompt, label);
+    };
+
+    const handleChatAction = async (actionData) => {
+        if (!actionData || actionLoading) return;
+        setActionLoading(true);
+        try {
+            if (actionData.type === 'promotion') {
+                const result = await applyPromotion(
+                    null, // No recommendationId from chat
+                    actionData.products || [],
+                    actionData.percent || 20,
+                    actionData.days || 3,
+                    actionData.promotionType || 'discount_percent'
+                );
+                if (result.success) {
+                    Alert.alert('สำเร็จ! 🎉', `สร้างโปรโมชั่นลด ${actionData.percent}% สำหรับสินค้า ${(actionData.products || []).join(', ')} แล้ว`);
+                    loadPromotions();
+                }
+            } else if (actionData.type === 'dispose') {
+                const result = await disposeProduct(null, actionData.products || []);
+                if (result.success) {
+                    Alert.alert('ตัดสต็อกเรียบร้อย ✅', `ตัดสต็อก ${(actionData.products || []).join(', ')} จำนวน ${result.data?.totalDisposed || 0} ชิ้นแล้ว`);
+                    useProductStore.getState().refreshProducts();
+                }
+            }
+        } catch (error) {
+            Alert.alert('เกิดข้อผิดพลาด', error.message || 'ไม่สามารถดำเนินการได้');
+        } finally {
+            setActionLoading(false);
         }
     };
 
@@ -297,24 +476,10 @@ export default function AIScreen() {
     };
 
     const renderTodayTab = () => {
-        const pendingRecs = recommendations.filter(r => r.status === 'pending');
+        const pendingRecs = (recommendations || []).filter(r => r && r.status === 'pending');
 
         return (
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-                {/* Mini Status Bar */}
-                <View style={styles.miniStatusBar}>
-                    <View style={styles.miniStatusLeft}>
-                        <Ionicons name="list-outline" size={16} color="#E65100" />
-                        <Text style={styles.miniStatusText}>
-                            ทำแล้ว {stats?.followedCount || 0}/{stats?.totalRecommendations || 0}
-                        </Text>
-                    </View>
-                    <View style={styles.miniProgressBarBg}>
-                        <View style={[styles.miniProgressBarFill, { width: `${stats?.followedPercent || 0}%` }]} />
-                    </View>
-                    <Text style={styles.miniStatusPercent}>{stats?.followedPercent || 0}%</Text>
-                </View>
-
                 {/* Section Header */}
                 <View style={styles.sectionHeader}>
                     <View style={styles.sectionTitleRow}>
@@ -328,6 +493,18 @@ export default function AIScreen() {
 
                 {loading ? (
                     <ActivityIndicator size="large" color="#F37021" style={{ marginTop: 30 }} />
+                ) : isEmptyStore ? (
+                    <View style={styles.emptyState}>
+                        <Ionicons name="storefront-outline" size={48} color="#9E9E9E" />
+                        <Text style={styles.emptyTitle}>ร้านค้ายังไม่มีสินค้า</Text>
+                        <Text style={styles.emptySubtitle}>AI ต้องการข้อมูลสินค้าเพื่อวิเคราะห์และให้คำแนะนำ</Text>
+                        <TouchableOpacity
+                            style={[styles.actionBtn, { backgroundColor: '#F37021', marginTop: 15, paddingHorizontal: 20 }]}
+                            onPress={() => navigation.navigate('คลัง')}
+                        >
+                            <Text style={styles.actionText}>ไปเพิ่มสินค้ากันเลย</Text>
+                        </TouchableOpacity>
+                    </View>
                 ) : pendingRecs.length === 0 ? (
                     <View style={styles.emptyState}>
                         <Ionicons name="checkmark-circle" size={48} color="#4CAF50" />
@@ -371,29 +548,49 @@ export default function AIScreen() {
                                             <Text style={styles.impactText}> {item.expected_impact}</Text>
                                         </View>
                                     )}
+
+                                    {/* Product List */}
+                                    {item.payload?.products?.length > 0 && (
+                                        <View style={styles.impactBox}>
+                                            {item.payload.products.map((p, idx) => (
+                                                <View key={idx} style={styles.impactBox}>
+                                                    <Text>• {p.name}</Text>
+                                                    <Text>{p.qty} {p.unit} — {p.status}</Text>
+                                                </View>
+                                            ))}
+                                        </View>
+                                    )}
                                 </View>
 
                                 {/* Action Footer */}
                                 <View style={styles.actionFooter}>
                                     <TouchableOpacity
-                                        style={styles.skipBtn}
+                                        style={[styles.skipBtn, actionLoading && { opacity: 0.5 }]}
                                         onPress={(e) => {
                                             e.stopPropagation();
                                             handleAction(item, 'skipped');
                                         }}
+                                        disabled={actionLoading}
                                     >
                                         <Ionicons name="close" size={16} color="#666" />
                                         <Text style={styles.skipText}> ข้าม</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
-                                        style={[styles.actionBtn, { backgroundColor: config.color }]}
+                                        style={[styles.actionBtn, { backgroundColor: config.color }, actionLoading && { opacity: 0.5 }]}
                                         onPress={(e) => {
                                             e.stopPropagation();
                                             handleAcceptAction(item);
                                         }}
+                                        disabled={actionLoading}
                                     >
-                                        <Ionicons name="checkmark" size={18} color="#fff" />
-                                        <Text style={styles.actionText}> {item.action_label || 'ตกลง'}</Text>
+                                        {actionLoading ? (
+                                            <ActivityIndicator size="small" color="#fff" />
+                                        ) : (
+                                            <>
+                                                <Ionicons name="checkmark" size={18} color="#fff" />
+                                                <Text style={styles.actionText}> {item.action_label || 'ตกลง'}</Text>
+                                            </>
+                                        )}
                                     </TouchableOpacity>
                                 </View>
                             </TouchableOpacity>
@@ -410,18 +607,21 @@ export default function AIScreen() {
     };
 
     const renderHistoryTab = () => {
-        const historyKeys = Object.keys(history);
+        const safeHistory = history || {};
+        const historyKeys = Object.keys(safeHistory);
 
         // Calculate totals
         let totalMoney = 0;
         let totalFollowed = 0;
-        Object.values(history).forEach(items => {
-            items.forEach(item => {
-                if (item.status === 'accepted') {
-                    totalFollowed++;
-                    totalMoney += parseFloat(item.actual_amount) || 0;
-                }
-            });
+        Object.values(safeHistory).forEach(items => {
+            if (Array.isArray(items)) {
+                items.forEach(item => {
+                    if (item && item.status === 'accepted') {
+                        totalFollowed++;
+                        totalMoney += parseFloat(item.actual_amount) || 0;
+                    }
+                });
+            }
         });
 
         return (
@@ -450,7 +650,7 @@ export default function AIScreen() {
                     historyKeys.map(dateLabel => (
                         <View key={dateLabel}>
                             <Text style={styles.dateLabel}>{dateLabel}</Text>
-                            {history[dateLabel].map(item => {
+                            {Array.isArray(safeHistory[dateLabel]) && safeHistory[dateLabel].map(item => {
                                 const config = getTypeConfig(item.type);
                                 return (
                                     <View key={item.id} style={styles.historyCard}>
@@ -502,33 +702,74 @@ export default function AIScreen() {
             style={{ flex: 1 }}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
         >
+            {(Array.isArray(chatHistory) && chatHistory.length > 0) && (
+                <View style={styles.chatTopBar}>
+                    <TouchableOpacity style={styles.resetBtn} onPress={resetChat}>
+                        <Ionicons name="refresh-outline" size={16} color="#E65100" />
+                        <Text style={styles.resetText}>เริ่มแชทใหม่</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
             <ScrollView
                 ref={scrollViewRef}
                 onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
                 contentContainerStyle={{ flexGrow: 1, padding: 20, paddingBottom: 100 }}
             >
-                {chatHistory.length === 0 ? (
+                {(!Array.isArray(chatHistory) || chatHistory.length === 0) ? (
                     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 40 }}>
                         <View style={styles.aiAvatarLarge}>
-                            <Octicons name="sparkle" size={40} color="#fff" />
+                            <Ionicons name="sparkles" size={40} color="#fff" />
                         </View>
-                        <Text style={styles.chatTitle}>ถามอะไรก็ได้เกี่ยวกับร้าน</Text>
-                        <Text style={styles.chatSubtitle}>AI จะตอบจากข้อมูลจริงของร้านคุณ</Text>
+                        <Text style={styles.chatTitle}>น้องเช็คกี้ ยินดีช่วยครับ!</Text>
+                        <Text style={styles.chatSubtitle}>ถามอะไรก็ได้เกี่ยวกับร้าน</Text>
 
                         <View style={styles.chipContainer}>
-                            {['สินค้าขายดีเดือนนี้', 'ควรสั่งสินค้าอะไร', 'ลูกหนี้ค้างมากสุด', 'สินค้าใกล้หมดอายุ'].map((text, i) => (
-                                <TouchableOpacity key={i} style={styles.chatChip} onPress={() => setChatMessage(text)}>
-                                    <MaterialCommunityIcons name={i === 0 ? 'chart-line' : i === 1 ? 'cube-outline' : i === 2 ? 'account-clock-outline' : 'calendar-alert'} size={18} color="#E65100" style={{ marginRight: 8 }} />
-                                    <Text style={styles.chipText}>{text}</Text>
+                            {[
+                                { id: 'promo_hit', label: 'แนะนำโปรโมชั่นยอดฮิต', icon: 'star-outline' },
+                                { id: 'stock_clear', label: 'ช่วยคิดโปรลดล้างสต็อก', icon: 'trash-can-outline' },
+                                { id: 'analyze_sales', label: 'วิเคราะห์ยอดขายสัปดาห์นี้', icon: 'trending-up' },
+                                { id: 'stock_near_expiry', label: 'สินค้าใกล้หมดอายุ', icon: 'calendar-alert' },
+                            ].map((action, i) => (
+                                <TouchableOpacity key={i} style={styles.chatChip} onPress={() => handleQuickAction(action)}>
+                                    <MaterialCommunityIcons name={action.icon || 'comment-text-outline'} size={18} color="#E65100" style={{ marginRight: 8 }} />
+                                    <Text style={styles.chipText}>{action.label}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
                     </View>
                 ) : (
                     chatHistory.map((chat, index) => {
+                        if (!chat || !chat.parts || !chat.parts[0]) return null;
+                        
                         const isUser = chat.role === 'user';
-                        const rawText = chat.parts[0].text.replace(/\*\*/g, '');
-                        const textParagraphs = isUser ? [rawText] : rawText.split('\n').filter(t => t.trim().length > 0);
+                        let rawText = chat.parts[0].text || '';
+                        let actions = [];
+
+                        // Parse ALL action metadata found in the text
+                        const actionRegex = /\[ACTION:(\{[\s\S]*?\})\]/g;
+                        const matches = [...rawText.matchAll(actionRegex)];
+                        
+                        matches.forEach(match => {
+                            try {
+                                // Fix common AI JSON mistakes
+                                let jsonStr = match[1]
+                                    .replace(/'/g, '"')
+                                    .replace(/(\w+):/g, '"$1":')
+                                    .replace(/,\s*\}/g, '}');
+                                
+                                jsonStr = jsonStr.replace(/[\u0000-\u001F\u007F-\u009F]/g, "");
+                                const parsed = JSON.parse(jsonStr);
+                                if (parsed) actions.push(parsed);
+                            } catch (e) {
+                                console.error('Parse action error:', e, 'Raw match:', match[1]);
+                            }
+                        });
+
+                        // Strip ALL action tags from the text
+                        const cleanText = rawText.replace(actionRegex, '').replace(/\*\*/g, '').trim();
+                        const textParagraphs = isUser ? [cleanText] : cleanText.split('\n').filter(t => t.trim().length > 0);
+                        
                         return (
                             <View key={index} style={[styles.messageBubble, isUser ? styles.userBubble : styles.aiBubble]}>
                                 {!isUser && (
@@ -536,7 +777,7 @@ export default function AIScreen() {
                                         <View style={styles.aiHeaderIconBage}>
                                             <Ionicons name="sparkles" size={14} color="#F37021" />
                                         </View>
-                                        <Text style={styles.aiHeaderTitle}>ผู้ช่วย AI บทวิเคราะห์</Text>
+                                        <Text style={styles.aiHeaderTitle}>น้องเช็คกี้</Text>
                                     </View>
                                 )}
                                 {textParagraphs.map((paragraph, pIndex) => (
@@ -544,6 +785,32 @@ export default function AIScreen() {
                                         {isUser ? paragraph : paragraph.replace(/^\*\s/, '').trim()}
                                     </Text>
                                 ))}
+                                
+                                {!isUser && actions.length > 0 && (
+                                    <View style={styles.chatActionContainer}>
+                                        {actions.map((act, i) => (
+                                            <TouchableOpacity
+                                                key={i}
+                                                style={[styles.chatActionBtn, i > 0 && { marginTop: 8 }]}
+                                                onPress={() => handleChatAction(act)}
+                                                disabled={actionLoading}
+                                            >
+                                                <Ionicons
+                                                    name={act.type === 'promotion' ? 'pricetag-outline' : 'trash-outline'}
+                                                    size={16}
+                                                    color="#fff"
+                                                />
+                                                <Text style={styles.chatActionBtnText} numberOfLines={1}>
+                                                    {act.type === 'promotion' 
+                                                        ? `สร้างโปร: ${act.products?.[0] || 'สินค้า'}${act.products?.length > 1 ? '...' : ''}` 
+                                                        : `ตัดสต็อก: ${act.products?.[0] || 'สินค้า'}${act.products?.length > 1 ? '...' : ''}`}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                        {actionLoading && <ActivityIndicator size="small" color="#F37021" style={{ marginTop: 8 }} />}
+                                    </View>
+                                )}
+
                                 {!isUser && (
                                     <Text style={styles.aiMessageFooter}>ประมวลผลจริงจากข้อมูลจริงของร้านคุณ</Text>
                                 )}
@@ -553,7 +820,10 @@ export default function AIScreen() {
                 )}
                 {chatLoading && (
                     <View style={[styles.messageBubble, styles.aiBubble]}>
-                        <ActivityIndicator size="small" color="#F37021" />
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <ActivityIndicator size="small" color="#F37021" />
+                            <Text style={{ marginLeft: 8, color: '#F37021', fontStyle: 'italic' }}>น้องเช็คกี้กำลังคิด...</Text>
+                        </View>
                     </View>
                 )}
             </ScrollView>
@@ -570,7 +840,7 @@ export default function AIScreen() {
                     />
                     <TouchableOpacity
                         style={[styles.sendBtn, !chatMessage.trim() && { backgroundColor: '#ccc' }]}
-                        onPress={handleSendMessage}
+                        onPress={() => handleSendMessage()}
                         disabled={!chatMessage.trim() || chatLoading}
                     >
                         <Ionicons name="send" size={14} color="#fff" />
@@ -588,12 +858,12 @@ export default function AIScreen() {
                     <Text style={styles.sectionTitle}>โปรโมชั่นที่ใช้อยู่</Text>
                 </View>
                 <View style={styles.countBadge}>
-                    <Text style={styles.countText}>{promotions.length} รายการ</Text>
+                    <Text style={styles.countText}>{(promotions || []).length} รายการ</Text>
                 </View>
             </View>
             {loading ? (
                 <ActivityIndicator size="large" color="#F37021" style={{ marginTop: 30 }} />
-            ) : promotions.length === 0 ? (
+            ) : (!promotions || promotions.length === 0) ? (
                 <View style={styles.emptyState}>
                     <Ionicons name="pricetag-outline" size={48} color="#ddd" />
                     <Text style={styles.emptyTitle}>ไม่มีโปรโมชั่นที่ใช้งาน</Text>
@@ -601,6 +871,7 @@ export default function AIScreen() {
                 </View>
             ) : (
                 promotions.map(promo => {
+                    if (!promo) return null;
                     const productNames = promo.promotion_items?.map(pi => pi.products?.name).filter(Boolean).join(', ') || '-';
                     const typeLabel = {
                         'discount_percent': `ลด${promo.discount_value}%`,
@@ -626,13 +897,14 @@ export default function AIScreen() {
                                     <Ionicons name="cube-outline" size={16} color="#666" />
                                     <Text style={[styles.impactText, { color: '#666' }]}>{productNames}</Text>
                                 </View>
-                                <Text style={{ color: '#999', fontSize: 12, marginTop: 4 }}>หมดเขต: {new Date(promo.end_date).toLocaleDateString('th-TH')}</Text>
+                                <Text style={{ color: '#999', fontSize: 12, marginTop: 4 }}>หมดเขต: {promo.end_date ? new Date(promo.end_date).toLocaleDateString('th-TH') : '-'}</Text>
                             </View>
                             <View style={styles.actionFooter}>
                                 <View />
                                 <TouchableOpacity
-                                    style={[styles.actionBtn, { backgroundColor: '#D32F2F' }]}
+                                    style={[styles.actionBtn, { backgroundColor: '#D32F2F' }, actionLoading && { opacity: 0.5 }]}
                                     onPress={() => handleDeactivatePromo(promo)}
+                                    disabled={actionLoading}
                                 >
                                     <Ionicons name="close-circle" size={18} color='#fff' />
                                     <Text style={styles.actionText}>ปิดโปรโมชั่น</Text>
@@ -957,7 +1229,7 @@ export default function AIScreen() {
                                         {(() => {
                                             const reason = selectedItem.payload?.reason || selectedItem.detail || 'คำแนะนำนี้มาจากการวิเคราะห์ข้อมูลจริงของร้านคุณ';
                                             // Split on newlines first, then strip leading "1." etc.
-                                            const bullets = reason
+                                            const bullets = (reason || '')
                                                 .split('\n')
                                                 .map(s => s.replace(/^\d+[\.\)]\s*/, '').trim())
                                                 .filter(s => s.length > 0);
@@ -973,7 +1245,7 @@ export default function AIScreen() {
                                     </View>
 
                                     {/* Discount Recommendation Highlight */}
-                                    {selectedItem.payload?.recommended_discount && (
+                                    {selectedItem.payload?.recommended_discount && selectedItem.payload.recommended_discount.action !== 'dispose' && selectedItem.action_label !== 'เติมสต็อก' && (
                                         <View style={styles.discountHighlight}>
                                             <View style={styles.discountHeader}>
                                                 <Ionicons name="pricetag" size={16} color="#E65100" />
@@ -989,7 +1261,7 @@ export default function AIScreen() {
                                                         : ''}
                                                 </Text>
                                             )}
-                                            {selectedItem.payload.recommended_discount.total_recovery > 0 && (
+                                            {(selectedItem.payload.recommended_discount.total_recovery || 0) > 0 && (
                                                 <Text style={styles.discountRecovery}>
                                                     💰 คืนทุนได้ ฿{selectedItem.payload.recommended_discount.total_recovery.toLocaleString()}
                                                     {selectedItem.payload.recommended_discount.vs_total_loss
@@ -1102,228 +1374,6 @@ const styles = StyleSheet.create({
         paddingTop: 5,
     },
 
-    // Summary Card (removed - moved to ReportScreen)
-    // Mini Status Bar
-    miniStatusBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFF3E0',
-        borderRadius: 14,
-        padding: 12,
-        paddingHorizontal: 16,
-        marginBottom: 18,
-        borderWidth: 1,
-        borderColor: '#FFE0B2',
-    },
-    miniStatusLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    miniStatusText: {
-        fontSize: 18,
-        color: '#E65100',
-        fontWeight: '600',
-        marginLeft: 6,
-    },
-    miniProgressBarBg: {
-        flex: 1,
-        height: 6,
-        backgroundColor: '#FFE0B2',
-        borderRadius: 3,
-        marginHorizontal: 12,
-        overflow: 'hidden',
-    },
-    miniProgressBarFill: {
-        height: '100%',
-        backgroundColor: '#4CAF50',
-        borderRadius: 3,
-    },
-    miniStatusPercent: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#4CAF50',
-        minWidth: 30,
-        textAlign: 'right',
-    },
-    summaryHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 10,
-    },
-    summaryDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: '#4CAF50',
-        marginRight: 8,
-    },
-    summaryLabel: {
-        flex: 1,
-        fontSize: 18,
-        color: '#666',
-        fontWeight: '500',
-    },
-    seeAllBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    seeAllText: {
-        fontSize: 18,
-        color: '#888',
-    },
-    summaryMain: {
-        flexDirection: 'row',
-        alignItems: 'baseline',
-    },
-    summaryAmount: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: '#E65100',
-    },
-    summaryUnit: {
-        fontSize: 18,
-        fontWeight: 'normal',
-    },
-    growthBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#E8F5E9',
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 10,
-        marginLeft: 10,
-    },
-    growthText: {
-        fontSize: 18,
-        color: '#4CAF50',
-        fontWeight: '600',
-        marginLeft: 2,
-    },
-    summarySubtitle: {
-        fontSize: 18,
-        color: '#888',
-        marginTop: 4,
-        marginBottom: 15,
-    },
-    progressSection: {
-        marginBottom: 15,
-    },
-    progressBarContainer: {
-        height: 8,
-        backgroundColor: '#fff',
-        borderRadius: 4,
-        overflow: 'hidden',
-    },
-    progressFill: {
-        height: '100%',
-        backgroundColor: '#4CAF50',
-        borderRadius: 4,
-    },
-    progressLabels: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginTop: 8,
-    },
-    progressLabelLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    progressText: {
-        fontSize: 18,
-        color: '#666',
-    },
-    progressPercent: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#4CAF50',
-    },
-    statsRow: {
-        flexDirection: 'row',
-        backgroundColor: '#fff',
-        borderRadius: 12,
-        paddingVertical: 12,
-        paddingHorizontal: 20,
-    },
-    statItem: {
-        flex: 1,
-        alignItems: 'center',
-    },
-    statValue: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#222',
-    },
-    statLabel: {
-        fontSize: 18,
-        color: '#888',
-    },
-    statDivider: {
-        width: 1,
-        backgroundColor: '#eee',
-    },
-
-    // Daily Card
-    dailyCard: {
-        backgroundColor: '#fff',
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 5,
-        elevation: 1,
-    },
-    dailyRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    dailyLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    dailyIconBg: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: '#E8F5E9',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 10,
-    },
-    dailyInfo: {},
-    dailyLabel: {
-        fontSize: 18,
-        color: '#888',
-    },
-    dailyAmount: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#4CAF50',
-    },
-    dailyRight: {
-        alignItems: 'flex-end',
-    },
-    dailyRightLabel: {
-        fontSize: 18,
-        color: '#aaa',
-    },
-    dailyRightValue: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#333',
-    },
-    cheerRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 12,
-    },
-    cheerText: {
-        fontSize: 18,
-        color: '#4CAF50',
-    },
-
     // Section Header
     sectionHeader: {
         flexDirection: 'row',
@@ -1416,27 +1466,6 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#2E7D32',
         fontWeight: '600',
-    },
-    whyBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 12,
-    },
-    whyText: {
-        fontSize: 18,
-        color: '#888',
-        marginLeft: 4,
-    },
-    whyContent: {
-        backgroundColor: '#F5F5F5',
-        borderRadius: 8,
-        padding: 12,
-        marginTop: 8,
-    },
-    whyContentText: {
-        fontSize: 18,
-        color: '#666',
-        lineHeight: 18,
     },
     actionFooter: {
         flexDirection: 'row',
@@ -1602,6 +1631,28 @@ const styles = StyleSheet.create({
     },
 
     // Chat Tab
+    chatTopBar: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        paddingHorizontal: 20,
+        paddingTop: 10,
+    },
+    resetBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFF3E0',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 15,
+        borderWidth: 1,
+        borderColor: '#FFE0B2',
+    },
+    resetText: {
+        fontSize: 14,
+        color: '#E65100',
+        fontWeight: '600',
+        marginLeft: 4,
+    },
     aiAvatarLarge: {
         width: 80,
         height: 80,
@@ -1666,7 +1717,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#FFE0B2',
         shadowColor: '#F37021',
-        shadowOffset: { width: 0, heoght: 2 },
+        shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 2,
@@ -1708,6 +1759,32 @@ const styles = StyleSheet.create({
         marginTop: 8,
         fontStyle: 'italic',
         textAlign: 'right',
+    },
+    chatActionContainer: {
+        marginTop: 15,
+        paddingTop: 10,
+        borderTopWidth: 1,
+        borderTopColor: '#FFE0B2',
+    },
+    chatActionBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#F37021',
+        paddingVertical: 10,
+        paddingHorizontal: 15,
+        borderRadius: 12,
+        shadowColor: '#F37021',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 3,
+        elevation: 3,
+    },
+    chatActionBtnText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#fff',
+        marginLeft: 8,
     },
     chatInputWrapper: {
         backgroundColor: '#fff',
@@ -1943,11 +2020,6 @@ const styles = StyleSheet.create({
         color: '#888',
         marginTop: 10,
     },
-    // AI Recommendation Box Styles
-    discountSection: {
-        marginBottom: 15,
-        marginLeft: 34,
-    },
     aiRecommendBox: {
         backgroundColor: '#FFF8F0',
         borderWidth: 1,
@@ -1970,78 +2042,82 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
         color: '#333',
-        marginBottom: 8,
+        marginBottom: 10,
+    },
+    profitBreakdown: {
+        backgroundColor: '#fff',
+        padding: 10,
+        borderRadius: 8,
+        marginBottom: 10,
+    },
+    profitBreakdownText: {
+        fontSize: 14,
+        color: '#666',
+        marginBottom: 4,
     },
     aiRecommendReason: {
-        fontSize: 16,
+        fontSize: 14,
         color: '#666',
-        lineHeight: 18,
-        marginBottom: 12,
+        lineHeight: 20,
+        marginBottom: 15,
     },
     useAiRecommendBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#F37021',
-        borderRadius: 8,
         paddingVertical: 10,
+        borderRadius: 8,
     },
     useAiRecommendText: {
-        fontSize: 16,
-        fontWeight: '600',
         color: '#fff',
+        fontWeight: '600',
+        marginLeft: 8,
     },
-    profitBreakdown: {
-        backgroundColor: '#E8F5E9',
-        borderRadius: 8,
-        padding: 10,
-        marginBottom: 10,
+    discountSection: {
+        marginBottom: 15,
+        marginLeft: 34,
     },
-    profitBreakdownText: {
-        fontSize: 16,
-        color: '#2E7D32',
-        marginBottom: 4,
+    discountInputRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 15,
     },
-
-    // Detail Modal Styles
     detailTopRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        marginBottom: 16,
+        marginBottom: 20,
     },
     detailTitle: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#222',
+        color: '#333',
         marginTop: 4,
     },
     detailDescription: {
         fontSize: 16,
-        color: '#555',
-        lineHeight: 22,
-        marginBottom: 16,
+        color: '#666',
+        lineHeight: 24,
+        marginBottom: 15,
     },
     detailImpact: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#E8F5E9',
-        borderRadius: 16,
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        marginBottom: 16,
+        padding: 12,
+        borderRadius: 10,
+        marginBottom: 20,
     },
     detailImpactText: {
-        fontSize: 16,
+        fontSize: 15,
         color: '#2E7D32',
         fontWeight: '600',
     },
     detailReasonBox: {
-        backgroundColor: '#FFFBF0',
+        backgroundColor: '#F5F5F5',
+        padding: 15,
         borderRadius: 12,
-        padding: 16,
-        marginBottom: 10,
-        borderLeftWidth: 3,
-        borderLeftColor: '#F57C00',
+        marginBottom: 20,
     },
     detailReasonHeader: {
         flexDirection: 'row',
@@ -2052,32 +2128,31 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
         color: '#E65100',
-        marginLeft: 6,
+        marginLeft: 8,
     },
     reasonBullet: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        marginBottom: 8,
-        paddingLeft: 2,
+        marginBottom: 10,
     },
     reasonBulletIcon: {
-        fontSize: 16,
+        fontSize: 14,
         marginRight: 8,
-        marginTop: 1,
+        marginTop: 2,
     },
     reasonBulletText: {
-        fontSize: 16,
+        flex: 1,
+        fontSize: 15,
         color: '#444',
         lineHeight: 22,
-        flex: 1,
     },
     discountHighlight: {
         backgroundColor: '#FFF3E0',
-        borderRadius: 12,
-        padding: 14,
-        marginBottom: 10,
         borderWidth: 1,
-        borderColor: '#FFB74D',
+        borderColor: '#FFE0B2',
+        padding: 15,
+        borderRadius: 12,
+        marginBottom: 20,
     },
     discountHeader: {
         flexDirection: 'row',
@@ -2085,7 +2160,7 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     discountTitle: {
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: 'bold',
         color: '#E65100',
         marginLeft: 6,
@@ -2093,12 +2168,11 @@ const styles = StyleSheet.create({
     discountDetail: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#BF360C',
+        color: '#333',
         marginBottom: 4,
     },
     discountRecovery: {
-        fontSize: 16,
-        color: '#2E7D32',
-        fontWeight: '600',
+        fontSize: 14,
+        color: '#666',
     },
 });
