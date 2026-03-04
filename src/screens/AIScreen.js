@@ -573,7 +573,7 @@ export default function AIScreen() {
                         onPress={handleSendMessage}
                         disabled={!chatMessage.trim() || chatLoading}
                     >
-                        <Ionicons name="send" size={18} color="#fff" />
+                        <Ionicons name="send" size={14} color="#fff" />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -1057,7 +1057,7 @@ const styles = StyleSheet.create({
         color: '#222',
     },
     headerSubtitle: {
-        fontSize: 12,
+        fontSize: 18,
         color: '#888',
     },
     tabBar: {
@@ -1086,7 +1086,7 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     tabText: {
-        fontSize: 14,
+        fontSize: 16,
         color: '#888',
         fontWeight: '600',
         marginLeft: 6,
@@ -1120,7 +1120,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     miniStatusText: {
-        fontSize: 13,
+        fontSize: 18,
         color: '#E65100',
         fontWeight: '600',
         marginLeft: 6,
@@ -1139,7 +1139,7 @@ const styles = StyleSheet.create({
         borderRadius: 3,
     },
     miniStatusPercent: {
-        fontSize: 12,
+        fontSize: 18,
         fontWeight: 'bold',
         color: '#4CAF50',
         minWidth: 30,
@@ -1159,7 +1159,7 @@ const styles = StyleSheet.create({
     },
     summaryLabel: {
         flex: 1,
-        fontSize: 14,
+        fontSize: 18,
         color: '#666',
         fontWeight: '500',
     },
@@ -1168,7 +1168,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     seeAllText: {
-        fontSize: 12,
+        fontSize: 18,
         color: '#888',
     },
     summaryMain: {
@@ -1194,13 +1194,13 @@ const styles = StyleSheet.create({
         marginLeft: 10,
     },
     growthText: {
-        fontSize: 12,
+        fontSize: 18,
         color: '#4CAF50',
         fontWeight: '600',
         marginLeft: 2,
     },
     summarySubtitle: {
-        fontSize: 12,
+        fontSize: 18,
         color: '#888',
         marginTop: 4,
         marginBottom: 15,
@@ -1229,11 +1229,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     progressText: {
-        fontSize: 12,
+        fontSize: 18,
         color: '#666',
     },
     progressPercent: {
-        fontSize: 12,
+        fontSize: 18,
         fontWeight: 'bold',
         color: '#4CAF50',
     },
@@ -1254,7 +1254,7 @@ const styles = StyleSheet.create({
         color: '#222',
     },
     statLabel: {
-        fontSize: 11,
+        fontSize: 18,
         color: '#888',
     },
     statDivider: {
@@ -1294,7 +1294,7 @@ const styles = StyleSheet.create({
     },
     dailyInfo: {},
     dailyLabel: {
-        fontSize: 12,
+        fontSize: 18,
         color: '#888',
     },
     dailyAmount: {
@@ -1306,11 +1306,11 @@ const styles = StyleSheet.create({
         alignItems: 'flex-end',
     },
     dailyRightLabel: {
-        fontSize: 10,
+        fontSize: 18,
         color: '#aaa',
     },
     dailyRightValue: {
-        fontSize: 14,
+        fontSize: 18,
         fontWeight: 'bold',
         color: '#333',
     },
@@ -1320,7 +1320,7 @@ const styles = StyleSheet.create({
         marginTop: 12,
     },
     cheerText: {
-        fontSize: 12,
+        fontSize: 18,
         color: '#4CAF50',
     },
 
@@ -1347,7 +1347,7 @@ const styles = StyleSheet.create({
         borderRadius: 12,
     },
     countText: {
-        fontSize: 11,
+        fontSize: 16,
         color: '#666',
         fontWeight: '500',
     },
@@ -1389,7 +1389,7 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     tagText: {
-        fontSize: 10,
+        fontSize: 14,
         fontWeight: 'bold',
     },
     recTitle: {
@@ -1399,7 +1399,7 @@ const styles = StyleSheet.create({
         marginBottom: 2,
     },
     recDetail: {
-        fontSize: 13,
+        fontSize: 18,
         color: '#666',
         lineHeight: 18,
     },
@@ -1413,7 +1413,7 @@ const styles = StyleSheet.create({
         marginTop: 12,
     },
     impactText: {
-        fontSize: 14,
+        fontSize: 16,
         color: '#2E7D32',
         fontWeight: '600',
     },
@@ -1423,7 +1423,7 @@ const styles = StyleSheet.create({
         marginTop: 12,
     },
     whyText: {
-        fontSize: 12,
+        fontSize: 18,
         color: '#888',
         marginLeft: 4,
     },
@@ -1434,7 +1434,7 @@ const styles = StyleSheet.create({
         marginTop: 8,
     },
     whyContentText: {
-        fontSize: 12,
+        fontSize: 18,
         color: '#666',
         lineHeight: 18,
     },
@@ -1457,7 +1457,7 @@ const styles = StyleSheet.create({
         borderColor: '#E0E0E0',
     },
     skipText: {
-        fontSize: 14,
+        fontSize: 18,
         color: '#666',
         fontWeight: '600',
     },
@@ -1470,13 +1470,13 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
     },
     actionText: {
-        fontSize: 14,
+        fontSize: 18,
         color: '#fff',
         fontWeight: 'bold',
     },
     footerNote: {
         textAlign: 'center',
-        fontSize: 11,
+        fontSize: 14,
         color: '#aaa',
         marginTop: 10,
         marginBottom: 20,
@@ -1489,13 +1489,13 @@ const styles = StyleSheet.create({
         paddingVertical: 40,
     },
     emptyTitle: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: 'bold',
         color: '#333',
         marginTop: 15,
     },
     emptySubtitle: {
-        fontSize: 13,
+        fontSize: 18,
         color: '#888',
         marginTop: 5,
         textAlign: 'center',
@@ -1513,7 +1513,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     historyStatLabel: {
-        fontSize: 12,
+        fontSize: 16,
         color: '#666',
         marginBottom: 4,
     },
@@ -1523,12 +1523,12 @@ const styles = StyleSheet.create({
         color: '#2E7D32',
     },
     historyStatValueSmall: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: 'bold',
         color: '#2E7D32',
     },
     dateLabel: {
-        fontSize: 13,
+        fontSize: 18,
         fontWeight: '600',
         color: '#888',
         marginBottom: 10,
@@ -1559,13 +1559,13 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     historyTitle: {
-        fontSize: 14,
+        fontSize: 18,
         fontWeight: '600',
         color: '#222',
         marginBottom: 2,
     },
     historyTime: {
-        fontSize: 11,
+        fontSize: 16,
         color: '#aaa',
         marginBottom: 4,
     },
@@ -1575,19 +1575,19 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     outcomeLabel: {
-        fontSize: 11,
+        fontSize: 16,
         color: '#888',
     },
     outcomeValue: {
-        fontSize: 11,
+        fontSize: 16,
         color: '#666',
     },
     outcomeArrow: {
-        fontSize: 11,
+        fontSize: 18,
         color: '#4CAF50',
     },
     actualValue: {
-        fontSize: 11,
+        fontSize: 18,
         color: '#4CAF50',
         fontWeight: '600',
     },
@@ -1597,7 +1597,7 @@ const styles = StyleSheet.create({
         borderRadius: 12,
     },
     statusText: {
-        fontSize: 11,
+        fontSize: 16,
         fontWeight: '600',
     },
 
@@ -1618,7 +1618,7 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     chatSubtitle: {
-        fontSize: 14,
+        fontSize: 18,
         color: '#888',
         marginBottom: 30,
     },
@@ -1641,7 +1641,7 @@ const styles = StyleSheet.create({
         minWidth: '45%',
     },
     chipText: {
-        fontSize: 13,
+        fontSize: 18,
         color: '#444',
         fontWeight: '500',
     },
@@ -1672,7 +1672,7 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     messageText: {
-        fontSize: 15,
+        fontSize: 18,
         lineHeight: 22,
     },
     userMessageText: {
@@ -1693,17 +1693,17 @@ const styles = StyleSheet.create({
         marginRight: 6,
     },
     aiHeaderTitle: {
-        fontSize: 14,
+        fontSize: 18,
         fontWeight: 'bold',
         color: '#E65100',
     },
     aiMessageText: {
-        fontSize: 15,
+        fontSize: 18,
         color: '#333',
         lineHeight: 24,
     },
     aiMessageFooter: {
-        fontSize: 11,
+        fontSize: 14,
         color: '#9E9E9E',
         marginTop: 8,
         fontStyle: 'italic',
@@ -1722,22 +1722,22 @@ const styles = StyleSheet.create({
         backgroundColor: '#F0F0F0',
         borderRadius: 25,
         paddingHorizontal: 15,
+        marginBottom: '8%'
     },
     chatInput: {
         flex: 1,
         paddingVertical: 10,
-        fontSize: 15,
+        fontSize: 18,
         color: '#333',
         maxHeight: 100,
     },
     sendBtn: {
-        width: 36,
-        height: 36,
+        width: 28,
+        height: 28,
         borderRadius: 18,
         backgroundColor: '#F37021',
         justifyContent: 'center',
-        alignItems: 'center',
-        marginLeft: 10,
+        alignItems: 'center'
     },
     // Modal Styles
     modalOverlay: {
@@ -1768,7 +1768,7 @@ const styles = StyleSheet.create({
         color: '#333',
     },
     modalSubtitle: {
-        fontSize: 14,
+        fontSize: 18,
         color: '#666',
         marginBottom: 20,
     },
@@ -1784,17 +1784,17 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     modalProductName: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: '600',
         color: '#333',
     },
     modalProductDetail: {
-        fontSize: 13,
+        fontSize: 18,
         color: '#888',
         marginTop: 4,
     },
     modalSectionTitle: {
-        fontSize: 14,
+        fontSize: 18,
         fontWeight: '600',
         color: '#666',
         marginBottom: 12,
@@ -1813,7 +1813,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFF8F0',
     },
     modalOptionText: {
-        fontSize: 15,
+        fontSize: 18,
         color: '#333',
         marginLeft: 12,
     },
@@ -1922,7 +1922,7 @@ const styles = StyleSheet.create({
         color: '#333',
     },
     debtCustomerAmount: {
-        fontSize: 14,
+        fontSize: 18,
         color: '#E65100',
         marginTop: 2,
     },
@@ -1939,7 +1939,7 @@ const styles = StyleSheet.create({
         padding: 30,
     },
     noPhoneText: {
-        fontSize: 14,
+        fontSize: 16,
         color: '#888',
         marginTop: 10,
     },
@@ -1962,7 +1962,7 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     aiRecommendTitle: {
-        fontSize: 14,
+        fontSize: 16,
         fontWeight: '600',
         color: '#F37021',
     },
@@ -1973,7 +1973,7 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     aiRecommendReason: {
-        fontSize: 13,
+        fontSize: 16,
         color: '#666',
         lineHeight: 18,
         marginBottom: 12,
@@ -1987,7 +1987,7 @@ const styles = StyleSheet.create({
         paddingVertical: 10,
     },
     useAiRecommendText: {
-        fontSize: 14,
+        fontSize: 16,
         fontWeight: '600',
         color: '#fff',
     },
@@ -1998,7 +1998,7 @@ const styles = StyleSheet.create({
         marginBottom: 10,
     },
     profitBreakdownText: {
-        fontSize: 13,
+        fontSize: 16,
         color: '#2E7D32',
         marginBottom: 4,
     },
@@ -2016,7 +2016,7 @@ const styles = StyleSheet.create({
         marginTop: 4,
     },
     detailDescription: {
-        fontSize: 14,
+        fontSize: 16,
         color: '#555',
         lineHeight: 22,
         marginBottom: 16,
@@ -2031,7 +2031,7 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     detailImpactText: {
-        fontSize: 15,
+        fontSize: 16,
         color: '#2E7D32',
         fontWeight: '600',
     },
@@ -2049,7 +2049,7 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     detailReasonTitle: {
-        fontSize: 15,
+        fontSize: 16,
         fontWeight: 'bold',
         color: '#E65100',
         marginLeft: 6,
@@ -2061,12 +2061,12 @@ const styles = StyleSheet.create({
         paddingLeft: 2,
     },
     reasonBulletIcon: {
-        fontSize: 14,
+        fontSize: 16,
         marginRight: 8,
         marginTop: 1,
     },
     reasonBulletText: {
-        fontSize: 14,
+        fontSize: 16,
         color: '#444',
         lineHeight: 22,
         flex: 1,
@@ -2085,7 +2085,7 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     discountTitle: {
-        fontSize: 14,
+        fontSize: 16,
         fontWeight: 'bold',
         color: '#E65100',
         marginLeft: 6,
@@ -2097,7 +2097,7 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     discountRecovery: {
-        fontSize: 13,
+        fontSize: 16,
         color: '#2E7D32',
         fontWeight: '600',
     },

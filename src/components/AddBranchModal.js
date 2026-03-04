@@ -91,11 +91,9 @@ export default function AddBranchModal({ visible, onClose, onSuccess }) {
 
         try {
             // Get current user and session
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('กรุณา login ใหม่');
-
             const { data: { session } } = await supabase.auth.getSession();
-            if (!session) throw new Error('Session หมดอายุ กรุณา login ใหม่');
+            const user = session?.user;
+            if (!user || !session) throw new Error('Session หมดอายุ กรุณา login ใหม่');
 
             // 1. Create store
             const { data: store, error: storeError } = await supabase

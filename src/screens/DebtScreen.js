@@ -481,8 +481,8 @@ export default function DebtScreen() {
                                         <ScrollView style={styles.billsList} nestedScrollEnabled={true}>
                                             {pendingBills.map((bill) => (
                                                 <View key={bill.id} style={styles.billItem}>
-                                                    <Text style={styles.billId}>บิล #{bill.order_id ? bill.order_id.slice(0, 8) : bill.id}</Text>
-                                                    <Text style={styles.billAmount}>฿{parseFloat(bill.total_debt).toFixed(2)}</Text>
+                                                    <Text style={{ fontSize: 16 }}>บิล #{bill.order_id ? bill.order_id.slice(0, 8) : bill.id}</Text>
+                                                    <Text style={{ fontSize: 16 }}>฿{parseFloat(bill.total_debt).toFixed(2)}</Text>
                                                 </View>
                                             ))}
                                         </ScrollView>
@@ -543,7 +543,7 @@ const styles = StyleSheet.create({
         alignItems: 'flex-start',
     },
     dashboardLabel: {
-        fontSize: 14,
+        fontSize: 18,
         color: '#666',
         marginBottom: 4,
     },
@@ -589,7 +589,7 @@ const styles = StyleSheet.create({
         color: '#1E2022',
     },
     statLabel: {
-        fontSize: 12,
+        fontSize: 16,
         color: '#888',
     },
 
@@ -642,7 +642,7 @@ const styles = StyleSheet.create({
     },
     filterText: {
         color: '#000',
-        fontSize: 14,
+        fontSize: 16,
         fontWeight: '600',
         marginRight: 6,
     },
@@ -660,7 +660,7 @@ const styles = StyleSheet.create({
     },
     filterCountText: {
         color: '#000',
-        fontSize: 10,
+        fontSize: 14,
         fontWeight: 'bold',
     },
 
@@ -700,13 +700,13 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
     userName: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: 'bold',
         color: '#1E2022',
         marginBottom: 2,
     },
     userPhone: {
-        fontSize: 12,
+        fontSize: 16,
         color: '#666',
     },
     statusBadge: {
@@ -715,7 +715,7 @@ const styles = StyleSheet.create({
         borderRadius: 12,
     },
     statusText: {
-        fontSize: 10,
+        fontSize: 16,
         fontWeight: 'bold',
     },
     cardFooter: {
@@ -727,7 +727,7 @@ const styles = StyleSheet.create({
         borderTopColor: 'rgba(0,0,0,0.05)',
     },
     debtLabel: {
-        fontSize: 12,
+        fontSize: 16,
         color: '#888',
         marginBottom: 2,
     },
@@ -748,12 +748,12 @@ const styles = StyleSheet.create({
         marginLeft: 4,
     },
     dueLabel: {
-        fontSize: 8,
+        fontSize: 16,
         color: '#F57F17',
         fontWeight: 'bold',
     },
     dueValue: {
-        fontSize: 10,
+        fontSize: 16,
         color: '#1E2022',
     },
     cardArrow: {
@@ -774,16 +774,16 @@ const styles = StyleSheet.create({
     customerNameModal: { fontSize: 18, fontWeight: 'bold' },
     billsContainer: { backgroundColor: '#f9f9f9', padding: 16, borderRadius: 12, maxHeight: 200, marginBottom: 20 },
     billsHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-    billsTitle: { fontWeight: '600' },
-    billsTotalAmount: { fontWeight: 'bold', color: '#F37021' },
+    billsTitle: { fontWeight: '600', fontSize: 18 },
+    billsTotalAmount: { fontWeight: 'bold', color: '#F37021', fontSize: 18 },
     billsList: { maxHeight: 150 },
     billItem: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#eee' },
     paymentSection: { marginBottom: 20 },
-    paymentLabel: { fontSize: 14, marginBottom: 8, color: '#666' },
+    paymentLabel: { fontSize: 18, marginBottom: 8, color: '#666' },
     paymentInputContainer: { flexDirection: 'row', gap: 10 },
     paymentInput: { flex: 1, height: 50, borderWidth: 1, borderColor: '#eee', borderRadius: 12, paddingHorizontal: 16, fontSize: 18 },
     fullAmountButton: { backgroundColor: '#1E2022', justifyContent: 'center', paddingHorizontal: 20, borderRadius: 12 },
-    fullAmountText: { color: '#fff' },
+    fullAmountText: { color: '#fff', fontSize: 18 },
     confirmButton: { backgroundColor: '#F37021', height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: 10 },
-    confirmButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+    confirmButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
 });

@@ -155,7 +155,8 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
     const checkOwnerStatus = async () => {
         if (!branch) return;
         try {
-            const { data: { user }, error } = await supabase.auth.getUser();
+            const { data: { session }, error } = await supabase.auth.getSession();
+            const user = session?.user;
             if (error || !user) return;
 
             if (branch.owner_id === user.id) {

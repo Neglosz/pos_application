@@ -21,10 +21,32 @@ export const apiRequest = async (endpoint, options = {}) => {
         ...options.headers,
     };
 
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
+    let response = await fetch(`${BASE_URL}${endpoint}`, {
         ...options,
         headers,
     });
+
+    if (response.status === 401 || response.status === 403) {
+        console.log("Token expired from Backend Request. Trying silent refresh...");
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+
+        if (refreshError || !refreshData.session) {
+            console.log("Refresh failed, kicking user to login.");
+            await supabase.auth.signOut();
+            return { success: false, error: 'Session expired permanently' };
+        }
+
+        const newHeaders = {
+            ...headers,
+            'Authorization': `Bearer ${refreshData.session.access_token}`
+        };
+
+        response = await fetch(`${BASE_URL}${endpoint}`, {
+            ...options,
+            headers: newHeaders,
+        });
+    }
+
     return response.json();
 }
 
