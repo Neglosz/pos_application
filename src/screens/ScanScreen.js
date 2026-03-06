@@ -69,6 +69,19 @@ export default function ScanScreen({ navigation, route }) {
         }
     }, [connectedScale, scaleWeight]);
 
+    useEffect(() => {
+        if (route?.params?.tab) {
+            setActiveTab(route.params.tab);
+        }
+        if (route?.params?.autoShowRestock && route?.params?.barcode) {
+            setRestockBarcode(route.params.barcode);
+            setShowRestockModal(true);
+            
+            // clear params to prevent infinite loop on re-render if needed
+            navigation.setParams({ autoShowRestock: false, barcode: null, tab: null });
+        }
+    }, [route?.params]);
+
     // Enable real-time sync for products across devices
     useRealtimeSync();
 

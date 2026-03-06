@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, StatusBar, Animated, TouchableWithoutFeedback, Vibration } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Audio } from 'expo-av';
@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AddStockModal from '../components/AddStockModal';
 import { useProductStore } from '../stores/useProductStore';
 
-export default function StockScanScreen({ navigation }) {
+export default function StockScanScreen({ navigation, route }) {
     const [permission, requestPermission] = useCameraPermissions();
     const [scanned, setScanned] = useState(false);
     const scannedRef = useRef(false);
@@ -16,6 +16,15 @@ export default function StockScanScreen({ navigation }) {
     const [torchOn, setTorchOn] = useState(false);
     const [focusMode, setFocusMode] = useState('on');
     const soundRef = useRef(null);
+
+    useEffect(() => {
+        if (route?.params?.autoShowModal && route?.params?.barcode) {
+            setScanned(true);
+            scannedRef.current = true;
+            setScannedCode(route.params.barcode);
+            setModalVisible(true);
+        }
+    }, [route?.params]);
 
     // Focus Animation
     const focusAnim = useRef(new Animated.Value(0)).current;
