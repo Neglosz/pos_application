@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Modal, Animated, Dimensions, KeyboardAvoidingView, Platform, FlatList, Keyboard, TouchableWithoutFeedback, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Modal, Animated, Dimensions, KeyboardAvoidingView, Platform, FlatList, Keyboard, TouchableWithoutFeedback, Image, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { AntDesign, Ionicons, Feather } from '@expo/vector-icons';
-import { PaymentMethodModal, QRPaymentModal, ReceiptModal } from '../components/payment';
-import { getCustomersWithDebt, createCreditPayment, getCustomerPendingBills } from '../services/api';
+import { PaymentMethodModal, QRPaymentModal, ReceiptModal, CashPaymentModal } from '../components/payment';
+import { getCustomersWithDebt, createCreditPayment, getCustomerPendingBills, getOrderDetails, cancelOrder } from '../services/api';
 import { useFocusEffect } from '@react-navigation/native';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -21,14 +21,20 @@ export default function DebtScreen() {
     const [modalVisible, setModalVisible] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [selectedDebtor, setSelectedDebtor] = useState(null);
-    const [paymentAmount, setPaymentAmount] = useState('0.00');
+    const [paymentAmount, setPaymentAmount] = useState('');
     const [searchText, setSearchText] = useState('');
 
     // Data from API
     const [debtors, setDebtors] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState(null);
     const [pendingBills, setPendingBills] = useState([]);
+    const [billsLoading, setBillsLoading] = useState(false);
+    const [billReceiptVisible, setBillReceiptVisible] = useState(false);
+    const [selectedBillTransaction, setSelectedBillTransaction] = useState(null);
+    const [billReceiptLoading, setBillReceiptLoading] = useState(false);
+    const [selectedBillOrderId, setSelectedBillOrderId] = useState(null);
     const [filterType, setFilterType] = useState('all');
 
     const filterOptions = [
@@ -57,8 +63,14 @@ export default function DebtScreen() {
             setError('ไม่สามารถเชื่อมต่อ Server ได้');
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
     };
+
+    const onRefresh = useCallback(() => {
+        setRefreshing(true);
+        fetchDebtData();
+    }, []);
 
     // Format date for display
     const formatDate = (dateString, format = 'short') => {
@@ -94,25 +106,27 @@ export default function DebtScreen() {
     const getFilteredDebtors = () => {
         let result = debtors;
         if (searchText.trim()) {
-            result = result.filter(d => d.name?.toLowerCase().includes(searchText.toLowerCase()));
+            const q = searchText.toLowerCase();
+            result = result.filter(d =>
+                d.name?.toLowerCase().includes(q) ||
+                d.phone?.includes(searchText.trim())
+            );
         }
 
         if (filterType === 'all') return result;
 
         return result.filter(debtor => {
-            return result.filter(debtor => {
-                if (!debtor.due_date) return false;
-                const dueDate = new Date(debtor.due_date);
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                dueDate.setHours(0, 0, 0, 0);
+            if (!debtor.due_date) return false;
+            const dueDate = new Date(debtor.due_date);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            dueDate.setHours(0, 0, 0, 0);
 
-                const diffDays = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+            const diffDays = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
 
-                if (filterType === 'nearDue') return diffDays >= 0 && diffDays <= 3;
-                if (filterType === 'overDue') return diffDays < 0;
-                return false;
-            });
+            if (filterType === 'nearDue') return diffDays >= 0 && diffDays <= 3;
+            if (filterType === 'overDue') return diffDays < 0;
+            return false;
         });
     };
 
@@ -120,9 +134,11 @@ export default function DebtScreen() {
 
     // Payment flow states
     const [paymentMethodVisible, setPaymentMethodVisible] = useState(false);
+    const [cashModalVisible, setCashModalVisible] = useState(false);
     const [qrPaymentVisible, setQRPaymentVisible] = useState(false);
     const [receiptVisible, setReceiptVisible] = useState(false);
     const [currentTransaction, setCurrentTransaction] = useState(null);
+    const [paymentLoading, setPaymentLoading] = useState(false);
 
     // Animation values
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -135,10 +151,11 @@ export default function DebtScreen() {
     // Open modal with animation
     const openModal = async (debtor) => {
         setSelectedDebtor(debtor);
-        setPaymentAmount('0.00');
+        setPaymentAmount('');
         setPendingBills([]);
         setShowModal(true);
         setModalVisible(true);
+        setBillsLoading(true);
 
         try {
             const response = await getCustomerPendingBills(debtor.id);
@@ -147,6 +164,8 @@ export default function DebtScreen() {
             }
         } catch (error) {
             console.error('Error fetching bills:', error);
+        } finally {
+            setBillsLoading(false);
         }
 
         // Run animations in parallel
@@ -168,7 +187,7 @@ export default function DebtScreen() {
             setShowModal(false);
             if (!callback) {
                 setSelectedDebtor(null);
-                setPaymentAmount('0.00');
+                setPaymentAmount('');
             }
             if (callback) callback();
         });
@@ -178,6 +197,37 @@ export default function DebtScreen() {
         openModal(debtor);
     };
 
+    const handleBillPress = async (bill) => {
+        const orderId = bill.order_id;
+        if (!orderId) return;
+        setBillReceiptLoading(true);
+        try {
+            const res = await getOrderDetails(orderId);
+            if (res.success) {
+                setSelectedBillTransaction(res.data);
+                setSelectedBillOrderId(orderId);
+                setBillReceiptVisible(true);
+            } else {
+                Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลบิลได้');
+            }
+        } catch (err) {
+            Alert.alert('ข้อผิดพลาด', 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
+        } finally {
+            setBillReceiptLoading(false);
+        }
+    };
+
+    const handleCancelBillOrder = async () => {
+        try {
+            await cancelOrder(selectedBillOrderId);
+            setBillReceiptVisible(false);
+            setSelectedBillTransaction(null);
+            fetchDebtData();
+        } catch (error) {
+            Alert.alert('ข้อผิดพลาด', 'ไม่สามารถยกเลิกบิลได้ กรุณาลองใหม่');
+        }
+    };
+
     const handlePayFull = () => {
         if (selectedDebtor) {
             setPaymentAmount((selectedDebtor.total_debt || 0).toFixed(2));
@@ -185,6 +235,16 @@ export default function DebtScreen() {
     };
 
     const handleConfirm = () => {
+        const payment = parseFloat(paymentAmount) || 0;
+        if (payment <= 0) {
+            Alert.alert('ข้อผิดพลาด', 'กรุณากรอกจำนวนเงินที่ต้องการชำระ');
+            return;
+        }
+        const totalPending = pendingBills.reduce((sum, bill) => sum + (parseFloat(bill.remaining_amount) || 0), 0);
+        if (totalPending > 0 && payment > totalPending) {
+            Alert.alert('ข้อผิดพลาด', `ยอดชำระเกินยอดค้าง (฿${totalPending.toFixed(2)})`);
+            return;
+        }
         // Close debt modal and open payment method modal
         closeModal(() => {
             setPaymentMethodVisible(true);
@@ -196,40 +256,43 @@ export default function DebtScreen() {
     };
 
     // Payment flow handlers
-    const handleSelectCash = async () => {
+    const handleSelectCash = () => {
         setPaymentMethodVisible(false);
-        const payment = parseFloat(paymentAmount) || 0;
+        setCashModalVisible(true);
+    };
 
-        // Call API to record payment
+    const handleCashConfirm = async (received) => {
+        setCashModalVisible(false);
+        const payment = parseFloat(paymentAmount) || 0;
+        setPaymentLoading(true);
         try {
             await createCreditPayment({
                 customer_id: selectedDebtor.id,
                 amount: payment,
                 payment_method: 'cash'
             });
-            // Refresh data after payment
             fetchDebtData();
-            // Close modal after successful payment
             setModalVisible(false);
+            setCurrentTransaction({
+                receiptNo: `TXHM${Date.now().toString().slice(-6)}`,
+                date: new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                paymentMethod: 'เงินสด',
+                items: [{
+                    name: `ชำระหนี้ - ${selectedDebtor?.name || 'ลูกค้า'}`,
+                    quantity: 1,
+                    price: payment
+                }],
+                total: payment,
+                received: received,
+                change: received - payment,
+            });
+            setReceiptVisible(true);
         } catch (err) {
             console.error('Payment error:', err);
+            Alert.alert('ข้อผิดพลาด', 'ไม่สามารถบันทึกการชำระได้ กรุณาลองใหม่');
+        } finally {
+            setPaymentLoading(false);
         }
-
-        // Create transaction data for receipt
-        setCurrentTransaction({
-            receiptNo: `TXHM${Date.now().toString().slice(-6)}`,
-            date: new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-            paymentMethod: 'เงินสด',
-            items: [{
-                name: `ชำระหนี้ - ${selectedDebtor?.name || 'ลูกค้า'}`,
-                quantity: 1,
-                price: payment
-            }],
-            total: payment,
-            received: payment,
-            change: 0,
-        });
-        setReceiptVisible(true);
     };
 
     const handleSelectQR = () => {
@@ -238,9 +301,8 @@ export default function DebtScreen() {
     };
 
     const handleQRConfirm = async () => {
-        setQRPaymentVisible(false);
         const payment = parseFloat(paymentAmount) || 0;
-
+        setPaymentLoading(true);
         try {
             await createCreditPayment({
                 customer_id: selectedDebtor.id,
@@ -248,25 +310,28 @@ export default function DebtScreen() {
                 payment_method: 'qr'
             });
             fetchDebtData();
+            setQRPaymentVisible(false);
             setModalVisible(false);
+            setCurrentTransaction({
+                receiptNo: `TXHM${Date.now().toString().slice(-6)}`,
+                date: new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                paymentMethod: 'Thai QR PromptPay',
+                items: [{
+                    name: `ชำระหนี้ - ${selectedDebtor?.name || 'ลูกค้า'}`,
+                    quantity: 1,
+                    price: payment
+                }],
+                total: payment,
+                received: payment,
+                change: 0,
+            });
+            setReceiptVisible(true);
         } catch (err) {
             console.error('Payment error:', err);
+            Alert.alert('ข้อผิดพลาด', 'ไม่สามารถบันทึกการชำระได้ กรุณาลองใหม่');
+        } finally {
+            setPaymentLoading(false);
         }
-
-        setCurrentTransaction({
-            receiptNo: `TXHM${Date.now().toString().slice(-6)}`,
-            date: new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-            paymentMethod: 'Thai QR PromptPay',
-            items: [{
-                name: `ชำระหนี้ - ${selectedDebtor?.name || 'ลูกค้า'}`,
-                quantity: 1,
-                price: payment
-            }],
-            total: payment,
-            received: payment,
-            change: 0,
-        });
-        setReceiptVisible(true);
     };
 
     const handlePrint = () => console.log('Printing receipt...');
@@ -275,7 +340,7 @@ export default function DebtScreen() {
         setReceiptVisible(false);
         setCurrentTransaction(null);
         setSelectedDebtor(null);
-        setPaymentAmount('0.00');
+        setPaymentAmount('');
     };
 
     const getRemainingBalance = () => {
@@ -314,7 +379,11 @@ export default function DebtScreen() {
                     <Text style={{ marginTop: 10, color: '#888' }}>กำลังโหลดข้อมูล...</Text>
                 </View>
             ) : (
-                <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                <ScrollView
+                    style={styles.content}
+                    showsVerticalScrollIndicator={false}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#F37021']} tintColor="#F37021" />}
+                >
                     {/* Unified Dashboard Card */}
                     <View style={styles.dashboardCard}>
                         <View style={styles.dashboardTop}>
@@ -416,10 +485,10 @@ export default function DebtScreen() {
                                             <Text style={styles.debtAmount}>฿{parseFloat(debtor.total_debt).toLocaleString()}</Text>
                                         </View>
                                         {latestDue && (
-                                            <View style={styles.dueContainer}>
-                                                <Feather name="clock" size={14} color="#F57F17" style={{ marginRight: 4 }} />
+                                            <View style={[styles.dueContainer, status.label === 'เกินกำหนด' && styles.dueContainerOverdue]}>
+                                                <Feather name="clock" size={14} color={status.label === 'เกินกำหนด' ? '#D32F2F' : '#F57F17'} style={{ marginRight: 4 }} />
                                                 <View style={styles.dueTextContainer}>
-                                                    <Text style={styles.dueLabel}>ครบกำหนด</Text>
+                                                    <Text style={[styles.dueLabel, status.label === 'เกินกำหนด' && { color: '#D32F2F' }]}>ครบกำหนด</Text>
                                                     <Text style={styles.dueValue}>{formatDate(latestDue, 'full')}</Text>
                                                 </View>
                                             </View>
@@ -478,14 +547,31 @@ export default function DebtScreen() {
                                                 <Text style={styles.billsTotalAmount}>รวม ฿{pendingBills.reduce((sum, bill) => sum + (parseFloat(bill.remaining_amount) || 0), 0).toFixed(2)}</Text>
                                             </View>
                                         </View>
-                                        <ScrollView style={styles.billsList} nestedScrollEnabled={true}>
-                                            {pendingBills.map((bill) => (
-                                                <View key={bill.id} style={styles.billItem}>
-                                                    <Text style={{ fontSize: 16 }}>บิล #{bill.order_id ? bill.order_id.slice(0, 8) : bill.id}</Text>
-                                                    <Text style={{ fontSize: 16 }}>฿{parseFloat(bill.total_debt).toFixed(2)}</Text>
-                                                </View>
-                                            ))}
-                                        </ScrollView>
+                                        {billsLoading ? (
+                                            <View style={styles.billsLoadingContainer}>
+                                                <ActivityIndicator size="small" color="#F37021" />
+                                                <Text style={styles.billsLoadingText}>กำลังโหลดรายการ...</Text>
+                                            </View>
+                                        ) : (
+                                            <ScrollView style={styles.billsList} nestedScrollEnabled={true}>
+                                                {pendingBills.map((bill) => (
+                                                    <TouchableOpacity
+                                                        key={bill.id}
+                                                        style={styles.billItem}
+                                                        onPress={() => handleBillPress(bill)}
+                                                        activeOpacity={0.7}
+                                                    >
+                                                        <View style={styles.billItemRow}>
+                                                            <Text style={styles.billItemTitle}>บิล #{bill.order_id ? bill.order_id.slice(0, 8) : bill.id}</Text>
+                                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                                <Text style={styles.billItemAmount}>฿{parseFloat(bill.total_debt).toFixed(2)}</Text>
+                                                                <Feather name="chevron-right" size={16} color="#888" />
+                                                            </View>
+                                                        </View>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </ScrollView>
+                                        )}
                                     </View>
                                     <View style={styles.paymentSection}>
                                         <Text style={styles.paymentLabel}>จำนวนที่ชำระ(บาท)</Text>
@@ -513,8 +599,42 @@ export default function DebtScreen() {
             </Modal>
 
             <PaymentMethodModal visible={paymentMethodVisible} amount={parseFloat(paymentAmount) || 0} onSelectCash={handleSelectCash} onSelectQR={handleSelectQR} onClose={() => setPaymentMethodVisible(false)} hideDebtOption={true} />
-            <QRPaymentModal visible={qrPaymentVisible} amount={parseFloat(paymentAmount) || 0} onConfirm={handleQRConfirm} onClose={() => setQRPaymentVisible(false)} />
+            <QRPaymentModal visible={qrPaymentVisible} amount={parseFloat(paymentAmount) || 0} onConfirm={handleQRConfirm} onClose={() => setQRPaymentVisible(false)} isSubmitting={paymentLoading} />
             <ReceiptModal visible={receiptVisible} transaction={currentTransaction} onPrint={handlePrint} onNewTransaction={handleNewTransaction} onClose={() => setReceiptVisible(false)} />
+
+            {/* Bill detail receipt */}
+            <ReceiptModal
+                visible={billReceiptVisible}
+                transaction={selectedBillTransaction}
+                onPrint={() => console.log('Print bill')}
+                onNewTransaction={() => { setBillReceiptVisible(false); setSelectedBillTransaction(null); }}
+                onClose={() => { setBillReceiptVisible(false); setSelectedBillTransaction(null); }}
+                onCancelOrder={handleCancelBillOrder}
+            />
+
+            <CashPaymentModal
+                visible={cashModalVisible}
+                amount={parseFloat(paymentAmount) || 0}
+                onConfirm={handleCashConfirm}
+                onClose={() => setCashModalVisible(false)}
+                isSubmitting={paymentLoading}
+            />
+
+            {/* Loading overlay while fetching bill details */}
+            <Modal visible={billReceiptLoading} transparent={true} animationType="fade">
+                <View style={styles.loadingOverlay}>
+                    <ActivityIndicator size="large" color="#fff" />
+                    <Text style={styles.loadingText}>กำลังโหลดบิล...</Text>
+                </View>
+            </Modal>
+
+            {/* Loading overlay during payment API call */}
+            <Modal visible={paymentLoading} transparent={true} animationType="fade">
+                <View style={styles.loadingOverlay}>
+                    <ActivityIndicator size="large" color="#fff" />
+                    <Text style={styles.loadingText}>กำลังบันทึกการชำระ...</Text>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -669,11 +789,9 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     debtorCard: {
-        backgroundColor: '#FFF8F0',
+        backgroundColor: '#fff',
         borderRadius: 20,
         padding: 16,
-        borderWidth: 1,
-        borderColor: '#FFF3E0',
         marginBottom: 12,
     },
     cardHeader: {
@@ -786,4 +904,18 @@ const styles = StyleSheet.create({
     fullAmountText: { color: '#fff', fontSize: 18 },
     confirmButton: { backgroundColor: '#F37021', height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: 10 },
     confirmButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+    filterCountTextActive: { color: '#F37021', fontSize: 14, fontWeight: 'bold' },
+    billsTotalContainer: { alignItems: 'flex-end' },
+    billsLoadingContainer: { paddingVertical: 16, alignItems: 'center' },
+    billsLoadingText: { marginTop: 6, fontSize: 14, color: '#888' },
+    billItemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    billItemTitle: { fontSize: 16 },
+    billItemAmount: { fontSize: 16 },
+    billExpandedContent: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#eee' },
+    billDetailRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 },
+    billDetailLabel: { fontSize: 14, color: '#888' },
+    billDetailValue: { fontSize: 14, color: '#333', flex: 1, textAlign: 'right', marginLeft: 8 },
+    dueContainerOverdue: { backgroundColor: '#FFEBEE' },
+    loadingOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center' },
+    loadingText: { color: '#fff', marginTop: 12, fontSize: 16 },
 });

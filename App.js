@@ -9,7 +9,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Alert, Linking, AppState } from 'react-native';
 import { enableScreens } from 'react-native-screens';
 import { StoreProvider } from './src/contexts/StoreContext';
-import { setCurrentStoreId, setCurrentUserId } from './src/services/api';
+import { setCurrentStoreId, setCurrentUserId, safeRefreshSession } from './src/services/api';
 import { supabase } from './src/services/supabase';
 import { initNetworkMonitoring } from './src/services/network';
 
@@ -215,10 +215,17 @@ export default function App() {
             }
           }
 
-          // ถ้ายังไม่เกิน หรือพึ่งเข้าครั้งแรก -> แอบต่ออายุ Session แล้วรีเซ็ตเวลาใหม่!
-          await supabase.auth.refreshSession();
+          // ถ้ายังไม่เกิน -> ต่ออายุ Session (หมุน refresh token อีก 7 วัน)
+          const { error: refreshError } = await safeRefreshSession();
+          if (refreshError) {
+            // refresh token หมดอายุจริงๆ (ไม่ได้เปิดแอปนาน > 7 วัน) -> บังคับ logout
+            console.log("Refresh token expired, signing out...");
+            await supabase.auth.signOut();
+            await AsyncStorage.multiRemove(['authData', 'currentStoreId', 'lastActiveTime']);
+            setIsLoggedIn(false);
+            return;
+          }
           await AsyncStorage.setItem('lastActiveTime', now.toString());
-          // <-- ส่วนที่แก้ไขใหม่ จบ -->
         } catch (error) {
           console.error("Error checking activity:", error);
         }
@@ -234,22 +241,49 @@ export default function App() {
 
     const checkAuth = async () => {
       try {
-        const storedAuth = await AsyncStorage.getItem('authData');
-        if (storedAuth) {
-          const data = JSON.parse(storedAuth);
-          setAuthData(data);
-          setCurrentUserId(data.user.id);
+        // 1. เช็ค 30 วัน inactivity ก่อนเลย (เหมือน AppState แต่รันตอน cold start)
+        const lastActiveStr = await AsyncStorage.getItem('lastActiveTime');
+        const now = Date.now();
+        const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+        if (lastActiveStr && now - parseInt(lastActiveStr, 10) > ONE_MONTH_MS) {
+          console.log('Cold start: inactive > 30 days, signing out...');
+          await supabase.auth.signOut();
+          await AsyncStorage.multiRemove(['authData', 'currentStoreId', 'lastActiveTime']);
+          return;
+        }
 
-          if (data.profile.role === 'owner') {
-            setCurrentScreen('BranchList');
-          } else {
-            if (data.stores.length > 0) {
-              const savedStoreId = await AsyncStorage.getItem('currentStoreId');
-              const targetStore = data.stores.find(s => s.id === savedStoreId) || data.stores[0];
-              setSelectedBranch(targetStore);
-              setCurrentStoreId(targetStore.id);
-              setIsLoggedIn(true);
-            }
+        const storedAuth = await AsyncStorage.getItem('authData');
+        if (!storedAuth) return;
+
+        // 2. ตรวจสอบว่า Supabase session ยังใช้งานได้จริงๆ
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          // ลอง refresh ก่อน
+          const { error: refreshError } = await safeRefreshSession();
+          if (refreshError) {
+            console.log('Cold start: session expired, clearing auth...');
+            await AsyncStorage.multiRemove(['authData', 'currentStoreId', 'lastActiveTime']);
+            return;
+          }
+        }
+
+        // 3. Restore UI state
+        const data = JSON.parse(storedAuth);
+        setAuthData(data);
+        setCurrentUserId(data.user.id);
+
+        // อัปเดตเวลา active ล่าสุด
+        await AsyncStorage.setItem('lastActiveTime', now.toString());
+
+        if (data.profile.role === 'owner') {
+          setCurrentScreen('BranchList');
+        } else {
+          if (data.stores.length > 0) {
+            const savedStoreId = await AsyncStorage.getItem('currentStoreId');
+            const targetStore = data.stores.find(s => s.id === savedStoreId) || data.stores[0];
+            setSelectedBranch(targetStore);
+            setCurrentStoreId(targetStore.id);
+            setIsLoggedIn(true);
           }
         }
       } catch (e) {
@@ -301,8 +335,7 @@ export default function App() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    await AsyncStorage.removeItem('authData');
-    await AsyncStorage.removeItem('currentStoreId');
+    await AsyncStorage.multiRemove(['authData', 'currentStoreId', 'lastActiveTime']);
     setIsLoggedIn(false);
     setCurrentScreen('SignIn');
     setAuthData(null);

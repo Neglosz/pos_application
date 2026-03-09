@@ -4,7 +4,20 @@ import { supabase } from './supabase';
 let currentStoreId = null;
 let currentUserId = null;
 
+// Singleton refresh: ถ้า refresh กำลังทำงานอยู่ → call อื่นรอแทนที่จะเรียกซ้ำ
+// (ป้องกัน race condition ตอนหลาย API call ยิงพร้อมกัน)
+let _refreshPromise = null;
+export const safeRefreshSession = () => {
+    if (_refreshPromise) return _refreshPromise;
+    _refreshPromise = supabase.auth.refreshSession()
+        .finally(() => { _refreshPromise = null; });
+    return _refreshPromise;
+};
+
 export const apiRequest = async (endpoint, options = {}) => {
+    // ถ้า refresh กำลังทำอยู่ รอให้เสร็จก่อนค่อยดึง token
+    if (_refreshPromise) await _refreshPromise;
+
     let token = null;
     try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -28,9 +41,9 @@ export const apiRequest = async (endpoint, options = {}) => {
 
     if (response.status === 401 || response.status === 403) {
         console.log("Token expired from Backend Request. Trying silent refresh...");
-        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        const { data: refreshData, error: refreshError } = await safeRefreshSession();
 
-        if (refreshError || !refreshData.session) {
+        if (refreshError || !refreshData?.session) {
             console.log("Refresh failed, kicking user to login.");
             await supabase.auth.signOut();
             return { success: false, error: 'Session expired permanently' };
@@ -479,5 +492,11 @@ export const getScheduledReminders = async () => {
 export const deleteTransaction = async (id) => {
     return apiRequest(`/transactions/${id}`, {
         method: 'DELETE',
+    });
+};
+
+export const cancelOrder = async (orderId) => {
+    return apiRequest(`/orders/${orderId}/cancel`, {
+        method: 'PATCH',
     });
 };

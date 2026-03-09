@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -7,9 +7,12 @@ import {
     ScrollView,
     Linking,
     ActivityIndicator,
+    Alert,
+    Platform,
+    StatusBar,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { getNotifications, deleteNotification, markNotificationAsRead, markNotificationsAsRead, runDailyCheck } from '../services/api';
+import { deleteNotification, markNotificationAsRead, markNotificationsAsRead, runDailyCheck } from '../services/api';
 import { supabase } from '../services/supabase';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useNotificationStore } from '../stores/useNotificationStore';
@@ -25,14 +28,16 @@ const tabs = [
 
 export default function AlertScreen({ navigation }) {
     const [activeTab, setActiveTab] = useState('all');
-    const { notifications, setNotifications, isLoading: loading, fetchNotifications } = useNotificationStore();
+    const { notifications, setNotifications, isLoading: loading, fetchNotifications, setUnreadCount } = useNotificationStore();
     const [checking, setChecking] = useState(false);
+    const [offlineError, setOfflineError] = useState(false);
     const { currentStore } = useStore();
+    const statusBarHeight = Platform.OS === 'ios' ? 44 : StatusBar.currentHeight || 24;
 
-    // Function to run daily check and refresh notifications
     const handleCheckNotifications = async () => {
         try {
             setChecking(true);
+            setOfflineError(false);
             await runDailyCheck();
             await fetchNotifications();
         } catch (error) {
@@ -42,7 +47,6 @@ export default function AlertScreen({ navigation }) {
         }
     };
 
-    // Refetch when screen is focused
     useFocusEffect(
         useCallback(() => {
             fetchNotifications();
@@ -50,19 +54,17 @@ export default function AlertScreen({ navigation }) {
     );
 
     useEffect(() => {
-        // Subscribe to realtime updates
         const channel = supabase
             .channel('alert-screen-notifications')
             .on('postgres_changes', {
-                event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+                event: '*',
                 schema: 'public',
                 table: 'notifications'
             }, (payload) => {
-                // Check if the change belongs to the current store
                 const newStoreId = payload.new?.store_id;
                 const oldStoreId = payload.old?.store_id;
-                
-                if ((newStoreId && newStoreId === currentStore?.id) || 
+
+                if ((newStoreId && newStoreId === currentStore?.id) ||
                     (oldStoreId && oldStoreId === currentStore?.id)) {
                     fetchNotifications();
                 }
@@ -85,39 +87,63 @@ export default function AlertScreen({ navigation }) {
     };
 
     const handleRetry = () => {
-        console.log('Retrying...');
+        setOfflineError(false);
         fetchNotifications();
+    };
+
+    // Sync unread count from local notifications state
+    const syncUnreadCount = (updatedNotifications) => {
+        const count = updatedNotifications.filter(n => !n.is_read).length;
+        setUnreadCount(count);
     };
 
     const markAsRead = async (type) => {
         const ids = type === 'today'
-            ? todayNotifications.map(n => n.id)
-            : earlierNotifications.map(n => n.id);
+            ? todayNotifications.filter(n => !n.is_read).map(n => n.id)
+            : earlierNotifications.filter(n => !n.is_read).map(n => n.id);
+
+        if (ids.length === 0) return;
 
         try {
             const response = await markNotificationsAsRead(ids);
             if (response.success) {
-                setNotifications(notifications.map(n => ids.includes(n.id) ? { ...n, is_read: true } : n));
+                const updated = notifications.map(n => ids.includes(n.id) ? { ...n, is_read: true } : n);
+                setNotifications(updated);
+                syncUnreadCount(updated);
+                setOfflineError(false);
             }
         } catch (error) {
             console.error('Mark read error:', error);
+            setOfflineError(true);
+            Alert.alert(
+                'ไม่สามารถเชื่อมต่อได้',
+                'กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต แล้วลองใหม่อีกครั้ง',
+                [
+                    { text: 'ตกลง' },
+                    { text: 'ลองใหม่', onPress: () => markAsRead(type) },
+                ]
+            );
         }
     };
 
     const handleNotificationPress = async (id) => {
         try {
             await markNotificationAsRead(id);
-            setNotifications(notifications.map(n => n.id === id ? { ...n, is_read: true } : n));
+            const updated = notifications.map(n => n.id === id ? { ...n, is_read: true } : n);
+            setNotifications(updated);
+            syncUnreadCount(updated);
         } catch (error) {
             console.error('Mark read error:', error);
         }
-    }
+    };
 
     const handleDelete = async (id) => {
         try {
             const response = await deleteNotification(id);
             if (response.success) {
-                setNotifications(notifications.filter(n => n.id !== id));
+                const updated = notifications.filter(n => n.id !== id);
+                setNotifications(updated);
+                syncUnreadCount(updated);
             }
         } catch (error) {
             console.error('Delete error:', error);
@@ -129,15 +155,14 @@ export default function AlertScreen({ navigation }) {
             style={styles.deleteAction}
             onPress={() => handleDelete(id)}
         >
+            <Ionicons name="trash-outline" size={20} color="#fff" />
             <Text style={styles.deleteText}>ลบ</Text>
         </TouchableOpacity>
     );
 
-    // Filter by category
     const filterNotifications = (notifs) => {
         if (activeTab === 'all') return notifs;
 
-        // Map tab IDs to categories (support both Thai and English)
         const categoryMap = {
             'payment': ['payment', 'การเงิน'],
             'stock': ['stock', 'สต็อก', 'สินค้า'],
@@ -148,7 +173,6 @@ export default function AlertScreen({ navigation }) {
         return notifs.filter(n => validCategories.includes(n.category));
     };
 
-    // Check if date is today
     const isToday = (dateString) => {
         if (!dateString) return false;
         const date = new Date(dateString);
@@ -156,7 +180,6 @@ export default function AlertScreen({ navigation }) {
         return date.toDateString() === today.toDateString();
     };
 
-    // Format time for display
     const formatTime = (dateString) => {
         if (!dateString) return '';
         const date = new Date(dateString);
@@ -166,29 +189,27 @@ export default function AlertScreen({ navigation }) {
         const diffHours = Math.floor(diffMs / 3600000);
         const diffDays = Math.floor(diffMs / 86400000);
 
+        if (diffMins < 1) return 'เมื่อกี้';
         if (diffMins < 60) return `${diffMins} นาทีที่แล้ว`;
         if (diffHours < 24) return `${diffHours} ชม. ที่แล้ว`;
         if (diffDays === 1) return 'เมื่อวาน';
         return `${diffDays} วันที่แล้ว`;
     };
 
-    // Get icon and color by category and type
     const getIconByCategory = (category, type) => {
-        // Stock notification types with specific colors
         if (type === 'stock_expired') {
-            return { icon: 'package-variant-closed', color: '#E53935' }; // Red for expired
+            return { icon: 'package-variant-closed', color: '#E53935' };
         }
         if (type === 'stock_near_expiry') {
-            return { icon: 'clock-alert', color: '#FF9800' }; // Orange for near expiry
+            return { icon: 'clock-alert', color: '#FF9800' };
         }
         if (type === 'stock_out') {
-            return { icon: 'package-variant-remove', color: '#E53935' }; // Red for out of stock
+            return { icon: 'package-variant-remove', color: '#E53935' };
         }
         if (type === 'stock_low') {
-            return { icon: 'package-down', color: '#FFC107' }; // Yellow for low stock
+            return { icon: 'package-down', color: '#FFC107' };
         }
 
-        // Default category-based icons
         switch (category) {
             case 'payment':
             case 'การเงิน':
@@ -209,6 +230,7 @@ export default function AlertScreen({ navigation }) {
         const { icon, color } = getIconByCategory(notification.category, notification.type);
         let phone = null;
         const isRead = notification.is_read;
+
         if (notification.payload) {
             const payload = typeof notification.payload === 'string'
                 ? JSON.parse(notification.payload)
@@ -222,37 +244,70 @@ export default function AlertScreen({ navigation }) {
                 renderRightActions={() => renderRightActions(notification.id)}
             >
                 <TouchableOpacity
-                    style={[styles.notificationCard, isRead && styles.notificationCardRead]}
+                    style={[
+                        styles.notificationCard,
+                        isRead ? styles.notificationCardRead : styles.notificationCardUnread,
+                    ]}
                     onPress={() => handleNotificationPress(notification.id)}
-                    activeOpacity={0.8}
+                    activeOpacity={0.75}
                 >
+                    {/* Unread accent bar */}
+                    {!isRead && <View style={[styles.unreadAccent, { backgroundColor: color }]} />}
+
                     {/* Icon */}
-                    <View style={[styles.iconContainer, { backgroundColor: color }]}>
-                        <MaterialCommunityIcons name={icon} size={24} color="#fff" />
+                    <View style={[
+                        styles.iconContainer,
+                        { backgroundColor: color, opacity: isRead ? 0.55 : 1 }
+                    ]}>
+                        <MaterialCommunityIcons name={icon} size={28} color="#fff" />
                     </View>
 
                     {/* Content */}
                     <View style={styles.contentContainer}>
-                        <Text style={styles.notificationTitle}>{notification.title || 'แจ้งเตือน'}</Text>
-                        <Text style={styles.notificationDescription}>{notification.message}</Text>
+                        <View style={styles.titleRow}>
+                            <Text
+                                style={[
+                                    styles.notificationTitle,
+                                    isRead && styles.notificationTitleRead,
+                                ]}
+                                numberOfLines={1}
+                            >
+                                {notification.title || 'แจ้งเตือน'}
+                            </Text>
+                            {/* Unread dot */}
+                            {!isRead && <View style={styles.unreadDot} />}
+                        </View>
+                        <Text
+                            style={[
+                                styles.notificationDescription,
+                                isRead && styles.notificationDescriptionRead,
+                            ]}
+                            numberOfLines={2}
+                        >
+                            {notification.message}
+                        </Text>
                     </View>
 
                     {/* Right side */}
                     <View style={styles.rightContainer}>
-                        <Text style={styles.timeText}>{formatTime(notification.created_at)}</Text>
-                        <Text style={styles.categoryText}>{notification.category}</Text>
+                        <Text style={styles.timeText}>
+                            {formatTime(notification.created_at)}
+                        </Text>
+                        <Text style={styles.categoryText}>
+                            {notification.category}
+                        </Text>
 
                         {phone && (
                             <TouchableOpacity
                                 style={styles.callButton}
                                 onPress={() => handleCall(phone)}
                             >
-                                <FontAwesome5 name="phone-alt" size={12} color="#fff" />
+                                <FontAwesome5 name="phone-alt" size={10} color="#fff" />
                                 <Text style={styles.callButtonText}>โทร</Text>
                             </TouchableOpacity>
                         )}
 
-                        {notification.category === 'ระบบ' && (
+                        {(notification.category === 'ระบบ' || notification.category === 'system') && (
                             <TouchableOpacity
                                 style={styles.retryButton}
                                 onPress={handleRetry}
@@ -270,9 +325,9 @@ export default function AlertScreen({ navigation }) {
     const todayNotifications = filteredNotifications.filter(n => isToday(n.created_at));
     const earlierNotifications = filteredNotifications.filter(n => !isToday(n.created_at));
 
-    // Calculate count for each tab
-    const getTabCount = (tabId) => {
-        if (tabId === 'all') return notifications.length;
+    // Badge shows unread count only (test case: badge ลดลงหลังอ่าน)
+    const getTabUnreadCount = (tabId) => {
+        if (tabId === 'all') return notifications.filter(n => !n.is_read).length;
 
         const categoryMap = {
             'payment': ['payment', 'การเงิน'],
@@ -281,13 +336,16 @@ export default function AlertScreen({ navigation }) {
         };
 
         const validCategories = categoryMap[tabId] || [tabId];
-        return notifications.filter(n => validCategories.includes(n.category)).length;
+        return notifications.filter(n => !n.is_read && validCategories.includes(n.category)).length;
     };
+
+    const hasTodayUnread = todayNotifications.some(n => !n.is_read);
+    const hasEarlierUnread = earlierNotifications.some(n => !n.is_read);
 
     return (
         <View style={styles.container}>
             {/* Header */}
-            <View style={styles.header}>
+            <View style={[styles.header, { paddingTop: statusBarHeight + 8 }]}>
                 <TouchableOpacity onPress={handleBack} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color="#000" />
                 </TouchableOpacity>
@@ -305,6 +363,17 @@ export default function AlertScreen({ navigation }) {
                 </TouchableOpacity>
             </View>
 
+            {/* Offline error banner */}
+            {offlineError && (
+                <View style={styles.offlineBanner}>
+                    <Ionicons name="wifi-outline" size={14} color="#fff" />
+                    <Text style={styles.offlineBannerText}>ไม่มีการเชื่อมต่อ กรุณาลองใหม่</Text>
+                    <TouchableOpacity onPress={handleRetry}>
+                        <Text style={styles.offlineBannerRetry}>ลองใหม่</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
             {/* Tab Bar */}
             <View style={styles.tabBarContainer}>
                 <ScrollView
@@ -313,19 +382,22 @@ export default function AlertScreen({ navigation }) {
                     contentContainerStyle={styles.tabBar}
                 >
                     {tabs.map((tab) => {
-                        const count = getTabCount(tab.id);
+                        const unreadCount = getTabUnreadCount(tab.id);
+                        const isActive = activeTab === tab.id;
                         return (
                             <TouchableOpacity
                                 key={tab.id}
-                                style={[styles.tab, activeTab === tab.id && styles.activeTab]}
+                                style={[styles.tab, isActive && styles.activeTab]}
                                 onPress={() => setActiveTab(tab.id)}
                             >
-                                {count > 0 && (
-                                    <View style={styles.countBadge}>
-                                        <Text style={styles.countText}>{count}</Text>
+                                {unreadCount > 0 && (
+                                    <View style={[styles.countBadge, isActive && styles.countBadgeActive]}>
+                                        <Text style={[styles.countText, isActive && styles.countTextActive]}>
+                                            {unreadCount > 99 ? '99+' : unreadCount}
+                                        </Text>
                                     </View>
                                 )}
-                                <Text style={[styles.tabText, activeTab === tab.id && styles.activeTabText]}>
+                                <Text style={[styles.tabText, isActive && styles.activeTabText]}>
                                     {tab.label}
                                 </Text>
                             </TouchableOpacity>
@@ -334,44 +406,57 @@ export default function AlertScreen({ navigation }) {
                 </ScrollView>
             </View>
 
+            {/* Loading */}
+            {loading && (
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color="#F37021" />
+                </View>
+            )}
+
             {/* Notifications List */}
-            <ScrollView style={styles.notificationsList} showsVerticalScrollIndicator={false}>
-                {/* Today */}
-                {todayNotifications.length > 0 && (
-                    <View style={styles.section}>
-                        <View style={styles.sectionHeader}>
-                            <Text style={styles.sectionTitle}>วันนี้</Text>
-                            <TouchableOpacity onPress={() => markAsRead('today')}>
-                                <Text style={styles.readAllText}>อ่านทั้งหมด</Text>
-                            </TouchableOpacity>
+            {!loading && (
+                <ScrollView style={styles.notificationsList} showsVerticalScrollIndicator={false}>
+                    {/* Today */}
+                    {todayNotifications.length > 0 && (
+                        <View style={styles.section}>
+                            <View style={styles.sectionHeader}>
+                                <Text style={styles.sectionTitle}>วันนี้</Text>
+                                {hasTodayUnread && (
+                                    <TouchableOpacity onPress={() => markAsRead('today')}>
+                                        <Text style={styles.readAllText}>อ่านทั้งหมด</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                            {todayNotifications.map(renderNotificationCard)}
                         </View>
-                        {todayNotifications.map(renderNotificationCard)}
-                    </View>
-                )}
+                    )}
 
-                {/* Earlier */}
-                {earlierNotifications.length > 0 && (
-                    <View style={styles.section}>
-                        <View style={styles.sectionHeader}>
-                            <Text style={styles.sectionTitle}>ก่อนหน้านี้</Text>
-                            <TouchableOpacity onPress={() => markAsRead('earlier')}>
-                                <Text style={styles.readAllText}>อ่านทั้งหมด</Text>
-                            </TouchableOpacity>
+                    {/* Earlier */}
+                    {earlierNotifications.length > 0 && (
+                        <View style={styles.section}>
+                            <View style={styles.sectionHeader}>
+                                <Text style={styles.sectionTitle}>ก่อนหน้านี้</Text>
+                                {hasEarlierUnread && (
+                                    <TouchableOpacity onPress={() => markAsRead('earlier')}>
+                                        <Text style={styles.readAllText}>อ่านทั้งหมด</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                            {earlierNotifications.map(renderNotificationCard)}
                         </View>
-                        {earlierNotifications.map(renderNotificationCard)}
-                    </View>
-                )}
+                    )}
 
-                {/* Empty state */}
-                {filteredNotifications.length === 0 && !loading && (
-                    <View style={styles.emptyState}>
-                        <Ionicons name="notifications-off-outline" size={48} color="#ccc" />
-                        <Text style={styles.emptyText}>ไม่มีการแจ้งเตือน</Text>
-                    </View>
-                )}
+                    {/* Empty state */}
+                    {filteredNotifications.length === 0 && (
+                        <View style={styles.emptyState}>
+                            <Ionicons name="notifications-off-outline" size={56} color="#ccc" />
+                            <Text style={styles.emptyText}>ไม่มีการแจ้งเตือน</Text>
+                        </View>
+                    )}
 
-                <View style={{ height: 100 }} />
-            </ScrollView>
+                    <View style={{ height: 100 }} />
+                </ScrollView>
+            )}
         </View>
     );
 }
@@ -379,60 +464,78 @@ export default function AlertScreen({ navigation }) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#fff',
+        backgroundColor: '#F8F9FA',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 16,
-        paddingVertical: 12,
-        paddingTop: 50,
+        paddingBottom: 12,
+        backgroundColor: '#fff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#F0F0F0',
     },
     backButton: {
-        padding: 8,
+        padding: 12,
     },
     headerTitle: {
-        fontSize: 20,
+        fontSize: 22,
         fontWeight: 'bold',
         color: '#000',
     },
-    bellContainer: {
-        padding: 8,
-    },
     refreshButton: {
-        padding: 8,
-        borderRadius: 20,
+        padding: 12,
+        borderRadius: 24,
         backgroundColor: '#FFF5F0',
     },
-    tabBarContainer: {
+    offlineBanner: {
         flexDirection: 'row',
         alignItems: 'center',
+        backgroundColor: '#E53935',
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        gap: 8,
+    },
+    offlineBannerText: {
+        flex: 1,
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    offlineBannerRetry: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: 'bold',
+        textDecorationLine: 'underline',
+    },
+    tabBarContainer: {
         backgroundColor: '#fff',
         paddingVertical: 10,
         paddingHorizontal: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F0F0F0',
     },
     tabBar: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        flex: 1,
     },
     tab: {
-        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 8,
-        borderRadius: 20,
+        paddingVertical: 11,
+        paddingHorizontal: 18,
+        borderRadius: 24,
         backgroundColor: '#F5F5F5',
-        gap: 4,
+        gap: 5,
     },
     activeTab: {
-        backgroundColor: '#000',
+        backgroundColor: '#F37021',
     },
     tabText: {
-        fontSize: 13,
+        fontSize: 16,
         color: '#666',
         fontWeight: '500',
     },
@@ -440,35 +543,42 @@ const styles = StyleSheet.create({
         color: '#fff',
     },
     countBadge: {
-        backgroundColor: '#fff',
-        borderRadius: 10,
-        minWidth: 20,
-        height: 20,
+        backgroundColor: '#F37021',
+        borderRadius: 12,
+        minWidth: 22,
+        height: 22,
         alignItems: 'center',
         justifyContent: 'center',
-        paddingHorizontal: 4,
-        marginRight: 6,
+        paddingHorizontal: 5,
+    },
+    countBadgeActive: {
+        backgroundColor: '#fff',
     },
     countText: {
-        color: '#000',
-        fontSize: 11,
+        color: '#fff',
+        fontSize: 12,
         fontWeight: 'bold',
         textAlign: 'center',
     },
-    readAllButton: {
-        paddingHorizontal: 10,
+    countTextActive: {
+        color: '#F37021',
+    },
+    loadingContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     readAllText: {
-        color: '#2196F3',
-        fontSize: 13,
-        fontWeight: '500',
+        color: '#F37021',
+        fontSize: 16,
+        fontWeight: '600',
     },
     notificationsList: {
         flex: 1,
         paddingHorizontal: 15,
     },
     section: {
-        marginTop: 15,
+        marginTop: 16,
     },
     sectionHeader: {
         flexDirection: 'row',
@@ -479,111 +589,162 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 14,
         color: '#999',
-        marginBottom: 10,
-        fontWeight: '500',
+        fontWeight: '600',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
-    notificationCard: {
+    // Unread card: white bg, shadow, left accent bar
+    notificationCardUnread: {
         flexDirection: 'row',
-        backgroundColor: '#f5f5f5',
-        borderRadius: 15,
-        padding: 15,
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        padding: 18,
         marginBottom: 10,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 2,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 6,
+        elevation: 3,
+        overflow: 'hidden',
     },
+    // Read card: muted bg, no shadow
     notificationCardRead: {
-        backgroundColor: '#fff',
+        flexDirection: 'row',
+        backgroundColor: '#F5F5F5',
+        borderRadius: 16,
+        padding: 18,
+        marginBottom: 10,
+        opacity: 0.75,
+    },
+    // Keep for compatibility
+    notificationCard: {
+        flexDirection: 'row',
+        borderRadius: 16,
+        padding: 18,
+        marginBottom: 10,
+    },
+    // Left color accent for unread
+    unreadAccent: {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: 4,
+        borderTopLeftRadius: 14,
+        borderBottomLeftRadius: 14,
     },
     deleteAction: {
         backgroundColor: '#E53935',
         justifyContent: 'center',
         alignItems: 'center',
-        width: 80,
-        height: '90%',
-        borderRadius: 15,
-        marginLeft: 10,
+        width: 72,
+        borderRadius: 14,
+        marginLeft: 8,
+        gap: 2,
     },
     deleteText: {
         color: '#fff',
         fontWeight: 'bold',
-        fontSize: 14,
+        fontSize: 12,
     },
     iconContainer: {
-        width: 45,
-        height: 45,
-        borderRadius: 22.5,
+        width: 52,
+        height: 52,
+        borderRadius: 26,
         justifyContent: 'center',
         alignItems: 'center',
+        flexShrink: 0,
     },
     contentContainer: {
         flex: 1,
         marginLeft: 12,
         justifyContent: 'center',
     },
+    titleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 3,
+    },
     notificationTitle: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: '#333',
-        marginBottom: 4,
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#1A1A1A',
+        flex: 1,
+    },
+    notificationTitleRead: {
+        fontWeight: '500',
+        color: '#666',
+    },
+    // Unread dot indicator next to title
+    unreadDot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: '#F37021',
+        flexShrink: 0,
     },
     notificationDescription: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: '#666',
-        lineHeight: 18,
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#444',
+        lineHeight: 21,
+    },
+    notificationDescriptionRead: {
+        color: '#999',
+        fontWeight: '400',
     },
     rightContainer: {
         alignItems: 'flex-end',
         justifyContent: 'space-between',
-        minWidth: 80,
+        minWidth: 76,
+        paddingLeft: 8,
     },
     timeText: {
-        fontSize: 11,
-        color: '#999',
+        fontSize: 13,
+        color: '#AAA',
     },
     categoryText: {
-        fontSize: 11,
-        color: '#999',
+        fontSize: 13,
+        color: '#BBB',
         marginTop: 2,
     },
     callButton: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#E53935',
-        paddingHorizontal: 15,
-        paddingVertical: 8,
-        borderRadius: 20,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderRadius: 22,
         gap: 6,
         marginTop: 8,
     },
     callButtonText: {
         color: '#fff',
-        fontSize: 13,
+        fontSize: 14,
         fontWeight: '600',
     },
     retryButton: {
         backgroundColor: '#FF9800',
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 20,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderRadius: 22,
         marginTop: 8,
     },
     retryButtonText: {
         color: '#fff',
-        fontSize: 12,
+        fontSize: 14,
         fontWeight: '600',
     },
     emptyState: {
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 50,
+        paddingVertical: 60,
     },
     emptyText: {
         fontSize: 16,
-        color: '#999',
-        marginTop: 10,
+        color: '#CCC',
+        marginTop: 14,
+        fontWeight: '500',
     },
 });

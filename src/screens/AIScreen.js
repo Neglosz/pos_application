@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, KeyboardAvoidingView, Keyboard, Platform, Modal, Linking, Alert, useWindowDimensions } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, KeyboardAvoidingView, Keyboard, Platform, Modal, Linking, Alert, useWindowDimensions, RefreshControl } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
 import { getAIRecommendations, getRecommendationStats, getRecommendationHistory, takeRecommendationAction, sendAIChat, applyPromotion, disposeProduct, getActivePromotions, deactivatePromotion, updateProductPrice, scheduleRecommendation, getScheduledReminders } from '../services/api';
 import { useFocusEffect } from '@react-navigation/native';
@@ -22,7 +22,22 @@ export default function AIScreen({ navigation }) {
     const [chatHistory, setChatHistory] = useState([]);
     const [loading, setLoading] = useState(false);
     const [chatLoading, setChatLoading] = useState(false);
-    const insets = useSafeAreaInsets();
+    const [refreshing, setRefreshing] = useState(false);
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        try {
+            if (activeTab === 'today') {
+                await Promise.all([loadTodayData(), loadScheduledReminders()]);
+            } else if (activeTab === 'history') {
+                await loadHistoryData();
+            } else if (activeTab === 'promos') {
+                await loadPromotions();
+            }
+        } finally {
+            setRefreshing(false);
+        }
+    }, [activeTab]);
     const { width: screenWidth } = useWindowDimensions();
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     const [usedChatActions, setUsedChatActions] = useState(new Set()); // track used chat action buttons
@@ -473,6 +488,13 @@ export default function AIScreen({ navigation }) {
             } else {
                 const aiDiscount = selectedItem.payload?.recommended_discount || {};
                 const promotionType = aiDiscount.promotion_type || 'discount_percent';
+
+                if (promotionType === 'discount_percent' && discountPercent >= 100) {
+                    Alert.alert('ไม่สามารถลด 100% ได้', 'การลดราคา 100% คือการแจกฟรี หากต้องการตัดสินค้าออกให้ใช้ "ตัดสต็อก" แทน');
+                    setActionLoading(false);
+                    return;
+                }
+
                 const effectivePercent = (promotionType === 'bundle') ? 0 :
                     (promotionType === 'buy_x_get_y') ? 0 : discountPercent;
                 const result = await applyPromotion(
@@ -636,6 +658,7 @@ export default function AIScreen({ navigation }) {
         const actualPrompt = customPrompt || chatMessage;
 
         if (!actualPrompt || !actualPrompt.trim() || chatLoading) return;
+        if (actualPrompt.trim().length > 500) return;
 
         // Ensure chatHistory is an array
         const safeChatHistory = Array.isArray(chatHistory) ? chatHistory : [];
@@ -652,6 +675,14 @@ export default function AIScreen({ navigation }) {
         setChatMessage('');
         setChatLoading(true);
 
+        // Hard timeout: ยกเลิกถ้า AI ไม่ตอบภายใน 30 วินาที
+        const withTimeout = (promise, ms) => {
+            const timeout = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('timeout: AI ใช้เวลานานเกินไป')), ms)
+            );
+            return Promise.race([promise, timeout]);
+        };
+
         // Retry logic: ลอง 2 ครั้ง ถ้า timeout/network error (ไม่ retry ถ้า rate limit)
         const sendWithRetry = async (retries = 2) => {
             for (let attempt = 0; attempt <= retries; attempt++) {
@@ -667,7 +698,7 @@ export default function AIScreen({ navigation }) {
         };
 
         try {
-            const response = await sendWithRetry();
+            const response = await withTimeout(sendWithRetry(), 60000);
             if (response.success) {
                 const aiMsg = { role: 'model', parts: [{ text: response.answer }] };
                 setChatHistory(prev => [...(Array.isArray(prev) ? prev : []), aiMsg]);
@@ -856,7 +887,7 @@ export default function AIScreen({ navigation }) {
                 payload: { ...item.payload, target_products: productNames, recommended_discount: aiDiscount },
             });
             setActionType('discount');
-            setDiscountPrice(aiDiscount.price_after_discount?.toString() || `${aiDiscount.percent || 20}%`);
+            setDiscountPrice(`${aiDiscount.percent || 20}%`);
             setDaysValid(aiDiscount.days_valid?.toString() || '3');
             setProductModalVisible(true);
         } else {
@@ -889,7 +920,7 @@ export default function AIScreen({ navigation }) {
         const pendingRecs = (recommendations || []).filter(r => r && r.status === 'pending');
 
         return (
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#E65100']} tintColor="#E65100" />}>
 
                 {/* Scheduled Price Reminders Section */}
                 {scheduledReminders.length > 0 && (
@@ -1020,8 +1051,8 @@ export default function AIScreen({ navigation }) {
                                         <View style={styles.impactBox}>
                                             {item.payload.products.map((p, idx) => (
                                                 <View key={idx} style={styles.impactBox}>
-                                                    <Text>• {p.name}</Text>
-                                                    <Text>{p.qty} {p.unit} — {p.status}</Text>
+                                                    <Text>{'• '}{p.name}</Text>
+                                                    <Text>{[p.qty, p.unit, p.status].filter(Boolean).join(' ')}</Text>
                                                 </View>
                                             ))}
                                         </View>
@@ -1116,7 +1147,7 @@ export default function AIScreen({ navigation }) {
         });
 
         return (
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#E65100']} tintColor="#E65100" />}>
                 {/* History Summary */}
                 <View style={styles.historySummary}>
                     <View style={styles.historyStat}>
@@ -1188,7 +1219,7 @@ export default function AIScreen({ navigation }) {
     };
 
     const renderChatTab = () => (
-        <View style={{ flex: 1, paddingBottom: Math.max(0, keyboardHeight - insets.bottom) }}>
+        <View style={{ flex: 1, paddingBottom: Math.max(0, keyboardHeight - 85) }}>
             {(Array.isArray(chatHistory) && chatHistory.length > 0) && (
                 <View style={styles.chatTopBar}>
                     <TouchableOpacity style={styles.resetBtn} onPress={resetChat}>
@@ -1373,7 +1404,7 @@ export default function AIScreen({ navigation }) {
             </ScrollView>
 
             <View style={styles.chatInputWrapper}>
-                <View style={styles.inputContainer}>
+                <View style={[styles.inputContainer, keyboardHeight > 0 && { marginBottom: 0 }]}>
                     <TextInput
                         style={styles.chatInput}
                         placeholder="พิมพ์คำถาม..."
@@ -1382,10 +1413,16 @@ export default function AIScreen({ navigation }) {
                         onChangeText={setChatMessage}
                         multiline
                         maxHeight={100}
+                        maxLength={500}
                         onFocus={() => setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 300)}
                         returnKeyType="default"
                         blurOnSubmit={false}
                     />
+                    {chatMessage.length > 400 && (
+                        <Text style={{ position: 'absolute', bottom: 4, right: 56, fontSize: 10, color: chatMessage.length >= 500 ? '#e53e3e' : '#aaa' }}>
+                            {chatMessage.length}/500
+                        </Text>
+                    )}
                     <TouchableOpacity
                         style={[styles.sendBtn, !chatMessage.trim() && { backgroundColor: '#ccc' }]}
                         onPress={() => handleSendMessage()}
@@ -1399,7 +1436,7 @@ export default function AIScreen({ navigation }) {
     );
 
     const renderPromosTab = () => (
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#E65100']} tintColor="#E65100" />}>
             <View style={styles.sectionHeader}>
                 <View style={styles.sectionTitleRow}>
                     <Ionicons name="pricetag-outline" size={18} color='#E65100' />
@@ -1595,10 +1632,10 @@ export default function AIScreen({ navigation }) {
                                                         {rec.reason ? <Text style={styles.aiRecommendReason}>{rec.reason}</Text> : null}
 
                                                         {/* "ใช้ราคา AI" button — only for discount_percent */}
-                                                        {promoType === 'discount_percent' && rec.price_after_discount && (
+                                                        {promoType === 'discount_percent' && rec.percent != null && (
                                                             <TouchableOpacity
                                                                 style={styles.useAiRecommendBtn}
-                                                                onPress={() => setDiscountPrice(rec.price_after_discount?.toString() || `${rec.percent}%`)}
+                                                                onPress={() => setDiscountPrice(`${rec.percent}%`)}
                                                             >
                                                                 <Ionicons name="checkmark-circle" size={18} color="#fff" />
                                                                 <Text style={styles.useAiRecommendText}> ใช้ราคาที่ AI แนะนำ</Text>
@@ -1648,11 +1685,11 @@ export default function AIScreen({ navigation }) {
                                                     </View>
                                                 ) : (
                                                     <View>
-                                                        <Text style={{ color: '#555', marginBottom: 6, fontSize: 13 }}>ลดราคา (% หรือ ราคาใหม่เป็นบาท):</Text>
+                                                        <Text style={{ color: '#555', marginBottom: 6, fontSize: 13 }}>เปอร์เซ็นลด (%):</Text>
                                                         <View style={styles.discountInputRow}>
                                                             <TextInput
                                                                 style={styles.discountInput}
-                                                                placeholder="เช่น 20% หรือ 45"
+                                                                placeholder="เช่น 20"
                                                                 keyboardType="numeric"
                                                                 value={discountPrice}
                                                                 onChangeText={setDiscountPrice}
