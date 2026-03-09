@@ -279,6 +279,13 @@ export const addProductCategory = async (name) => {
     });
 };
 
+export const updateProductPrice = async (productId, newPrice) => {
+    return apiRequest(`/products/${productId}/price`, {
+        method: 'PUT',
+        body: JSON.stringify({ newPrice }),
+    });
+};
+
 export const updateProductCategory = async (id, name) => {
     return apiRequest(`/product-categories/${id}`, {
         method: 'PUT',
@@ -457,6 +464,17 @@ export const getActivePromotions = async () => {
 export const deactivatePromotion = async (promotionId) => {
     return apiRequest(`/ai/promotions/${promotionId}/deactivate`, { method: 'PATCH' });
 }
+
+export const scheduleRecommendation = async (id, triggerType, promotionId, scheduledPrice) => {
+    return apiRequest(`/ai/recommendations/${id}/schedule`, {
+        method: 'POST',
+        body: JSON.stringify({ trigger_type: triggerType, promotion_id: promotionId, scheduled_price: scheduledPrice }),
+    });
+};
+
+export const getScheduledReminders = async () => {
+    return apiRequest('/ai/scheduled-reminders');
+};
 
 export const deleteTransaction = async (id) => {
     return apiRequest(`/transactions/${id}`, {
