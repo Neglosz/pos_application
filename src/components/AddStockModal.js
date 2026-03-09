@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, Modal, StyleSheet, TouchableOpacity, TextInput, Image, ScrollView, Platform, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard, Alert, ActivityIndicator } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
@@ -27,7 +27,6 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
     const [loading, setLoading] = useState(false);
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [fieldErrors, setFieldErrors] = useState({});
-
     // Datas
     const [categories, setCategories] = useState([]);
 
@@ -37,6 +36,11 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
             // เรียกตรวจสอบบาร์โค้ดจาก API ใหม่ทุกครั้งที่เปิด Modal
             checkExistingProduct(scannedCode, cancelToken);
             loadCategories();
+        } else if (!visible) {
+            // Reset ทุกอย่างเมื่อปิด Modal เพื่อไม่ให้ state ค้าง
+            setMode('loading');
+            setExistingProduct(null);
+            resetForm();
         }
         return () => {
             cancelToken.cancelled = true;
@@ -84,6 +88,24 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
         setUnitType('ชิ้น');
         setExpireDate(null);
         setFieldErrors({});
+    };
+
+    // --- Helpers ---
+    const isValidPositiveNumber = (val) => {
+        if (!val && val !== 0) return false;
+        const num = parseFloat(val);
+        return !isNaN(num) && isFinite(num) && num > 0;
+    };
+
+    const hasSQLInjection = (val) => {
+        return /['";]|(--)|drop\s+table|delete\s+from|insert\s+into|update\s+\w+\s+set|select\s+\*/i.test(val);
+    };
+
+    const isPastDate = (date) => {
+        if (!date) return false;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return date < today;
     };
 
     const loadCategories = async () => {
@@ -144,14 +166,60 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
     };
 
     const handleConfirmNew = async () => {
-        // Validate required fields with red borders
         const errors = {};
-        if (!name) errors.name = true;
+
+        // 1. SQL Injection check
+        if (name && hasSQLInjection(name)) {
+            Alert.alert('ชื่อสินค้าไม่ถูกต้อง', 'ชื่อสินค้ามีอักขระพิเศษที่ไม่อนุญาต\nกรุณากรอกชื่อสินค้าให้ถูกต้อง');
+            setFieldErrors({ name: true });
+            return;
+        }
+
+        // 2. Required fields
+        if (!name || !name.trim()) errors.name = true;
         if (!quantity) errors.quantity = true;
         if (!costPrice) errors.costPrice = true;
         if (!salePrice) errors.salePrice = true;
         if (!lowStockThreshold) errors.lowStockThreshold = true;
         if (!expireDate) errors.expireDate = true;
+
+        // 3. จำนวนต้องเป็นตัวเลข > 0 (ไม่ใช่ตัวอักษร ไม่ใช่ติดลบ ไม่ใช่ 0)
+        if (quantity && !isValidPositiveNumber(quantity)) {
+            errors.quantity = true;
+            setFieldErrors(errors);
+            Alert.alert('จำนวนไม่ถูกต้อง', 'จำนวนสินค้าต้องเป็นตัวเลขที่มากกว่า 0\nไม่สามารถกรอกตัวอักษร เลขติดลบ หรือ 0 ได้');
+            return;
+        }
+
+        // 4. ราคาขายต้องมากกว่า 0 (ห้ามขายฟรี)
+        if (salePrice && !isValidPositiveNumber(salePrice)) {
+            errors.salePrice = true;
+            setFieldErrors(errors);
+            Alert.alert('ราคาขายไม่ถูกต้อง', 'ราคาขายต้องมากกว่า 0 บาท\nไม่สามารถตั้งราคาขายเป็น 0 หรือฟรีได้');
+            return;
+        }
+
+        // 5. ราคาขายต้องไม่น้อยกว่าราคาทุน
+        const cost = parseFloat(costPrice);
+        const sale = parseFloat(salePrice);
+        if (!isNaN(cost) && !isNaN(sale) && sale > 0 && sale < cost) {
+            errors.salePrice = true;
+            setFieldErrors(errors);
+            Alert.alert(
+                'ราคาขายต่ำกว่าราคาทุน',
+                `ราคาขาย ฿${sale.toFixed(2)} ต่ำกว่าราคาทุน ฿${cost.toFixed(2)}\nถ้าขายราคานี้จะขาดทุนทุกชิ้น กรุณาตรวจสอบอีกครั้ง`
+            );
+            return;
+        }
+
+        // 6. วันหมดอายุต้องไม่ผ่านไปแล้ว
+        if (expireDate && isPastDate(expireDate)) {
+            errors.expireDate = true;
+            setFieldErrors(errors);
+            Alert.alert('วันหมดอายุไม่ถูกต้อง', 'วันหมดอายุที่เลือกผ่านไปแล้ว\nกรุณาเลือกวันหมดอายุที่ถูกต้อง');
+            return;
+        }
+
         if (Object.keys(errors).length > 0) {
             setFieldErrors(errors);
             return;
@@ -230,8 +298,51 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
 
     const handleConfirmRestock = async () => {
         const errors = {};
+
+        // 1. Required fields
         if (!quantity) errors.quantity = true;
         if (!expireDate) errors.expireDate = true;
+
+        // 2. จำนวนต้องเป็นตัวเลข > 0
+        if (quantity && !isValidPositiveNumber(quantity)) {
+            errors.quantity = true;
+            setFieldErrors(errors);
+            Alert.alert('จำนวนไม่ถูกต้อง', 'จำนวนที่เติมต้องเป็นตัวเลขที่มากกว่า 0\nไม่สามารถกรอกตัวอักษร เลขติดลบ หรือ 0 ได้');
+            return;
+        }
+
+        // 3. ราคาขายต้องมากกว่า 0 ถ้ามีการกรอก
+        const sale = parseFloat(salePrice);
+        if (salePrice && (isNaN(sale) || sale <= 0)) {
+            errors.salePrice = true;
+            setFieldErrors(errors);
+            Alert.alert('ราคาขายไม่ถูกต้อง', 'ราคาขายต้องมากกว่า 0 บาท\nไม่สามารถตั้งราคาขายเป็น 0 หรือฟรีได้');
+            return;
+        }
+
+        // 4. ราคาขายต้องไม่น้อยกว่าราคาทุน
+        const cost = parseFloat(costPrice);
+        if (!isNaN(cost) && !isNaN(sale) && sale > 0 && sale < cost) {
+            errors.salePrice = true;
+            setFieldErrors(errors);
+            Alert.alert(
+                'ราคาขายต่ำกว่าราคาทุน',
+                `ราคาขาย ฿${sale.toFixed(2)} ต่ำกว่าราคาทุน ฿${cost.toFixed(2)}\nถ้าขายราคานี้จะขาดทุนทุกชิ้น กรุณาตรวจสอบอีกครั้ง`
+            );
+            return;
+        }
+
+        // 5. วันหมดอายุต้องไม่ผ่านไปแล้ว (ห้ามเติมสต็อกสินค้าที่หมดอายุ)
+        if (expireDate && isPastDate(expireDate)) {
+            errors.expireDate = true;
+            setFieldErrors(errors);
+            Alert.alert(
+                'สินค้า Lot นี้หมดอายุแล้ว',
+                'ไม่สามารถเติมสต็อกสินค้าที่หมดอายุไปแล้วได้\nกรุณาตรวจสอบวันหมดอายุของสินค้า Lot นี้อีกครั้ง'
+            );
+            return;
+        }
+
         if (Object.keys(errors).length > 0) {
             setFieldErrors(errors);
             return;
@@ -289,7 +400,7 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
     );
 
     const renderRestockMode = () => (
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             {/* Existing Product Info */}
             <View style={styles.existingProductCard}>
                 <View style={styles.existingHeader}>
@@ -340,11 +451,11 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
             </View>
 
             <View style={styles.inputGroup}>
-                <Text style={styles.label}>ราคาขาย (อัพเดททุก Lot)</Text>
+                <Text style={[styles.label, fieldErrors.salePrice && styles.errorLabel]}>ราคาขาย (อัพเดททุก Lot)</Text>
                 <TextInput
-                    style={styles.input}
+                    style={[styles.input, fieldErrors.salePrice && styles.errorInput]}
                     value={salePrice}
-                    onChangeText={setSalePrice}
+                    onChangeText={(text) => { setSalePrice(text); setFieldErrors(prev => ({ ...prev, salePrice: false })); }}
                     keyboardType="numeric"
                     placeholder={existingProduct?.price?.toString() || '0.00'}
                 />
@@ -392,7 +503,7 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
     );
 
     const renderNewMode = () => (
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             {/* New Product Notice */}
             <View style={styles.newProductCard}>
                 <View style={styles.existingHeader}>
@@ -566,29 +677,31 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
             onRequestClose={onClose}
             statusBarTranslucent={true}
         >
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                <View style={styles.centeredView}>
-                    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                        <KeyboardAvoidingView
-                            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                            style={styles.modalView}
-                        >
-                            <View style={styles.header}>
-                                <Text style={styles.modalTitle}>
-                                    {mode === 'restock' ? 'เติมสต็อก' : 'เพิ่มสินค้า'}
-                                </Text>
-                                <TouchableOpacity onPress={onClose}>
-                                    <Ionicons name="close" size={28} color="#000" />
-                                </TouchableOpacity>
-                            </View>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={styles.keyboardAvoidingView}
+            >
+                <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                    <View style={styles.centeredView}>
+                        <TouchableWithoutFeedback>
+                            <View style={styles.modalView}>
+                                <View style={styles.header}>
+                                    <Text style={styles.modalTitle}>
+                                        {mode === 'restock' ? 'เติมสต็อก' : 'เพิ่มสินค้า'}
+                                    </Text>
+                                    <TouchableOpacity onPress={onClose}>
+                                        <Ionicons name="close" size={28} color="#000" />
+                                    </TouchableOpacity>
+                                </View>
 
-                            {mode === 'loading' && renderLoading()}
-                            {mode === 'restock' && renderRestockMode()}
-                            {mode === 'new' && renderNewMode()}
-                        </KeyboardAvoidingView>
-                    </TouchableWithoutFeedback>
-                </View>
-            </TouchableWithoutFeedback>
+                                {mode === 'loading' && renderLoading()}
+                                {mode === 'restock' && renderRestockMode()}
+                                {mode === 'new' && renderNewMode()}
+                            </View>
+                        </TouchableWithoutFeedback>
+                    </View>
+                </TouchableWithoutFeedback>
+            </KeyboardAvoidingView>
 
             {/* iOS Date Picker Overlay (inside main modal) */}
             {Platform.OS === 'ios' && showDatePicker && (
@@ -624,6 +737,9 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
 }
 
 const styles = StyleSheet.create({
+    keyboardAvoidingView: {
+        flex: 1,
+    },
     centeredView: {
         flex: 1,
         justifyContent: 'center',

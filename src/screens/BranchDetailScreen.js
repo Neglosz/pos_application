@@ -428,8 +428,58 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
             return;
         }
 
+        if (editName.trim().length > 100) {
+            Alert.alert('ชื่อยาวเกินไป', 'ชื่อสาขาต้องไม่เกิน 100 ตัวอักษร');
+            return;
+        }
+
+        if (editPhone.trim()) {
+            const digitsOnly = editPhone.trim().replace(/[^0-9]/g, '');
+            if (digitsOnly !== editPhone.trim()) {
+                Alert.alert('รูปแบบไม่ถูกต้อง', 'เบอร์โทรกรอกได้เฉพาะตัวเลขเท่านั้น');
+                return;
+            }
+            if (digitsOnly.length !== 10) {
+                Alert.alert('เบอร์โทรไม่ถูกต้อง', 'เบอร์โทรต้องมี 10 หลักพอดี');
+                return;
+            }
+        }
+
         setSavingBranch(true);
         try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const ownerId = session?.user?.id;
+
+            // เช็คชื่อสาขาซ้ำ
+            const { data: dupName } = await supabase
+                .from('stores')
+                .select('id')
+                .eq('owner_id', ownerId)
+                .eq('name', editName.trim())
+                .neq('id', branch.id)
+                .limit(1);
+            if (dupName && dupName.length > 0) {
+                Alert.alert('ชื่อซ้ำ', 'คุณมีสาขาที่ใช้ชื่อนี้อยู่แล้ว กรุณาเปลี่ยนชื่อใหม่');
+                setSavingBranch(false);
+                return;
+            }
+
+            // เช็คที่อยู่ซ้ำ (ถ้ากรอกมา)
+            if (editAddress.trim()) {
+                const { data: dupAddr } = await supabase
+                    .from('stores')
+                    .select('id')
+                    .eq('owner_id', ownerId)
+                    .eq('address', editAddress.trim())
+                    .neq('id', branch.id)
+                    .limit(1);
+                if (dupAddr && dupAddr.length > 0) {
+                    Alert.alert('ที่อยู่ซ้ำ', 'คุณมีสาขาที่ใช้ที่อยู่นี้อยู่แล้ว กรุณาตรวจสอบอีกครั้ง');
+                    setSavingBranch(false);
+                    return;
+                }
+            }
+
             const { error } = await supabase
                 .from('stores')
                 .update({
@@ -517,6 +567,7 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
                                 value={editName}
                                 onChangeText={setEditName}
                                 placeholder="ชื่อร้านของคุณ"
+                                maxLength={100}
                             />
                             <Text style={styles.inputLabel}>เบอร์โทร</Text>
                             <TextInput
@@ -537,7 +588,12 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
                             <View style={styles.editActions}>
                                 <TouchableOpacity
                                     style={styles.cancelBtn}
-                                    onPress={() => setIsEditing(false)}
+                                    onPress={() => {
+                                        setEditName(branch?.name || '');
+                                        setEditAddress(branch?.address || '');
+                                        setEditPhone(branch?.phone || '');
+                                        setIsEditing(false);
+                                    }}
                                 >
                                     <Text style={styles.cancelBtnText}>ยกเลิก</Text>
                                 </TouchableOpacity>
@@ -619,7 +675,10 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
                             <View style={styles.editActions}>
                                 <TouchableOpacity
                                     style={styles.cancelBtn}
-                                    onPress={() => setIsEditingPromptPay(false)}
+                                    onPress={() => {
+                                        fetchPromptPaySettings();
+                                        setIsEditingPromptPay(false);
+                                    }}
                                 >
                                     <Text style={styles.cancelBtnText}>ยกเลิก</Text>
                                 </TouchableOpacity>

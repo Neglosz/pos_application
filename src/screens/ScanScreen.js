@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Vibration, ActivityIndicator, Dimensions, Image, TextInput, ScrollView, FlatList, Animated, Platform, Modal, TouchableWithoutFeedback, Keyboard, KeyboardAvoidingView, PanResponder } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Vibration, ActivityIndicator, Dimensions, Image, TextInput, ScrollView, FlatList, Animated, Platform, Modal, TouchableWithoutFeedback, Keyboard, KeyboardAvoidingView, PanResponder, RefreshControl } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -61,6 +61,13 @@ export default function ScanScreen({ navigation, route }) {
     const isFocused = useIsFocused(); // Track if screen is focused
     const { getProductByBarcode, products: storeProducts, weightProducts, categories, fetchProducts, fetchWeightProducts, fetchCategories, addProduct, refreshProducts, setSearchQuery, selectedCategoryId, setSelectedCategory, isLoading, hasMore } = useProductStore();
     const { cart: products, addToCart, removeFromCart, updateQuantity, reset: clearCart } = useCartStore();
+
+    const [searchRefreshing, setSearchRefreshing] = useState(false);
+    const onSearchRefresh = useCallback(() => {
+        setSearchRefreshing(true);
+        refreshProducts();
+        setTimeout(() => setSearchRefreshing(false), 1200);
+    }, []);
 
     useEffect(() => {
         if (connectedScale && scaleWeight) {
@@ -314,10 +321,19 @@ export default function ScanScreen({ navigation, route }) {
         );
     };
 
-    // Pre-fill category when opening modal
+    // Pre-fill category when opening modal, reset when closing
     useEffect(() => {
         if (showAddProductModal && currentWeightCategory) {
             setNewProductCategory(currentWeightCategory);
+        } else if (!showAddProductModal) {
+            setNewProductName('');
+            setNewProductPrice('');
+            setNewProductCost('');
+            setNewProductStock('');
+            setNewProductLowStock('5');
+            setNewProductImage(null);
+            setNewProductExpireDate(null);
+            setFieldErrors({});
         }
     }, [showAddProductModal, currentWeightCategory]);
 
@@ -349,6 +365,19 @@ export default function ScanScreen({ navigation, route }) {
             Alert.alert('ข้อมูลไม่ครบ', 'กรุณากรอกข้อมูลที่จำเป็นให้ครบ');
             return;
         }
+
+        // ราคาขายต้องไม่ต่ำกว่าราคาทุน
+        const sale = parseFloat(newProductPrice);
+        const cost = parseFloat(newProductCost);
+        if (newProductCost && !isNaN(cost) && cost > 0 && sale < cost) {
+            Alert.alert(
+                'ราคาขายต่ำกว่าทุน',
+                `ราคาขาย ฿${sale} ต่ำกว่าราคาทุน ฿${cost}\nขายสินค้านี้จะขาดทุนทุกชิ้น กรุณาตรวจสอบอีกครั้ง`
+            );
+            setFieldErrors(prev => ({ ...prev, price: true }));
+            return;
+        }
+
         setFieldErrors({});
         setIsAddingProduct(true);
 
@@ -593,6 +622,23 @@ export default function ScanScreen({ navigation, route }) {
                         [{ text: "ตกลง" }]
                     );
                     return;
+                }
+
+                // ราคาขาย < ราคาทุน warning
+                const salePrice = parseFloat(product.price || 0);
+                const costPrice = parseFloat(product.cost_price || 0);
+                if (costPrice > 0 && salePrice < costPrice) {
+                    const proceed = await new Promise((resolve) => {
+                        Alert.alert(
+                            'ราคาขายต่ำกว่าทุน',
+                            `"${product.name}" ราคาขาย ฿${salePrice} แต่ต้นทุน ฿${costPrice}\nขายสินค้านี้จะขาดทุน ยืนยันขายต่อหรือไม่?`,
+                            [
+                                { text: 'ยกเลิก', style: 'cancel', onPress: () => resolve(false) },
+                                { text: 'ขายต่อ', onPress: () => resolve(true) }
+                            ]
+                        );
+                    });
+                    if (!proceed) return;
                 }
 
                 // ถ้าฝ่าด่านด้านบนมาได้ทั้งหมด (ไม่หมดอายุ หรือ ดึงดันกดขายต่อ) ให้ดรอปลงตะกร้า
@@ -1000,7 +1046,7 @@ export default function ScanScreen({ navigation, route }) {
                                                 { text: 'ลบ', style: 'destructive', onPress: () => removeFromCart(item.id) }
                                             ]);
                                         } else if (num > maxStock) {
-                                            Alert.alert('เกินจำนวนสต็อก', `"${item.name}" มีสต็อกเพียง ${maxStock} ชิ้น`);
+                                            Alert.alert('สินค้าไม่พอ', `"${item.name}" มีสต็อกเพียง ${maxStock} ชิ้น`);
                                             updateQuantity(item.id, maxStock);
                                         } else {
                                             updateQuantity(item.id, num);
@@ -1013,7 +1059,7 @@ export default function ScanScreen({ navigation, route }) {
                                     onPress={() => {
                                         const maxStock = parseFloat(item.stock_qty || item.quantity || 0);
                                         if (item.quantity + 1 > maxStock) {
-                                            Alert.alert('เกินจำนวนสต็อก', `"${item.name}" มีสต็อกเพียง ${maxStock} ชิ้น`);
+                                            Alert.alert('สินค้าไม่พอ', `"${item.name}" มีสต็อกเพียง ${maxStock} ชิ้น`);
                                         } else {
                                             addToCart(item, 1);
                                         }
@@ -1105,6 +1151,23 @@ export default function ScanScreen({ navigation, route }) {
                 return;
             }
 
+            // ราคาขาย < ราคาทุน warning
+            const salePrice = parseFloat(item.price || 0);
+            const costPrice = parseFloat(item.cost_price || 0);
+            if (costPrice > 0 && salePrice < costPrice) {
+                const proceed = await new Promise((resolve) => {
+                    Alert.alert(
+                        'ราคาขายต่ำกว่าทุน',
+                        `"${item.name}" ราคาขาย ฿${salePrice} แต่ต้นทุน ฿${costPrice}\nขายสินค้านี้จะขาดทุน ยืนยันขายต่อหรือไม่?`,
+                        [
+                            { text: 'ยกเลิก', style: 'cancel', onPress: () => resolve(false) },
+                            { text: 'ขายต่อ', onPress: () => resolve(true) }
+                        ]
+                    );
+                });
+                if (!proceed) return;
+            }
+
             // All checks passed, proceed to show quantity modal
             setSelectedProductToAdd(item);
             setQuantityModalVisible(true);
@@ -1168,6 +1231,16 @@ export default function ScanScreen({ navigation, route }) {
                     columnWrapperStyle={COLUMN_WRAPPER_STYLE}
                     onEndReached={handleLoadMore}
                     renderItem={renderSearchItem}
+                    refreshControl={<RefreshControl refreshing={searchRefreshing} onRefresh={onSearchRefresh} colors={['#F37021']} tintColor="#F37021" />}
+                    ListEmptyComponent={
+                        <View style={{ alignItems: 'center', paddingVertical: 60 }}>
+                            <Ionicons name="search-outline" size={60} color="#E0E0E0" />
+                            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#888', marginTop: 15 }}>ไม่พบสินค้า</Text>
+                            <Text style={{ fontSize: 14, color: '#aaa', marginTop: 6, textAlign: 'center', paddingHorizontal: 30 }}>
+                                {searchQueryLocal.trim() ? `ไม่พบสินค้า "${searchQueryLocal}" ในระบบ` : 'ยังไม่มีสินค้าในระบบ\nกรุณาเพิ่มสินค้าก่อนใช้งาน'}
+                            </Text>
+                        </View>
+                    }
                 />
             </View>
         );
@@ -1429,6 +1502,23 @@ export default function ScanScreen({ navigation, route }) {
                                                     [{ text: "ตกลง" }]
                                                 );
                                                 return;
+                                            }
+
+                                            // ราคาขาย < ราคาทุน warning
+                                            const itemSalePrice = parseFloat(selectedItem.price || 0);
+                                            const itemCostPrice = parseFloat(selectedItem.cost_price || 0);
+                                            if (itemCostPrice > 0 && itemSalePrice < itemCostPrice) {
+                                                const proceed = await new Promise((resolve) => {
+                                                    Alert.alert(
+                                                        'ราคาขายต่ำกว่าทุน',
+                                                        `"${selectedItem.name}" ราคาขาย ฿${itemSalePrice} แต่ต้นทุน ฿${itemCostPrice}\nขายสินค้านี้จะขาดทุน ยืนยันขายต่อหรือไม่?`,
+                                                        [
+                                                            { text: 'ยกเลิก', style: 'cancel', onPress: () => resolve(false) },
+                                                            { text: 'ขายต่อ', onPress: () => resolve(true) }
+                                                        ]
+                                                    );
+                                                });
+                                                if (!proceed) return;
                                             }
 
                                             const product = { ...selectedItem, unit: selectedUnit.label, isWeight: true };

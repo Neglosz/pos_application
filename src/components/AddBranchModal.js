@@ -87,6 +87,11 @@ export default function AddBranchModal({ visible, onClose, onSuccess }) {
             return;
         }
 
+        if (branchName.trim().length > 100) {
+            Alert.alert('ชื่อยาวเกินไป', 'ชื่อสาขาต้องไม่เกิน 100 ตัวอักษร');
+            return;
+        }
+
         setLoading(true);
 
         try {
@@ -94,6 +99,34 @@ export default function AddBranchModal({ visible, onClose, onSuccess }) {
             const { data: { session } } = await supabase.auth.getSession();
             const user = session?.user;
             if (!user || !session) throw new Error('Session หมดอายุ กรุณา login ใหม่');
+
+            // เช็คชื่อสาขาซ้ำ
+            const { data: dupName } = await supabase
+                .from('stores')
+                .select('id')
+                .eq('owner_id', user.id)
+                .eq('name', branchName.trim())
+                .limit(1);
+            if (dupName && dupName.length > 0) {
+                Alert.alert('ชื่อซ้ำ', 'คุณมีสาขาที่ใช้ชื่อนี้อยู่แล้ว กรุณาเปลี่ยนชื่อใหม่');
+                setLoading(false);
+                return;
+            }
+
+            // เช็คที่อยู่ซ้ำ (ถ้ากรอกมา)
+            if (address.trim()) {
+                const { data: dupAddr } = await supabase
+                    .from('stores')
+                    .select('id')
+                    .eq('owner_id', user.id)
+                    .eq('address', address.trim())
+                    .limit(1);
+                if (dupAddr && dupAddr.length > 0) {
+                    Alert.alert('ที่อยู่ซ้ำ', 'คุณมีสาขาที่ใช้ที่อยู่นี้อยู่แล้ว กรุณาตรวจสอบอีกครั้ง');
+                    setLoading(false);
+                    return;
+                }
+            }
 
             // 1. Create store
             const { data: store, error: storeError } = await supabase
@@ -195,6 +228,7 @@ export default function AddBranchModal({ visible, onClose, onSuccess }) {
                                             style={styles.input}
                                             placeholder="สาขา"
                                             value={branchName}
+                                            maxLength={100}
                                             onChangeText={(text) => {
                                                 setBranchName(text);
                                                 generateEmailFromName(text);

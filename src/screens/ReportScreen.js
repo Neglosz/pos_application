@@ -4,7 +4,7 @@ import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-ico
 import { LineChart } from 'react-native-chart-kit';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { getSalesSummary, getSalesChartData, getPaymentMethodStats, getOrders, getOrderDetails, getRecommendationStats, getAIRecommendations } from '../services/api';
+import { getSalesSummary, getSalesChartData, getPaymentMethodStats, getOrders, getOrderDetails, getRecommendationStats, getAIRecommendations, cancelOrder } from '../services/api';
 import ReceiptModal from '../components/payment/ReceiptModal';
 import { useBluetooth } from '../contexts/BluetoothContext';
 
@@ -37,6 +37,7 @@ export default function ReportScreen() {
     // Modal State
     const [receiptVisible, setReceiptVisible] = useState(false);
     const [selectedTransaction, setSelectedTransaction] = useState(null);
+    const [selectedOrderId, setSelectedOrderId] = useState(null);
 
     const fetchData = async () => {
         try {
@@ -81,14 +82,25 @@ export default function ReportScreen() {
             const res = await getOrderDetails(order.id);
             if (res.success) {
                 setSelectedTransaction(res.data);
+                setSelectedOrderId(order.id);
                 setReceiptVisible(true);
             } else {
-                Alert.alert('Error', 'ไม่สามารถโหลดข้อมูลบิลได้');
+                Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลบิลได้');
             }
         } catch (error) {
-            Alert.alert('Error', 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
+            Alert.alert('ข้อผิดพลาด', 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
         } finally {
             setLoadingReceipt(false);
+        }
+    };
+
+    const handleCancelOrder = async () => {
+        try {
+            await cancelOrder(selectedOrderId);
+            setReceiptVisible(false);
+            fetchData();
+        } catch (error) {
+            Alert.alert('ข้อผิดพลาด', 'ไม่สามารถยกเลิกบิลได้ กรุณาลองใหม่');
         }
     };
 
@@ -111,19 +123,31 @@ export default function ReportScreen() {
         </View>
     );
 
+    // TC2: label เปรียบเทียบช่วงไหน
+    const comparisonLabel = period === 'today' ? 'vs เมื่อวาน' : period === 'week' ? 'vs สัปดาห์ก่อน' : 'vs เดือนก่อน';
+
+    // TC3: handle div-by-zero (growth = Infinity / NaN / null)
+    const isGrowthValid = summary.growth !== null && isFinite(summary.growth);
+    const growthIsPositive = isGrowthValid && summary.growth >= 0;
+
     const renderSummaryCard = () => (
         <View style={styles.summaryCard}>
             <View style={styles.summaryHeader}>
                 <Text style={styles.summaryLabel}>ยอดขาย{period === 'today' ? 'วันนี้' : period === 'week' ? 'สัปดาห์นี้' : 'เดือนนี้'}</Text>
-                <View style={[styles.growthTag, { backgroundColor: summary.growth >= 0 ? '#E8F5E9' : '#FFEBEE' }]}>
-                    <Ionicons name={summary.growth >= 0 ? "trending-up" : "trending-down"} size={14} color={summary.growth >= 0 ? "#10B981" : "#EF4444"} />
-                    <Text style={[styles.growthText, { color: summary.growth >= 0 ? "#10B981" : "#EF4444" }]}>
-                        {Math.abs(summary.growth)}%
+                {/* TC2: แสดง label ช่วงที่เปรียบเทียบ + TC3: guard Infinity/NaN */}
+                <View style={[styles.growthTag, { backgroundColor: !isGrowthValid ? '#F5F5F5' : growthIsPositive ? '#E8F5E9' : '#FFEBEE' }]}>
+                    {isGrowthValid && (
+                        <Ionicons name={growthIsPositive ? "trending-up" : "trending-down"} size={14} color={growthIsPositive ? "#10B981" : "#EF4444"} />
+                    )}
+                    <Text style={[styles.growthText, { color: !isGrowthValid ? '#999' : growthIsPositive ? "#10B981" : "#EF4444" }]}>
+                        {!isGrowthValid ? 'N/A' : `${Math.abs(summary.growth)}%`}
                     </Text>
                 </View>
             </View>
+            {/* TC2: บอกว่าเปรียบเทียบกับช่วงไหน */}
+            <Text style={styles.comparisonLabel}>{comparisonLabel}</Text>
 
-            <Text style={styles.totalSalesText}>฿{summary.totalSales?.toLocaleString()}</Text>
+            <Text style={styles.totalSalesText}>฿{summary.totalSales?.toLocaleString() ?? 0}</Text>
 
             <View style={styles.summaryFooter}>
                 <View style={[styles.orderCountBadge, { backgroundColor: '#FFF3E0' }]}>
@@ -151,7 +175,8 @@ export default function ReportScreen() {
 
                     <View style={styles.paymentFooter}>
                         <View style={styles.progressBarBg}>
-                            <View style={[styles.progressBarFill, { width: `${paymentStats.cash?.percent || 0}%`, backgroundColor: '#4CAF50' }]} />
+                            {/* TC4: cap ที่ 100% เพื่อกัน overflow */}
+                            <View style={[styles.progressBarFill, { width: `${Math.min(100, paymentStats.cash?.percent || 0)}%`, backgroundColor: '#4CAF50' }]} />
                         </View>
                         <Text style={styles.paymentPercentCompact}>{paymentStats.cash?.percent || 0}%</Text>
                     </View>
@@ -170,7 +195,7 @@ export default function ReportScreen() {
 
                     <View style={styles.paymentFooter}>
                         <View style={styles.progressBarBg}>
-                            <View style={[styles.progressBarFill, { width: `${paymentStats.qr?.percent || 0}%`, backgroundColor: '#2196F3' }]} />
+                            <View style={[styles.progressBarFill, { width: `${Math.min(100, paymentStats.qr?.percent || 0)}%`, backgroundColor: '#2196F3' }]} />
                         </View>
                         <Text style={styles.paymentPercentCompact}>{paymentStats.qr?.percent || 0}%</Text>
                     </View>
@@ -189,7 +214,7 @@ export default function ReportScreen() {
 
                     <View style={styles.paymentFooter}>
                         <View style={styles.progressBarBg}>
-                            <View style={[styles.progressBarFill, { width: `${paymentStats.credit?.percent || 0}%`, backgroundColor: '#FF9800' }]} />
+                            <View style={[styles.progressBarFill, { width: `${Math.min(100, paymentStats.credit?.percent || 0)}%`, backgroundColor: '#FF9800' }]} />
                         </View>
                         <Text style={styles.paymentPercentCompact}>{paymentStats.credit?.percent || 0}%</Text>
                     </View>
@@ -199,30 +224,38 @@ export default function ReportScreen() {
     );
 
     const renderChart = () => {
-        // Prepare data for ChartKit
+        // ใช้ข้อมูลจาก API โดยตรง — backend จัดการ labels/values ตามข้อมูลจริงแล้ว
+        const labels = chartData.labels || [];
+        const values = chartData.values || [];
+        const hasData = labels.length > 0 && values.some(v => v > 0);
+
+        // Prepare data for ChartKit (ต้องมีอย่างน้อย 1 point ไม่งั้น crash)
+        const safeValues = values.length > 0 ? values : [0];
+        const safeLabels = labels.length > 0 ? labels : ['-'];
         const data = {
-            labels: chartData.labels || [],
+            labels: safeLabels,
             datasets: [
                 {
-                    data: chartData.values.length > 0 ? chartData.values : [0],
-                    color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`, // Green theme
+                    data: safeValues,
+                    color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`,
                     strokeWidth: 3,
                 }
             ],
-            // legend: ["ยอดขาย"] 
         };
 
         return (
             <View style={styles.sectionContainer}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Text style={styles.sectionTitle}>ช่วงเวลาขายดี</Text>
-                    {/* <View style={styles.chartToggle}>
-                        <Text style={styles.chartToggleText}>{period === 'today' ? 'วันนี้' : period === 'week' ? 'สัปดาห์' : 'เดือน'}</Text>
-                    </View> */}
                 </View>
 
                 <View style={styles.chartContainer}>
-                    <LineChart
+                    {!hasData && (
+                        <View style={{ height: 220, justifyContent: 'center', alignItems: 'center' }}>
+                            <Text style={{ color: '#bbb', fontSize: 14 }}>ยังไม่มียอดขาย{period === 'today' ? 'วันนี้' : period === 'week' ? 'สัปดาห์นี้' : 'เดือนนี้'}</Text>
+                        </View>
+                    )}
+                    {hasData && <LineChart
                         data={data}
                         width={width - 80}
                         height={220}
@@ -245,11 +278,12 @@ export default function ReportScreen() {
                                 stroke: "#fff"
                             },
                             propsForBackgroundLines: {
-                                strokeDasharray: "", // solid lines
+                                strokeDasharray: "",
                                 stroke: "#F3F4F6"
                             }
                         }}
                         bezier
+                        fromZero={true}
                         style={{
                             marginVertical: 8,
                             borderRadius: 16
@@ -257,7 +291,8 @@ export default function ReportScreen() {
                         withInnerLines={true}
                         withOuterLines={false}
                         withVerticalLines={false}
-                    />
+                        withShadow={true}
+                    />}
 
                     <View style={styles.chartSummaryFooter}>
                         <View>
@@ -288,9 +323,9 @@ export default function ReportScreen() {
                 <TouchableOpacity key={order.id} style={styles.transactionRow} onPress={() => handleTransactionPress(order)}>
                     <View style={styles.transactionIcon}>
                         <Ionicons
-                            name={order.paymentStatus === 'paid' ? 'checkmark-circle' : 'time'}
+                            name={order.paymentStatus === 'paid' ? 'checkmark-circle' : order.paymentStatus === 'cancelled' ? 'close-circle': 'time'}
                             size={24}
-                            color={order.paymentStatus === 'paid' ? '#10B981' : '#FF9800'}
+                            color={order.paymentStatus === 'paid' ? '#4CAF50' : order.paymentStatus === 'cancelled' ? '#E53935' : '#FF9800'}
                         />
                     </View>
                     <View style={{ flex: 1, marginLeft: 12 }}>
@@ -427,6 +462,7 @@ export default function ReportScreen() {
                     }
                 }}
                 onNewTransaction={() => setReceiptVisible(false)}
+                onCancelOrder={handleCancelOrder}
             />
         </View>
     );
@@ -492,6 +528,12 @@ const styles = StyleSheet.create({
         color: '#666',
         fontSize: 14,
         fontWeight: '500',
+    },
+    comparisonLabel: {
+        fontSize: 11,
+        color: '#aaa',
+        marginBottom: 6,
+        marginTop: -6,
     },
     growthTag: {
         flexDirection: 'row',

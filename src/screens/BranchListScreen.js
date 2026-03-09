@@ -85,9 +85,9 @@ export default function BranchListScreen({ userProfile, onSelectBranch, onLogout
     };
 
     const getCurrentDate = () => {
-        const options = { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' };
+        const options = { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Bangkok' };
         const date = new Date();
-        return date.toLocaleDateString('th-TH', options);
+        return date.toLocaleDateString('th-TH-u-ca-buddhist', options);
     };
 
     const renderBranchItem = ({ item, index }) => {

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getTransactions, createTransaction, deleteTransaction } from '../services/api';
+import { getTransactions, createTransaction, deleteTransaction, cancelOrder } from '../services/api';
 import AddTransactionModal from '../components/AddTransactionModal';
 import { useBluetooth } from '../contexts/BluetoothContext';
 import { ReceiptModal } from '../components/payment';
@@ -16,6 +16,8 @@ export default function TransactionHistoryScreen({ navigation }) {
     const { connectedPrinter } = useBluetooth();
     const [receiptModalVisible, setReceiptModalVisible] = useState(false);
     const [selectedTransaction, setSelectedTransaction] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
 
     const fetchTransactions = async () => {
         setLoading(true);
@@ -26,9 +28,23 @@ export default function TransactionHistoryScreen({ navigation }) {
             }
         } catch (error) {
             console.error(error);
-            Alert.alert('Error', 'Failed to fetch transactions');
+            Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดรายการได้ กรุณาลองใหม่อีกครั้ง');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        try {
+            const res = await getTransactions({ type: filter, limit: 100 });
+            if (res.success) {
+                setTransactions(res.data);
+            }
+        } catch (error) {
+            Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดรายการได้ กรุณาลองใหม่อีกครั้ง');
+        } finally {
+            setRefreshing(false);
         }
     };
 
@@ -43,22 +59,45 @@ export default function TransactionHistoryScreen({ navigation }) {
                 setModalVisible(false);
                 fetchTransactions();
             } else {
-                Alert.alert('Error', res.error || 'Failed to save');
+                Alert.alert('ข้อผิดพลาด', res.error || 'บันทึกรายการไม่สำเร็จ กรุณาลองใหม่');
             }
         } catch (error) {
-            Alert.alert('Error', 'Network error');
+            Alert.alert('ข้อผิดพลาด', 'ไม่สามารถเชื่อมต่อได้ กรุณาตรวจสอบอินเทอร์เน็ต');
         }
     };
 
-    const handleDelete = (id) => {
-        Alert.alert('Confirm', 'Are you sure you want to delete this transaction?', [
-            { text: 'Cancel', style: 'cancel' },
-            { 
-                text: 'Delete', 
-                style: 'destructive', 
+    const handleDelete = (item) => {
+        if (isDeleting) return;
+
+        const isLinkedToSale = item.category === 'sales';
+        const isLinkedToDebt = item.category === 'debt_payment';
+
+        let message = 'คุณต้องการลบรายการนี้ใช่หรือไม่?';
+        if (isLinkedToSale) {
+            message = 'รายการนี้เชื่อมโยงกับการขาย หากลบอาจส่งผลต่อรายงาน คุณต้องการลบต่อหรือไม่?';
+        } else if (isLinkedToDebt) {
+            message = 'รายการนี้เชื่อมโยงกับการชำระหนี้ หากลบอาจส่งผลต่อยอดค้างชำระ คุณต้องการลบต่อหรือไม่?';
+        }
+
+        Alert.alert('ยืนยันการลบ', message, [
+            { text: 'ยกเลิก', style: 'cancel' },
+            {
+                text: 'ลบ',
+                style: 'destructive',
                 onPress: async () => {
-                    await deleteTransaction(id);
-                    fetchTransactions();
+                    setIsDeleting(true);
+                    try {
+                        // ถ้าเป็น sales ที่ linked กับ order → cancel order ด้วย เพื่อให้รายงานอัปเดตถูกต้อง
+                        if (isLinkedToSale && item.reference_order_id) {
+                            await cancelOrder(item.reference_order_id);
+                        }
+                        await deleteTransaction(item.id);
+                        fetchTransactions();
+                    } catch (e) {
+                        Alert.alert('ข้อผิดพลาด', 'ลบรายการไม่สำเร็จ กรุณาลองใหม่');
+                    } finally {
+                        setIsDeleting(false);
+                    }
                 }
             }
         ]);
@@ -105,8 +144,8 @@ export default function TransactionHistoryScreen({ navigation }) {
                             <Ionicons name="print" size={20} color="#0A84FF" />
                         </TouchableOpacity>
                     )}
-                    <TouchableOpacity onPress={() => handleDelete(item.id)}>
-                        <Ionicons name="trash-outline" size={18} color="#ccc" />
+                    <TouchableOpacity onPress={() => handleDelete(item)} disabled={isDeleting}>
+                        <Ionicons name="trash-outline" size={18} color={isDeleting ? '#eee' : '#ccc'} />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -148,6 +187,14 @@ export default function TransactionHistoryScreen({ navigation }) {
                     keyExtractor={item => item.id}
                     contentContainerStyle={{ padding: 20 }}
                     ListEmptyComponent={<Text style={styles.emptyText}>ไม่มีรายการ</Text>}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={onRefresh}
+                            colors={['#F37021']}
+                            tintColor="#F37021"
+                        />
+                    }
                 />
             )}
 

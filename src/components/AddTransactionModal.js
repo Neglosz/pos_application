@@ -12,13 +12,18 @@ export default function AddTransactionModal({ visible, onClose, onSave }) {
     const [showDatePicker, setShowDatePicker] = useState(false);
 
     const handleSave = () => {
-        if (!amount || !category) {
-            Alert.alert('Error', 'Please fill Amount and Category');
+        const parsedAmount = parseFloat(amount);
+        if (!amount || isNaN(parsedAmount) || parsedAmount <= 0) {
+            Alert.alert('ข้อผิดพลาด', 'กรุณาระบุจำนวนเงินที่มากกว่า 0');
+            return;
+        }
+        if (!category.trim()) {
+            Alert.alert('ข้อผิดพลาด', 'กรุณาระบุหมวดหมู่ก่อนบันทึก');
             return;
         }
         onSave({
             trans_type: type,
-            amount: parseFloat(amount),
+            amount: parsedAmount,
             category,
             description,
             trans_date: date.toISOString().split('T')[0],

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Modal, Dimensions, Animated, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getOrders, getOrderDetails } from '../services/api';
+import { getOrders, getOrderDetails, cancelOrder } from '../services/api';
 import ReceiptModal from '../components/payment/ReceiptModal';
 import { useBluetooth } from '../contexts/BluetoothContext';
 
@@ -21,6 +21,7 @@ const STATUS_OPTIONS = [
     { id: 'all', label: 'ทั้งหมด' },
     { id: 'paid', label: 'ชำระแล้ว' },
     { id: 'unpaid', label: 'ค้างชำระ' },
+    { id: 'cancelled', label: 'ยกเลิก' },
 ];
 
 const PAYMENT_METHOD_OPTIONS = [
@@ -61,9 +62,9 @@ const TransactionItem = React.memo(({ item, onPress }) => {
         <TouchableOpacity style={styles.card} onPress={() => onPress(item)}>
             <View style={styles.iconContainer}>
                 <Ionicons
-                    name={item.paymentStatus === 'paid' ? 'checkmark-circle' : 'time'}
+                    name={item.paymentStatus === 'paid' ? 'checkmark-circle' : item.paymentStatus === 'cancelled' ? 'close-circle': 'time'}
                     size={36}
-                    color={item.paymentStatus === 'paid' ? '#4CAF50' : '#FF9800'}
+                    color={item.paymentStatus === 'paid' ? '#4CAF50' : item.paymentStatus === 'cancelled' ? '#E53935' : '#FF9800'}
                 />
             </View>
             <View style={styles.info}>
@@ -82,7 +83,7 @@ const TransactionItem = React.memo(({ item, onPress }) => {
                     </View>
                 </View>
 
-                {item.paymentStatus !== 'paid' && (
+                {item.paymentStatus !== 'paid' && item.paymentStatus !== 'cancelled' && (
                     <Text style={[styles.statusText, { color: '#FF9800', marginTop: 4 }]}>
                         สถานะ: ค้างชำระ
                     </Text>
@@ -117,6 +118,7 @@ export default function AllTransactionsScreen({ navigation }) {
     // Receipt Modal State
     const [receiptVisible, setReceiptVisible] = useState(false);
     const [selectedTransaction, setSelectedTransaction] = useState(null);
+    const [selectedOrderId, setSelectedOrderId] = useState(null);
 
     // Animation for Modal
     const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
@@ -242,16 +244,27 @@ export default function AllTransactionsScreen({ navigation }) {
             const res = await getOrderDetails(order.id);
             if (res.success) {
                 setSelectedTransaction(res.data);
+                setSelectedOrderId(order.id);
                 setReceiptVisible(true);
             } else {
-                Alert.alert('Error', 'ไม่สามารถโหลดข้อมูลบิลได้');
+                Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลบิลได้');
             }
         } catch (error) {
-            Alert.alert('Error', 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
+            Alert.alert('ข้อผิดพลาด', 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
         } finally {
             setLoadingReceipt(false);
         }
     }, []);
+
+    const handleCancelOrder = async () => {
+        try {
+            await cancelOrder(selectedOrderId);
+            setReceiptVisible(false);
+            fetchOrders(1, true);
+        } catch (error) {
+            Alert.alert('ข้อผิดพลาด', 'ไม่สามารถยกเลิกบิลได้ กรุณาลองใหม่');
+        }
+    };
 
     // --- Render Components ---
 
@@ -438,6 +451,7 @@ export default function AllTransactionsScreen({ navigation }) {
                     }
                 }}
                 onNewTransaction={() => setReceiptVisible(false)}
+                onCancelOrder={handleCancelOrder}
             />
 
             {/* Filter Modal (Custom Bottom Sheet) */}

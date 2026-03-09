@@ -21,17 +21,17 @@ export default function ResetPasswordScreen({ onNavigateToSignIn }) {
 
   const handleUpdatePassword = async () => {
     if (!newPassword || !confirmPassword) {
-      Alert.alert('ผิดพลาด', 'โปรดตรวจสอบและกรอกข้อมูลให้ครบถ้วน');
+      Alert.alert('ข้อมูลไม่ครบ', 'กรุณากรอกรหัสผ่านใหม่และยืนยันรหัสผ่านให้ครบ');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      Alert.alert('ผิดพลาด', 'รหัสผ่านไม่ตรงกัน');
+      Alert.alert('รหัสผ่านไม่ตรงกัน', 'กรุณากรอกรหัสผ่านให้ตรงกันทั้งสองช่อง');
       return;
     }
 
     if (newPassword.length < 6) {
-      Alert.alert('ผิดพลาด', 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');
+      Alert.alert('รหัสผ่านสั้นเกินไป', 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');
       return;
     }
 
@@ -43,20 +43,29 @@ export default function ResetPasswordScreen({ onNavigateToSignIn }) {
 
       if (error) throw error;
 
-      Alert.alert('สำเร็จ', 'เปลี่ยนรหัสผ่านสำเร็จ', [
+      Alert.alert('เปลี่ยนรหัสผ่านสำเร็จ', 'รหัสผ่านของคุณถูกเปลี่ยนเรียบร้อยแล้ว กรุณาเข้าสู่ระบบอีกครั้ง', [
         {
-          text: 'OK',
-          onPress: () => {
-            // Sign out to ensure clean state or just navigate
-            // Usually good practice to force re-login or just go to home
-            // But here we might want to go to SignIn or Home depending on flow
-            // If update is successful, user is logged in.
-            onNavigateToSignIn();
-          },
+          text: 'ตกลง',
+          onPress: () => onNavigateToSignIn(),
         },
       ]);
     } catch (error) {
-      Alert.alert('ผิดพลาด', error.message);
+      const m = error?.message?.toLowerCase() || '';
+      if (m.includes('token') && (m.includes('expired') || m.includes('invalid'))) {
+        Alert.alert('ลิงก์หมดอายุ', 'ลิงก์สำหรับตั้งรหัสผ่านใหม่หมดอายุแล้ว กรุณาขอลิงก์ใหม่อีกครั้ง', [
+          { text: 'ตกลง', onPress: () => onNavigateToSignIn() }
+        ]);
+      } else if (m.includes('session') && (m.includes('missing') || m.includes('expired'))) {
+        Alert.alert('ลิงก์ถูกใช้งานแล้ว', 'ลิงก์นี้ถูกใช้งานไปแล้วหรือหมดอายุ กรุณาขอลิงก์ใหม่อีกครั้ง', [
+          { text: 'ตกลง', onPress: () => onNavigateToSignIn() }
+        ]);
+      } else if (m.includes('network') || m.includes('fetch')) {
+        Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้ กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่');
+      } else if (m.includes('same password') || m.includes('different from the old')) {
+        Alert.alert('รหัสผ่านซ้ำ', 'รหัสผ่านใหม่ต้องไม่เหมือนรหัสผ่านเดิม กรุณาตั้งรหัสผ่านใหม่');
+      } else {
+        Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถเปลี่ยนรหัสผ่านได้ กรุณาลองใหม่อีกครั้ง');
+      }
     } finally {
       setLoading(false);
     }
@@ -73,7 +82,7 @@ export default function ResetPasswordScreen({ onNavigateToSignIn }) {
           source={{ uri: "https://i.postimg.cc/CMk3WcZs/Chat-GPT-Image-Jan-5-2026-12-04-50-AM-Photoroom.png" }}
         />
         <Text style={{ fontSize: 30, fontWeight: '700', color: '#fff', marginTop: 10 }}>Zippy Till</Text>
-        <Text style={{ fontSize: 16, color: '#fff' }}>ระบบจัดการร้านค้า</Text>
+        <Text style={{ fontSize: 18, color: '#fff' }}>ระบบจัดการร้านค้า</Text>
       </View>
 
       <View style={{
@@ -93,7 +102,7 @@ export default function ResetPasswordScreen({ onNavigateToSignIn }) {
           </Text>
 
           <View style={{ marginBottom: 20 }}>
-            <Text style={{ fontWeight: '600', marginBottom: 8 }}>รหัสผ่านใหม่</Text>
+            <Text style={{ fontWeight: '600', marginBottom: 8, fontSize: 18 }}>รหัสผ่านใหม่</Text>
             <View style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -106,7 +115,7 @@ export default function ResetPasswordScreen({ onNavigateToSignIn }) {
             }}>
               <Ionicons name="lock-closed-outline" size={20} color="#999" style={{ marginRight: 10 }} />
               <TextInput
-                style={{ flex: 1, fontSize: 16 }}
+                style={{ flex: 1, fontSize: 18 }}
                 placeholder="รหัสผ่านใหม่"
                 secureTextEntry
                 value={newPassword}
@@ -117,7 +126,7 @@ export default function ResetPasswordScreen({ onNavigateToSignIn }) {
           </View>
 
           <View style={{ marginBottom: 30 }}>
-            <Text style={{ fontWeight: '600', marginBottom: 8 }}>ยืนยันรหัสผ่าน</Text>
+            <Text style={{ fontWeight: '600', marginBottom: 8, fontSize: 18 }}>ยืนยันรหัสผ่าน</Text>
             <View style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -130,7 +139,7 @@ export default function ResetPasswordScreen({ onNavigateToSignIn }) {
             }}>
               <Ionicons name="lock-closed-outline" size={20} color="#999" style={{ marginRight: 10 }} />
               <TextInput
-                style={{ flex: 1, fontSize: 16 }}
+                style={{ flex: 1, fontSize: 18 }}
                 placeholder="ยืนยันหัสผ่าน"
                 secureTextEntry
                 value={confirmPassword}
@@ -165,7 +174,7 @@ export default function ResetPasswordScreen({ onNavigateToSignIn }) {
           </TouchableOpacity>
 
           <TouchableOpacity onPress={onNavigateToSignIn} style={{ alignItems: 'center', padding: 10 }}>
-            <Text style={{ color: '#666', fontWeight: '600' }}>ยกเลิก</Text>
+            <Text style={{ color: '#666', fontWeight: '600', fontSize: 18 }}>ยกเลิก</Text>
           </TouchableOpacity>
 
         </ScrollView>

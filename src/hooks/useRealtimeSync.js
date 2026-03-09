@@ -44,6 +44,19 @@ export const useRealtimeSync = () => {
                 console.log('[RealtimeSync] Batch change detected:', payload.eventType);
                 useProductStore.getState().refreshProducts();
             })
+            // Subscribe to promotions table changes (for real-time promo apply/deactivate)
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'promotions',
+                filter: `store_id=eq.${storeId}`
+            }, (payload) => {
+                console.log('[RealtimeSync] Promotion change detected:', payload.eventType);
+                // Small delay to ensure promotion_items are also committed before refreshing
+                setTimeout(() => {
+                    useProductStore.getState().refreshProducts();
+                }, 500);
+            })
             // Subscribe to notifications table changes
             .on('postgres_changes', {
                 event: '*',

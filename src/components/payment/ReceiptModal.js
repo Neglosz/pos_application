@@ -8,7 +8,8 @@ import {
     Animated,
     Dimensions,
     ScrollView,
-    ActivityIndicator
+    ActivityIndicator,
+    Alert
 } from 'react-native';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -29,6 +30,7 @@ export default function ReceiptModal({
     onPrint,
     onNewTransaction,
     onClose,
+    onCancelOrder,
 }) {
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
@@ -100,6 +102,17 @@ export default function ReceiptModal({
         } finally {
             setLoadingDetails(false);
         }
+    };
+
+    const handleCancelOrder = () => {
+        Alert.alert(
+            'ยืนยันการยกเลิกบิล',
+            'บิลนี้จะถูกยกเลิกและยอดขายจะถูกปรับ คุณแน่ใจหรือไม่?',
+            [
+                { text: 'ไม่ใช่', style: 'cancel' },
+                { text: 'ยืนยัน ยกเลิกบิล', style: 'destructive', onPress: () => onCancelOrder?.() }
+            ]
+        );
     };
 
     const handleClose = () => {
@@ -261,14 +274,25 @@ export default function ReceiptModal({
                             <MaterialCommunityIcons name="printer" size={20} color="#fff" />
                             <Text style={styles.printButtonText}>พิมพ์</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.newTransactionButton}
-                            onPress={onNewTransaction}
-                            activeOpacity={0.8}
-                        >
-                            <Text style={styles.newTransactionButtonText}>รายการใหม่</Text>
-                            <AntDesign name="arrow-right" size={18} color="#fff" />
-                        </TouchableOpacity>
+                        {onCancelOrder ? (
+                            <TouchableOpacity
+                                style={styles.cancelOrderButton}
+                                onPress={handleCancelOrder}
+                                activeOpacity={0.8}
+                            >
+                                <AntDesign name="close" size={20} color="#fff" />
+                                <Text style={styles.cancelOrderButtonText}>ยกเลิกบิล</Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity
+                                style={styles.newTransactionButton}
+                                onPress={onNewTransaction}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={styles.newTransactionButtonText}>รายการใหม่</Text>
+                                <AntDesign name="arrow-right" size={18} color="#fff" />
+                            </TouchableOpacity>
+                        )}
                     </View>
                 </Animated.View>
             </View>
@@ -478,6 +502,21 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     newTransactionButtonText: {
+        color: '#fff',
+        fontSize: 18,
+        fontWeight: '600',
+    },
+    cancelOrderButton: {
+        flex: 1,
+        backgroundColor: '#EF4444',
+        borderRadius: 25,
+        paddingVertical: 12,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 8,
+    },
+    cancelOrderButtonText: {
         color: '#fff',
         fontSize: 18,
         fontWeight: '600',

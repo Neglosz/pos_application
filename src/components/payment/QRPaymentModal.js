@@ -10,6 +10,7 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import AntDesign from '@expo/vector-icons/AntDesign';
+import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
 import { getQRPayload, getStoreSettings } from '../../services/api';
 
@@ -29,6 +30,10 @@ export default function QRPaymentModal({
     const [qrPayload, setQrPayload] = useState(null);
     const [storeInfo, setStoreInfo] = useState(null);
     const [loading, setLoading] = useState(true);
+    const QR_TIMEOUT = 300; // 5 นาที
+    const [timeLeft, setTimeLeft] = useState(QR_TIMEOUT);
+    const [qrExpired, setQrExpired] = useState(false);
+    const timerRef = useRef(null);
 
     useEffect(() => {
         if (visible) {
@@ -47,6 +52,28 @@ export default function QRPaymentModal({
             ]).start();
         }
     }, [visible, amount]);
+
+    useEffect(() => {
+        if (!visible || loading) {
+            if (timerRef.current) clearInterval(timerRef.current);
+            return;
+        }
+        setTimeLeft(QR_TIMEOUT);
+        setQrExpired(false);
+        timerRef.current = setInterval(() => {
+            setTimeLeft(prev => {
+                if (prev <= 1) {
+                    clearInterval(timerRef.current);
+                    setQrExpired(true);
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+        return () => {
+            if (timerRef.current) clearInterval(timerRef.current);
+        };
+    }, [visible, loading]);
 
     const fetchQRData = async () => {
         setLoading(true);
@@ -74,6 +101,12 @@ export default function QRPaymentModal({
             Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
             Animated.timing(slideAnim, { toValue: SCREEN_HEIGHT, duration: 250, useNativeDriver: true }),
         ]).start(() => onClose?.());
+    };
+
+    const handleRefreshQR = () => {
+        setQrExpired(false);
+        setTimeLeft(QR_TIMEOUT);
+        fetchQRData();
     };
 
     return (
@@ -110,6 +143,16 @@ export default function QRPaymentModal({
                     <View style={styles.qrSection}>
                         {loading ? (
                             <ActivityIndicator size="large" color="#007AFF" />
+                        ) : qrExpired ? (
+                            <View style={styles.expiredContainer}>
+                                <Ionicons name="time-outline" size={50} color="#FF9500" />
+                                <Text style={styles.expiredText}>QR Code หมดอายุแล้ว</Text>
+                                <Text style={styles.expiredSubText}>กรุณากด "สร้างใหม่" เพื่อรับ QR Code ใหม่</Text>
+                                <TouchableOpacity style={styles.refreshButton} onPress={handleRefreshQR}>
+                                    <Ionicons name="refresh" size={20} color="#fff" style={{ marginRight: 6 }} />
+                                    <Text style={styles.refreshButtonText}>สร้าง QR ใหม่</Text>
+                                </TouchableOpacity>
+                            </View>
                         ) : qrPayload ? (
                             <View style={styles.qrWrapper}>
                                 <View style={styles.promptpayLogo}>
@@ -122,6 +165,7 @@ export default function QRPaymentModal({
                                     backgroundColor="white"
                                 />
                                 <Text style={styles.accountName}>{storeInfo?.promptpay_name || 'ไม่ระบุชื่อบัญชี'}</Text>
+                                <Text style={styles.countdownText}>QR หมดอายุใน {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}</Text>
                             </View>
                         ) : (
                             <View style={styles.errorContainer}>
@@ -280,5 +324,39 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 16,
         fontWeight: 'bold',
+    },
+    expiredContainer: {
+        alignItems: 'center',
+    },
+    expiredText: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#FF9500',
+        marginTop: 12,
+    },
+    expiredSubText: {
+        fontSize: 13,
+        color: '#666',
+        marginTop: 4,
+        textAlign: 'center',
+    },
+    refreshButton: {
+        flexDirection: 'row',
+        backgroundColor: '#007AFF',
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 25,
+        alignItems: 'center',
+        marginTop: 16,
+    },
+    refreshButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    countdownText: {
+        marginTop: 10,
+        fontSize: 13,
+        color: '#999',
     },
 });
