@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, KeyboardAvoidingView, Keyboard, Platform, Modal, Linking, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, KeyboardAvoidingView, Keyboard, Platform, Modal, Linking, Alert, useWindowDimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
-import { getAIRecommendations, getRecommendationStats, getRecommendationHistory, takeRecommendationAction, sendAIChat, applyPromotion, disposeProduct, getActivePromotions, deactivatePromotion } from '../services/api';
+import { getAIRecommendations, getRecommendationStats, getRecommendationHistory, takeRecommendationAction, sendAIChat, applyPromotion, disposeProduct, getActivePromotions, deactivatePromotion, updateProductPrice, scheduleRecommendation, getScheduledReminders } from '../services/api';
 import { useFocusEffect } from '@react-navigation/native';
 import { useProductStore } from '../stores/useProductStore'
 import { useCartStore } from '../stores/useCartStore';
@@ -23,10 +23,20 @@ export default function AIScreen({ navigation }) {
     const [loading, setLoading] = useState(false);
     const [chatLoading, setChatLoading] = useState(false);
     const insets = useSafeAreaInsets();
+    const { width: screenWidth } = useWindowDimensions();
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     const [usedChatActions, setUsedChatActions] = useState(new Set()); // track used chat action buttons
     const [bundleMinSpend, setBundleMinSpend] = useState(''); // bundle promo min spend
     const [isEmptyStore, setIsEmptyStore] = useState(false);
+
+    // Pricing Modal states
+    const [pricingModalVisible, setPricingModalVisible] = useState(false);
+    const [pricingItem, setPricingItem] = useState(null);
+    const [newPriceInput, setNewPriceInput] = useState('');
+    const [pricingLoading, setPricingLoading] = useState(false);
+
+    // Scheduled price reminders
+    const [scheduledReminders, setScheduledReminders] = useState([]);
 
     // Stock Refill Modal states
     const [stockModalVisible, setStockModalVisible] = useState(false);
@@ -151,6 +161,7 @@ export default function AIScreen({ navigation }) {
         useCallback(() => {
             if (activeTab === 'today') {
                 loadTodayData();
+                loadScheduledReminders();
             } else if (activeTab === 'history') {
                 loadHistoryData();
             } else if (activeTab === 'promos') {
@@ -178,6 +189,15 @@ export default function AIScreen({ navigation }) {
             console.error("Fetch AI Data Error:", error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const loadScheduledReminders = async () => {
+        try {
+            const res = await getScheduledReminders();
+            if (res.success) setScheduledReminders(res.data || []);
+        } catch (e) {
+            console.error('loadScheduledReminders error:', e);
         }
     };
 
@@ -379,6 +399,39 @@ export default function AIScreen({ navigation }) {
                 navigation.navigate('StockScan');
                 handleAction(item, 'accepted');
             }
+        } else if (item.type === 'pricing') {
+            // Open pricing modal
+            const product = item.payload?.products?.[0];
+            setPricingItem({
+                rec: item,
+                product,
+                currentPrice: product?.price ?? item.payload?.current_price ?? 0,
+                suggestedPrice: item.payload?.suggested_price ?? null,
+                reason: item.payload?.price_change_reason ?? item.detail ?? '',
+            });
+            setNewPriceInput('');
+            setPricingModalVisible(true);
+        } else if (item.action_label === 'ดูโปรที่มีอยู่') {
+            // Product already has an active promotion — inform user and navigate to promos tab
+            const productNames = item.payload?.target_products?.join(', ') || item.title;
+            Alert.alert(
+                '🏷️ มีโปรโมชั่นอยู่แล้ว',
+                `${productNames} มีโปรโมชั่น active อยู่แล้ว ดูรายละเอียดได้ในแท็บโปรโมชั่น`,
+                [
+                    {
+                        text: 'ไปดูโปร',
+                        onPress: () => {
+                            handleAction(item, 'skipped');
+                            setActiveTab('promos');
+                        }
+                    },
+                    {
+                        text: 'รับทราบ',
+                        style: 'cancel',
+                        onPress: () => handleAction(item, 'skipped')
+                    }
+                ]
+            );
         } else {
             // Default - just mark as accepted
             handleAction(item, 'accepted');
@@ -398,36 +451,30 @@ export default function AIScreen({ navigation }) {
                 ? parseInt(inputPercent)
                 : (selectedItem.payload?.recommended_discount?.percent || 20);
 
+            let alertTitle = '';
+            let alertMessage = '';
+
             if (actionType === 'dispose') {
-                // Call API to dispose expired products
                 const result = await disposeProduct(selectedItem.id, productNames);
                 if (result.success) {
-                    Alert.alert(
-                        'ตัดสต็อกเรียบร้อย ✅',
-                        `ลบ ${result.data.disposedItems?.map(i => i.productName).join(', ')} ออกจากระบบแล้ว`,
-                        [{ text: 'ตกลง' }]
-                    );
-                    // Explicitly update status in DB
                     try {
                         const outcomeStr = `ตัดสต็อก ${result.data.totalDisposed || 0} ชิ้น จาก ${result.data.disposedItems?.length || 0} batch`;
                         await takeRecommendationAction(selectedItem.id, 'accepted', outcomeStr);
                     } catch (e) {
                         console.error('Failed to update recommendation status', e);
                     }
-
-                    // Reload history so acted item appears in history tab
                     const histResp = await getRecommendationHistory(30);
                     if (histResp.success) setHistory(histResp.data || {});
+                    alertTitle = 'ตัดสต็อกเรียบร้อย ✅';
+                    alertMessage = `ลบ ${result.data.disposedItems?.map(i => i.productName).join(', ')} ออกจากระบบแล้ว`;
                 } else {
                     throw new Error(result.error || 'Dispose failed');
                 }
             } else {
                 const aiDiscount = selectedItem.payload?.recommended_discount || {};
                 const promotionType = aiDiscount.promotion_type || 'discount_percent';
-                // For bundle/buy_x_get_y, discountPercent isn't meaningful but still pass for API
                 const effectivePercent = (promotionType === 'bundle') ? 0 :
                     (promotionType === 'buy_x_get_y') ? 0 : discountPercent;
-                // Call API to create promotion
                 const result = await applyPromotion(
                     selectedItem.id,
                     productNames,
@@ -450,41 +497,125 @@ export default function AIScreen({ navigation }) {
                         'discount_amount': `สร้างโปรลดราคา สำหรับ ${products.length} สินค้า`,
                     }[promotionType] || `ลด ${discountPercent}% สำหรับ ${products.length} สินค้า`;
                     const skippedNote = result.skippedWarning ? `\n\n⚠️ ${result.skippedWarning}` : '';
-                    Alert.alert(
-                        'สร้างโปรโมชั่นสำเร็จ! 🎉',
-                        `${promoSummary}\n\nหมดเขต: ${expiresAt}\n\nตอนขายสินค้า ระบบจะใช้ราคาโปรอัตโนมัติ${skippedNote}`,
-                        [{ text: 'เยี่ยม!' }]
-                    );
-
-                    // Explicitly update status in DB
                     try {
                         await takeRecommendationAction(selectedItem.id, 'accepted', promoSummary);
                     } catch (e) {
                         console.error('Failed to update recommendation status', e);
                     }
-
-                    // Reload history so acted item appears in history tab
                     const histResp = await getRecommendationHistory(30);
                     if (histResp.success) setHistory(histResp.data || {});
+                    alertTitle = 'สร้างโปรโมชั่นสำเร็จ! 🎉';
+                    alertMessage = `${promoSummary}\n\nหมดเขต: ${expiresAt}\n\nตอนขายสินค้า ระบบจะใช้ราคาโปรอัตโนมัติ${skippedNote}`;
                 } else {
                     throw new Error(result.error || 'Promotion failed');
                 }
             }
 
-            // Remove from pending list
+            // Update state and close modal BEFORE showing alert
+            // so the modal dismiss animation doesn't interfere with the Alert on iOS
             setRecommendations(prev => (prev || []).filter(r => r.id !== selectedItem.id));
-            // Reload stats
             const statsResponse = await getRecommendationStats('month');
             if (statsResponse.success) setStats(statsResponse.data);
-
             setProductModalVisible(false);
             setSelectedItem(null);
             setBundleMinSpend('');
+            // Wait for modal dismiss animation then show alert
+            setTimeout(() => Alert.alert(alertTitle, alertMessage, [{ text: 'เยี่ยม!' }]), 350);
         } catch (error) {
             console.error('Product action error:', error);
             Alert.alert('เกิดข้อผิดพลาด', error.message || 'ไม่สามารถดำเนินการได้');
         } finally {
             setActionLoading(false);
+        }
+    };
+
+    // Handle pricing confirm
+    const handlePricingConfirm = async () => {
+        if (!pricingItem || pricingLoading) return;
+        const product = pricingItem.product;
+        if (!product?.id) {
+            Alert.alert('ไม่พบสินค้า', 'ไม่พบข้อมูลสินค้าในระบบ กรุณาแก้ราคาในหน้าจัดการสินค้าโดยตรง');
+            return;
+        }
+        const finalPrice = parseFloat(newPriceInput) || pricingItem.suggestedPrice;
+        if (!finalPrice || finalPrice <= 0) {
+            Alert.alert('ราคาไม่ถูกต้อง', 'กรุณาใส่ราคาใหม่');
+            return;
+        }
+        setPricingLoading(true);
+        try {
+            const result = await updateProductPrice(product.id, finalPrice);
+            if (!result.success) throw new Error(result.error || 'ไม่สามารถอัปเดตราคาได้');
+            try {
+                await takeRecommendationAction(pricingItem.rec.id, 'accepted', `ปรับราคา ${product.name} เป็น ฿${finalPrice}`);
+            } catch (e) { console.error(e); }
+            const histResp = await getRecommendationHistory(30);
+            if (histResp.success) setHistory(histResp.data || {});
+            setRecommendations(prev => (prev || []).filter(r => r.id !== pricingItem.rec.id));
+            const statsResp = await getRecommendationStats('month');
+            if (statsResp.success) setStats(statsResp.data);
+            setPricingModalVisible(false);
+            setPricingItem(null);
+            setTimeout(() => Alert.alert('ปรับราคาสำเร็จ ✅', `${product.name}\n฿${pricingItem.currentPrice} → ฿${finalPrice}`, [{ text: 'เยี่ยม!' }]), 350);
+        } catch (error) {
+            Alert.alert('เกิดข้อผิดพลาด', error.message || 'ไม่สามารถดำเนินการได้');
+        } finally {
+            setPricingLoading(false);
+        }
+    };
+
+    // Handle "เก็บไว้ก่อน" / "ตั้งเตือนหลังโปรหมด" from pricing modal
+    const handleScheduleReminder = async () => {
+        if (!pricingItem || pricingLoading) return;
+        const finalPrice = parseFloat(newPriceInput) || pricingItem.suggestedPrice;
+        if (!finalPrice || finalPrice <= 0) {
+            Alert.alert('ราคาไม่ถูกต้อง', 'กรุณาใส่ราคาที่ต้องการตั้งไว้ก่อนบันทึก');
+            return;
+        }
+        setPricingLoading(true);
+        try {
+            const linkedPromo = (promotions || []).find(p =>
+                p.promotion_items?.some(item => item.product_id === pricingItem.product?.id)
+            );
+            const triggerType = linkedPromo ? 'after_promo' : 'manual';
+            const result = await scheduleRecommendation(pricingItem.rec.id, triggerType, linkedPromo?.id || null, finalPrice);
+            if (!result.success) throw new Error(result.error || 'บันทึกไม่สำเร็จ');
+            setRecommendations(prev => (prev || []).filter(r => r.id !== pricingItem.rec.id));
+            setPricingModalVisible(false);
+            setPricingItem(null);
+            const msg = linkedPromo
+                ? `หลังโปรหมด จะแสดงในส่วน "รอดำเนินการ" ให้เลย`
+                : `บันทึกไว้แล้ว จะแสดงในส่วน "รอดำเนินการ" จนกว่าจะดำเนินการ`;
+            setTimeout(() => Alert.alert('บันทึกแล้ว ✅', msg, [{ text: 'โอเค' }]), 350);
+        } catch (error) {
+            Alert.alert('เกิดข้อผิดพลาด', error.message);
+        } finally {
+            setPricingLoading(false);
+        }
+    };
+
+    // Handle acting on a scheduled reminder card
+    const handleActOnScheduled = async (item, action) => {
+        if (action === 'confirm') {
+            // Re-open pricing modal pre-filled with scheduled price
+            const product = item.payload?.products?.[0];
+            setPricingItem({
+                rec: item,
+                product,
+                currentPrice: product?.price ?? item.payload?.current_price ?? 0,
+                suggestedPrice: item.payload?.scheduled_price ?? item.payload?.suggested_price ?? null,
+                reason: item.payload?.price_change_reason ?? item.detail ?? '',
+            });
+            setNewPriceInput(item.payload?.scheduled_price ? String(item.payload.scheduled_price) : '');
+            setScheduledReminders(prev => prev.filter(r => r.id !== item.id));
+            setPricingModalVisible(true);
+        } else {
+            try {
+                await takeRecommendationAction(item.id, 'skipped');
+                setScheduledReminders(prev => prev.filter(r => r.id !== item.id));
+            } catch (e) {
+                console.error('handleActOnScheduled skip error:', e);
+            }
         }
     };
 
@@ -686,6 +817,53 @@ export default function AIScreen({ navigation }) {
         return configs[type] || configs.stock;
     };
 
+    // Parse action_label (may contain "/" for multi-action) into typed action array
+    const getDetailActions = (item) => {
+        if (!item) return [{ label: 'ตกลง', actionType: 'primary' }];
+        const parts = (item.action_label || 'ตกลง')
+            .split('/')
+            .map(s => s.trim())
+            .filter(Boolean);
+        return parts.map(label => {
+            const l = label;
+            if (l.includes('ปรับราคา') || l.includes('ขึ้นราคา') || l.includes('ลดราคา')) return { label, actionType: 'pricing' };
+            if (l.includes('จัดโปร') || l.includes('สร้างโปร')) return { label, actionType: 'promotion' };
+            if (l.includes('เติมสต็อก') || l.includes('สั่งของ')) return { label, actionType: 'stock' };
+            if (l.includes('ตัดสต็อก')) return { label, actionType: 'dispose' };
+            if (l.includes('ทวงถาม') || l.includes('โทร')) return { label, actionType: 'debt' };
+            return { label, actionType: 'primary' };
+        });
+    };
+
+    // Route to the correct modal/handler based on explicit actionType
+    const handleDetailAction = (item, actionType) => {
+        if (actionType === 'pricing') {
+            const product = item.payload?.products?.[0];
+            setPricingItem({
+                rec: item,
+                product,
+                currentPrice: product?.price ?? item.payload?.current_price ?? 0,
+                suggestedPrice: item.payload?.suggested_price ?? null,
+                reason: item.payload?.price_change_reason ?? item.detail ?? '',
+            });
+            setNewPriceInput('');
+            setPricingModalVisible(true);
+        } else if (actionType === 'promotion') {
+            const productNames = item.payload?.target_products || [item.title];
+            const aiDiscount = item.payload?.recommended_discount || { percent: 20, promotion_type: 'discount_percent' };
+            setSelectedItem({
+                ...item,
+                payload: { ...item.payload, target_products: productNames, recommended_discount: aiDiscount },
+            });
+            setActionType('discount');
+            setDiscountPrice(aiDiscount.price_after_discount?.toString() || `${aiDiscount.percent || 20}%`);
+            setDaysValid(aiDiscount.days_valid?.toString() || '3');
+            setProductModalVisible(true);
+        } else {
+            handleAcceptAction(item);
+        }
+    };
+
     // Build a meaningful action button label using target_products instead of raw action_label from AI
     const getSmartActionLabel = (item) => {
         const products = item.payload?.target_products || [];
@@ -712,6 +890,62 @@ export default function AIScreen({ navigation }) {
 
         return (
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+
+                {/* Scheduled Price Reminders Section */}
+                {scheduledReminders.length > 0 && (
+                    <View style={{ marginBottom: 8 }}>
+                        <View style={[styles.sectionHeader, { marginBottom: 8 }]}>
+                            <View style={styles.sectionTitleRow}>
+                                <Ionicons name="notifications-outline" size={18} color="#7B3F00" />
+                                <Text style={[styles.sectionTitle, { color: '#7B3F00' }]}> รอดำเนินการ</Text>
+                            </View>
+                            <View style={[styles.countBadge, { backgroundColor: '#FFF3E0' }]}>
+                                <Text style={[styles.countText, { color: '#E65100' }]}>{scheduledReminders.length} รายการ</Text>
+                            </View>
+                        </View>
+                        {scheduledReminders.map(item => {
+                            const isAfterPromo = item.payload?.schedule_trigger === 'after_promo';
+                            const productName = item.payload?.products?.[0]?.name || item.title;
+                            const fromPrice = item.payload?.current_price ?? item.payload?.products?.[0]?.price;
+                            const toPrice = item.payload?.scheduled_price;
+                            return (
+                                <View key={item.id} style={[styles.recCard, { borderLeftWidth: 3, borderLeftColor: '#E65100' }]}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6, gap: 8 }}>
+                                        <View style={{ backgroundColor: '#FFF3E0', borderRadius: 8, padding: 8 }}>
+                                            <Ionicons name="pricetag-outline" size={20} color="#E65100" />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ fontSize: 14, fontWeight: '700', color: '#1a1a1a' }}>{productName}</Text>
+                                            <Text style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+                                                {isAfterPromo ? '🕐 โปรหมดแล้ว — พร้อมขึ้นราคา' : '📌 เก็บไว้ก่อน'}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                    {fromPrice != null && toPrice != null && (
+                                        <Text style={{ fontSize: 13, color: '#555', marginBottom: 10 }}>
+                                            ฿{fromPrice} → <Text style={{ color: '#E65100', fontWeight: '700' }}>฿{toPrice}</Text>
+                                        </Text>
+                                    )}
+                                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                                        <TouchableOpacity
+                                            style={{ flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 10, paddingVertical: 10, alignItems: 'center' }}
+                                            onPress={() => handleActOnScheduled(item, 'skip')}
+                                        >
+                                            <Text style={{ color: '#888', fontSize: 13 }}>ข้ามไป</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={{ flex: 2, backgroundColor: '#E65100', borderRadius: 10, paddingVertical: 10, alignItems: 'center' }}
+                                            onPress={() => handleActOnScheduled(item, 'confirm')}
+                                        >
+                                            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>ขึ้นราคาเลย</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            );
+                        })}
+                    </View>
+                )}
+
                 {/* Section Header */}
                 <View style={styles.sectionHeader}>
                     <View style={styles.sectionTitleRow}>
@@ -795,36 +1029,61 @@ export default function AIScreen({ navigation }) {
                                 </View>
 
                                 {/* Action Footer */}
-                                <View style={styles.actionFooter}>
-                                    <TouchableOpacity
-                                        style={[styles.skipBtn, actionLoading && { opacity: 0.5 }]}
-                                        onPress={(e) => {
-                                            e.stopPropagation();
-                                            handleAction(item, 'skipped');
-                                        }}
-                                        disabled={actionLoading}
-                                    >
-                                        <Ionicons name="close" size={16} color="#666" />
-                                        <Text style={styles.skipText}> ข้าม</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={[styles.actionBtn, { backgroundColor: config.color }, actionLoading && { opacity: 0.5 }]}
-                                        onPress={(e) => {
-                                            e.stopPropagation();
-                                            handleAcceptAction(item);
-                                        }}
-                                        disabled={actionLoading}
-                                    >
-                                        {actionLoading ? (
-                                            <ActivityIndicator size="small" color="#fff" />
-                                        ) : (
-                                            <>
-                                                <Ionicons name="checkmark" size={18} color="#fff" />
-                                                <Text style={styles.actionText}> {getSmartActionLabel(item)}</Text>
-                                            </>
-                                        )}
-                                    </TouchableOpacity>
-                                </View>
+                                {(() => {
+                                    const actions = getDetailActions(item);
+                                    const isMulti = actions.length > 1;
+                                    // Responsive: scale button padding based on screen width
+                                    const btnPadV = screenWidth < 375 ? 9 : 12;
+                                    const btnFontSize = screenWidth < 375 ? 11 : 13;
+                                    return (
+                                        <View style={styles.actionFooter}>
+                                            {isMulti ? (
+                                                // Icon-only skip for multi-action to save horizontal space
+                                                <TouchableOpacity
+                                                    style={[styles.skipBtnIcon, actionLoading && { opacity: 0.5 }]}
+                                                    onPress={(e) => { e.stopPropagation(); handleAction(item, 'skipped'); }}
+                                                    disabled={actionLoading}
+                                                >
+                                                    <Ionicons name="close" size={18} color="#666" />
+                                                </TouchableOpacity>
+                                            ) : (
+                                                <TouchableOpacity
+                                                    style={[styles.skipBtn, actionLoading && { opacity: 0.5 }]}
+                                                    onPress={(e) => { e.stopPropagation(); handleAction(item, 'skipped'); }}
+                                                    disabled={actionLoading}
+                                                >
+                                                    <Ionicons name="close" size={16} color="#666" />
+                                                    <Text style={styles.skipText}> ข้าม</Text>
+                                                </TouchableOpacity>
+                                            )}
+                                            {actions.length === 1 ? (
+                                                <TouchableOpacity
+                                                    style={[styles.actionBtn, { backgroundColor: config.color }, actionLoading && { opacity: 0.5 }]}
+                                                    onPress={(e) => { e.stopPropagation(); handleAcceptAction(item); }}
+                                                    disabled={actionLoading}
+                                                >
+                                                    {actionLoading ? <ActivityIndicator size="small" color="#fff" /> : (
+                                                        <>
+                                                            <Ionicons name="checkmark" size={18} color="#fff" />
+                                                            <Text style={styles.actionText}> {getSmartActionLabel(item)}</Text>
+                                                        </>
+                                                    )}
+                                                </TouchableOpacity>
+                                            ) : (
+                                                actions.map((action, idx) => (
+                                                    <TouchableOpacity
+                                                        key={idx}
+                                                        style={[styles.actionBtn, { flex: 1, backgroundColor: idx === 0 ? '#607D8B' : config.color, paddingVertical: btnPadV, paddingHorizontal: 6 }, actionLoading && { opacity: 0.5 }]}
+                                                        onPress={(e) => { e.stopPropagation(); handleDetailAction(item, action.actionType); }}
+                                                        disabled={actionLoading}
+                                                    >
+                                                        <Text style={[styles.actionText, { fontSize: btnFontSize }]} numberOfLines={1} adjustsFontSizeToFit>{action.label}</Text>
+                                                    </TouchableOpacity>
+                                                ))
+                                            )}
+                                        </View>
+                                    );
+                                })()}
                             </TouchableOpacity>
                         );
                     })
@@ -1630,19 +1889,129 @@ export default function AIScreen({ navigation }) {
                             >
                                 <Text style={styles.modalCancelText}>ข้าม</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity
-                                style={styles.modalConfirmBtn}
-                                onPress={() => {
-                                    setDetailModalVisible(false);
-                                    if (selectedItem) handleAcceptAction(selectedItem);
-                                }}
-                            >
-                                <Text style={styles.modalConfirmText}>{selectedItem?.action_label || 'ตกลง'}</Text>
-                            </TouchableOpacity>
+                            {(() => {
+                                const actions = getDetailActions(selectedItem);
+                                if (actions.length === 1) {
+                                    return (
+                                        <TouchableOpacity
+                                            style={styles.modalConfirmBtn}
+                                            onPress={() => {
+                                                setDetailModalVisible(false);
+                                                if (selectedItem) handleAcceptAction(selectedItem);
+                                            }}
+                                        >
+                                            <Text style={styles.modalConfirmText}>{selectedItem?.action_label || 'ตกลง'}</Text>
+                                        </TouchableOpacity>
+                                    );
+                                }
+                                return actions.map((action, idx) => (
+                                    <TouchableOpacity
+                                        key={idx}
+                                        style={[styles.modalConfirmBtn, idx === 0 && { backgroundColor: '#607D8B' }, idx > 0 && { marginLeft: 8 }]}
+                                        onPress={() => {
+                                            setDetailModalVisible(false);
+                                            setTimeout(() => handleDetailAction(selectedItem, action.actionType), 300);
+                                        }}
+                                    >
+                                        <Text style={styles.modalConfirmText} numberOfLines={1} adjustsFontSizeToFit>{action.label}</Text>
+                                    </TouchableOpacity>
+                                ));
+                            })()}
                         </View>
                     </View>
                 </View>
             </Modal>
+
+            {/* Pricing Adjustment Modal */}
+            <Modal
+                visible={pricingModalVisible}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => { setPricingModalVisible(false); setPricingItem(null); }}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>💡 ปรับราคาสินค้า</Text>
+                            <TouchableOpacity onPress={() => { setPricingModalVisible(false); setPricingItem(null); }}>
+                                <Ionicons name="close" size={24} color="#666" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {pricingItem && (
+                            <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+                                <Text style={{ fontSize: 16, fontWeight: '700', color: '#1a1a1a', marginBottom: 4 }}>
+                                    {pricingItem.product?.name || pricingItem.rec?.title}
+                                </Text>
+                                {pricingItem.reason ? (
+                                    <Text style={{ fontSize: 13, color: '#666', marginBottom: 16, lineHeight: 18 }}>
+                                        {pricingItem.reason}
+                                    </Text>
+                                ) : null}
+
+                                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+                                    <View style={{ flex: 1, backgroundColor: '#F3F4F6', borderRadius: 10, padding: 12, alignItems: 'center' }}>
+                                        <Text style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>ราคาปัจจุบัน</Text>
+                                        <Text style={{ fontSize: 20, fontWeight: '700', color: '#374151' }}>฿{pricingItem.currentPrice}</Text>
+                                    </View>
+                                    {pricingItem.suggestedPrice ? (() => {
+                                        const isRaise = pricingItem.suggestedPrice > pricingItem.currentPrice;
+                                        const bgColor = isRaise ? '#FFF3E0' : '#E3F2FD';
+                                        const textColor = isRaise ? '#E65100' : '#1565C0';
+                                        const arrow = isRaise ? '↑' : '↓';
+                                        const dirLabel = isRaise ? 'AI แนะนำขึ้นราคา' : 'AI แนะนำลดราคา';
+                                        return (
+                                            <View style={{ flex: 1, backgroundColor: bgColor, borderRadius: 10, padding: 12, alignItems: 'center' }}>
+                                                <Text style={{ fontSize: 11, color: textColor, marginBottom: 4 }}>{dirLabel}</Text>
+                                                <Text style={{ fontSize: 20, fontWeight: '700', color: textColor }}>{arrow} ฿{pricingItem.suggestedPrice}</Text>
+                                            </View>
+                                        );
+                                    })() : null}
+                                </View>
+
+                                <Text style={{ fontSize: 13, color: '#374151', marginBottom: 8, fontWeight: '600' }}>
+                                    ราคาใหม่ที่ต้องการตั้ง
+                                </Text>
+                                <TextInput
+                                    style={{ borderWidth: 1.5, borderColor: '#E65100', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 18, fontWeight: '700', color: '#1a1a1a', marginBottom: 20 }}
+                                    keyboardType="numeric"
+                                    placeholder={pricingItem.suggestedPrice ? `${pricingItem.suggestedPrice}` : 'ใส่ราคา'}
+                                    placeholderTextColor="#bbb"
+                                    value={newPriceInput}
+                                    onChangeText={setNewPriceInput}
+                                />
+
+                                <View style={{ flexDirection: 'row', gap: 8 }}>
+                                    <TouchableOpacity
+                                        style={{ flex: 1, backgroundColor: '#F3F4F6', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
+                                        onPress={handleScheduleReminder}
+                                        disabled={pricingLoading}
+                                    >
+                                        <Text style={{ color: '#374151', fontWeight: '600', fontSize: 13 }} numberOfLines={1}>
+                                            {(promotions || []).find(p => p.promotion_items?.some(i => i.product_id === pricingItem?.product?.id))
+                                                ? 'ตั้งเตือนหลังโปรหมด'
+                                                : 'เก็บไว้ก่อน'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={{ flex: 1, backgroundColor: pricingLoading ? '#ccc' : '#E65100', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
+                                        onPress={handlePricingConfirm}
+                                        disabled={pricingLoading}
+                                    >
+                                        {pricingLoading
+                                            ? <ActivityIndicator color="#fff" />
+                                            : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
+                                                {pricingItem?.suggestedPrice && pricingItem.suggestedPrice < pricingItem.currentPrice ? 'ลดราคาเลย' : 'ขึ้นราคาเลย'}
+                                              </Text>
+                                        }
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        )}
+                    </View>
+                </View>
+            </Modal>
+
         </SafeAreaView >
     );
 }
@@ -1827,6 +2196,16 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderRadius: 25,
         paddingVertical: 12,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+    },
+    skipBtnIcon: {
+        width: 44,
+        height: 44,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#F5F5F5',
+        borderRadius: 22,
         borderWidth: 1,
         borderColor: '#E0E0E0',
     },
