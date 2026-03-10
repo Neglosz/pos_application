@@ -56,6 +56,7 @@ export default function AIScreen({ navigation }) {
     // Stock Refill Modal states
     const [stockModalVisible, setStockModalVisible] = useState(false);
     const [stockModalBarcode, setStockModalBarcode] = useState('');
+    const [stockModalProduct, setStockModalProduct] = useState(null); // สำหรับสินค้าชั่งน้ำหนัก/ไม่มีบาร์โค้ด
     const [currentRestockItem, setCurrentRestockItem] = useState(null);
 
     // Persona Prompt
@@ -330,15 +331,16 @@ export default function AIScreen({ navigation }) {
             Alert.alert("สำเร็จ", `เพิ่มสินค้าใหม่ "${data.name}" จำนวน ${data.addedQty} ชิ้น เรียบร้อย`);
         } else {
             Alert.alert("สำเร็จ", `เติมสต็อก "${data.name}" จำนวน ${data.addedQty} ชิ้น\n(สต็อกรวม: ${data.newStockQty} ชิ้น)`);
-            
-            // Mark the AI recommendation as accepted since we just restocked it
-            if (currentRestockItem) {
-                await handleAction(currentRestockItem, 'accepted');
-            }
         }
-        
+
+        // Mark as accepted หลังจากเติม stock จริงแล้ว (ทั้ง isNew และ restock)
+        if (currentRestockItem) {
+            await handleAction(currentRestockItem, 'accepted');
+        }
+
         setStockModalVisible(false);
         setCurrentRestockItem(null);
+        setStockModalProduct(null);
     };
 
     // Handle Accept button - open appropriate modal
@@ -373,46 +375,46 @@ export default function AIScreen({ navigation }) {
                 setDebtModalVisible(true);
             }
         } else if (isRestockOnly) {
-            // Open AddStockModal for the specific product if we have its barcode
-            // The payload usually contains the product name. We need to fetch the product details or barcode.
-            // Let's assume the payload.products contains the full product object from AI response
+            // เปิด AddStockModal ของ AIScreen โดยตรง — mark accepted เฉพาะตอนที่เติมจริงใน handleAddStock
             const targetProduct = item.payload?.products?.[0];
-            
+
             if (targetProduct) {
-                // To be safe and get the most up-to-date barcode, we can search the store state
                 const allProducts = useProductStore.getState().products || [];
                 const storeProduct = allProducts.find(p => p.name === targetProduct.name);
-                
+
+                setCurrentRestockItem(item); // set ก่อนเสมอ
+
                 if (storeProduct && storeProduct.is_weightable) {
-                     navigation.navigate('สแกน', { 
-                         tab: 'weight', 
-                         autoShowRestock: true, 
-                         barcode: storeProduct.barcode || storeProduct.id 
-                     });
-                     handleAction(item, 'accepted');
+                    // สินค้าชั่งน้ำหนัก — ส่ง product object ตรงๆ ให้ AddStockModal
+                    setStockModalProduct(storeProduct);
+                    setStockModalBarcode('');
+                    setStockModalVisible(true);
                 } else if (storeProduct && storeProduct.barcode) {
-                     navigation.navigate('StockScan', { 
-                         autoShowModal: true, 
-                         barcode: storeProduct.barcode 
-                     });
-                     handleAction(item, 'accepted');
+                    // สินค้ามีบาร์โค้ด — ให้ AddStockModal ค้นหาเอง
+                    setStockModalProduct(null);
+                    setStockModalBarcode(storeProduct.barcode);
+                    setStockModalVisible(true);
+                } else if (storeProduct) {
+                    // มีสินค้าแต่ไม่มีบาร์โค้ด — ส่ง product ตรงๆ
+                    setStockModalProduct(storeProduct);
+                    setStockModalBarcode('');
+                    setStockModalVisible(true);
                 } else {
-                     // No barcode found, go to scan screen
-                     Alert.alert(
-                         'เริ่มสแกนสินค้า',
-                         `ไม่พบบาร์โค้ดของ ${targetProduct.name} ในระบบ กรุณาสแกนสินค้าเพื่อเติมสต็อก`,
-                         [
-                             { text: 'ยกเลิก', style: 'cancel' },
-                             { text: 'เปิดกล้องสแกน', onPress: () => {
-                                 navigation.navigate('StockScan');
-                                 handleAction(item, 'accepted');
-                             }}
-                         ]
-                     );
+                    // ไม่เจอสินค้าในระบบ — fallback ไป StockScan และ reset
+                    setCurrentRestockItem(null);
+                    Alert.alert(
+                        'ไม่พบสินค้า',
+                        `ไม่พบ "${targetProduct.name}" ในระบบ กรุณาสแกนบาร์โค้ดสินค้าเพื่อเติมสต็อก`,
+                        [
+                            { text: 'ยกเลิก', style: 'cancel' },
+                            { text: 'เปิดกล้องสแกน', onPress: () => navigation.navigate('StockScan') }
+                        ]
+                    );
                 }
             } else {
+                // ไม่มีข้อมูลสินค้าจาก AI เลย
+                setCurrentRestockItem(null);
                 navigation.navigate('StockScan');
-                handleAction(item, 'accepted');
             }
         } else if (item.type === 'pricing') {
             // Open pricing modal
@@ -480,8 +482,12 @@ export default function AIScreen({ navigation }) {
                     }
                     const histResp = await getRecommendationHistory(30);
                     if (histResp.success) setHistory(histResp.data || {});
-                    alertTitle = 'ตัดสต็อกเรียบร้อย ✅';
-                    alertMessage = `ลบ ${result.data.disposedItems?.map(i => i.productName).join(', ')} ออกจากระบบแล้ว`;
+                    const disposed = result.data.totalDisposed || 0;
+                    const names = [...new Set(result.data.disposedItems?.map(i => i.productName) || [])].join(', ');
+                    alertTitle = disposed > 0 ? 'ตัดสต็อกเรียบร้อย ✅' : 'ไม่พบสต็อกที่ต้องตัด';
+                    alertMessage = disposed > 0
+                        ? `ตัดสต็อก ${names} ออก ${disposed} ${result.data.disposedItems?.[0]?.unit_type || 'ชิ้น'} เรียบร้อยแล้ว`
+                        : `ไม่พบสินค้าค้างสต็อกของ ${names || productNames.join(', ')} (อาจถูกตัดไปแล้ว)`;
                 } else {
                     throw new Error(result.error || 'Dispose failed');
                 }
@@ -1749,10 +1755,12 @@ export default function AIScreen({ navigation }) {
             {/* Add Stock Modal */}
             <AddStockModal
                 visible={stockModalVisible}
-                scannedCode={stockModalBarcode}
+                scannedCode={stockModalProduct ? undefined : stockModalBarcode}
+                product={stockModalProduct}
                 onClose={() => {
                     setStockModalVisible(false);
                     setCurrentRestockItem(null);
+                    setStockModalProduct(null);
                 }}
                 onConfirm={handleAddStock}
             />
