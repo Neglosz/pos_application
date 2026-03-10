@@ -4,6 +4,7 @@ import { AntDesign, Ionicons, Feather } from '@expo/vector-icons';
 import { PaymentMethodModal, QRPaymentModal, ReceiptModal, CashPaymentModal } from '../components/payment';
 import { getCustomersWithDebt, createCreditPayment, getCustomerPendingBills, getOrderDetails, cancelOrder } from '../services/api';
 import { useFocusEffect } from '@react-navigation/native';
+import { useStore } from '../contexts/StoreContext';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -18,6 +19,7 @@ const getAvatarColor = (name) => {
 };
 
 export default function DebtScreen() {
+    const { currentStore } = useStore();
     const [modalVisible, setModalVisible] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [selectedDebtor, setSelectedDebtor] = useState(null);
@@ -288,6 +290,7 @@ export default function DebtScreen() {
                 total: payment,
                 received: received,
                 change: received - payment,
+                store: { name: currentStore?.name, address: currentStore?.address, phone: currentStore?.phone },
             });
             setReceiptVisible(true);
         } catch (err) {
@@ -327,6 +330,7 @@ export default function DebtScreen() {
                 total: payment,
                 received: payment,
                 change: 0,
+                store: { name: currentStore?.name, address: currentStore?.address, phone: currentStore?.phone },
             });
             setReceiptVisible(true);
         } catch (err) {
