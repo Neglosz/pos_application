@@ -201,7 +201,7 @@ export default function AlertScreen({ navigation }) {
             return { icon: 'package-variant-closed', color: '#E53935' };
         }
         if (type === 'stock_near_expiry') {
-            return { icon: 'clock-alert', color: '#FF9800' };
+            return { icon: 'clock-alert', color: '#F37021' };
         }
         if (type === 'stock_out') {
             return { icon: 'package-variant-remove', color: '#E53935' };

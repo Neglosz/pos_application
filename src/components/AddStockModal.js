@@ -599,7 +599,7 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
                     style={styles.input}
                     value={unitType}
                     onChangeText={setUnitType}
-                    placeholder="ชิ้น, กก., ขวด, ลัง..."
+                    placeholder="ชิ้น, ขวด, ลัง..."
                 />
             </View>
 
