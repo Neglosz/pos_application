@@ -310,7 +310,7 @@ export default function DebtScreen() {
             await createCreditPayment({
                 customer_id: selectedDebtor.id,
                 amount: payment,
-                payment_method: 'qr'
+                payment_method: 'qr_promptpay'
             });
             fetchDebtData();
             setQRPaymentVisible(false);
