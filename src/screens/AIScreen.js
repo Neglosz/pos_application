@@ -530,7 +530,7 @@ export default function AIScreen({ navigation }) {
                 );
                 if (result.success) {
                     const products = result.data.affectedProducts;
-                    const expiresAt = new Date(result.data.expiresAt).toLocaleDateString('th-TH');
+                    const expiresAt = new Date(result.data.expiresAt).toLocaleDateString('th-TH-u-ca-buddhist');
                     const promoSummary = {
                         'bundle': `สร้างโปรซื้อคู่ถูกกว่า ${products.map(p => p.name).join(' + ')}`,
                         'buy_x_get_y': `สร้างโปรซื้อแถมฟรี สำหรับ ${products.length} สินค้า`,
@@ -1500,7 +1500,7 @@ export default function AIScreen({ navigation }) {
                                     <Ionicons name="cube-outline" size={16} color="#666" />
                                     <Text style={[styles.impactText, { color: '#666' }]}>{productNames}</Text>
                                 </View>
-                                <Text style={{ color: '#999', fontSize: 12, marginTop: 4 }}>หมดเขต: {promo.end_date ? new Date(promo.end_date).toLocaleDateString('th-TH') : '-'}</Text>
+                                <Text style={{ color: '#999', fontSize: 12, marginTop: 4 }}>หมดเขต: {promo.end_date ? new Date(promo.end_date).toLocaleDateString('th-TH-u-ca-buddhist') : '-'}</Text>
                             </View>
                             <View style={styles.actionFooter}>
                                 <View />

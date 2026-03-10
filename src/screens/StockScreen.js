@@ -78,7 +78,7 @@ export default function StockScreen() {
         if (diffDays == 0) return 'วันนี้';
         if (diffDays === 1) return 'พรุ่งนี้';
         if (diffDays <= 7) return `อีก ${diffDays} วัน`;
-        return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+        return date.toLocaleDateString('th-TH-u-ca-buddhist', { day: 'numeric', month: 'short' });
     };
 
     // Images are now stored as full Supabase URLs, no need to prefix

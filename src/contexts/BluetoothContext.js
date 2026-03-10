@@ -251,7 +251,7 @@ export const BluetoothProvider = ({ children }) => {
             // ข้อมูลบิล
             receipt += LEFT;
             receipt += 'No: ' + (transaction?.receiptNo || transaction?.order_no || '-') + '\n';
-            receipt += 'Date: ' + (transaction?.date || new Date().toLocaleString('th-TH')) + '\n';
+            receipt += 'Date: ' + (transaction?.date || new Date().toLocaleString('th-TH-u-ca-buddhist')) + '\n';
             receipt += 'Pay: ' + (transaction?.paymentMethod || '-') + '\n';
             receipt += LINE;
             // รายการสินค้า

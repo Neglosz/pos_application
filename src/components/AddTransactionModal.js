@@ -65,7 +65,7 @@ export default function AddTransactionModal({ visible, onClose, onSave }) {
 
                             <Text style={styles.label}>วันที่</Text>
                             <TouchableOpacity style={styles.input} onPress={() => setShowDatePicker(true)}>
-                                <Text>{date.toLocaleDateString('th-TH')}</Text>
+                                <Text>{date.toLocaleDateString('th-TH-u-ca-buddhist')}</Text>
                             </TouchableOpacity>
                             {showDatePicker && (
                                 <DateTimePicker

@@ -477,7 +477,7 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
                     onPress={() => { Keyboard.dismiss(); setShowDatePicker(true); }}
                 >
                     <Text style={[styles.dateText, !expireDate && { color: '#999' }]}>
-                        {expireDate ? expireDate.toLocaleDateString('th-TH') : 'เลือกวันหมดอายุ'}
+                        {expireDate ? expireDate.toLocaleDateString('th-TH-u-ca-buddhist') : 'เลือกวันหมดอายุ'}
                     </Text>
                     <Ionicons name="calendar-outline" size={20} color="#666" />
                 </TouchableOpacity>
@@ -635,7 +635,7 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
                     onPress={() => { Keyboard.dismiss(); setShowDatePicker(true); }}
                 >
                     <Text style={[styles.dateText, !expireDate && { color: '#999' }]}>
-                        {expireDate ? expireDate.toLocaleDateString('th-TH') : 'เลือกวันหมดอายุ'}
+                        {expireDate ? expireDate.toLocaleDateString('th-TH-u-ca-buddhist') : 'เลือกวันหมดอายุ'}
                     </Text>
                     <Ionicons name="calendar-outline" size={20} color="#666" />
                 </TouchableOpacity>
