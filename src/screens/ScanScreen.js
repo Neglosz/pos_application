@@ -1774,7 +1774,7 @@ export default function ScanScreen({ navigation, route }) {
                 {/* iOS Date Picker Overlay */}
                 {Platform.OS === 'ios' && showDatePicker && (
                     <TouchableWithoutFeedback onPress={() => setShowDatePicker(false)}>
-                        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' }}>
+                        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 999 }}>
                             <TouchableWithoutFeedback>
                                 <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 30 }}>
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#eee' }}>
