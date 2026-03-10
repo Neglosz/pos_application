@@ -31,6 +31,7 @@ export default function ReceiptModal({
     onNewTransaction,
     onClose,
     onCancelOrder,
+    hidePrint = false,
 }) {
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
@@ -257,6 +258,7 @@ export default function ReceiptModal({
 
                     {/* Action Buttons */}
                     <View style={styles.actionButtons}>
+                        {!hidePrint && (
                         <TouchableOpacity
                             style={styles.printButton}
                             onPress={onPrint}
@@ -265,6 +267,7 @@ export default function ReceiptModal({
                             <MaterialCommunityIcons name="printer" size={20} color="#fff" />
                             <Text style={styles.printButtonText}>พิมพ์</Text>
                         </TouchableOpacity>
+                        )}
                         {onCancelOrder ? (
                             <TouchableOpacity
                                 style={styles.cancelOrderButton}
