@@ -1066,11 +1066,11 @@ export default function AIScreen({ navigation }) {
 
                                     {/* Product List */}
                                     {item.payload?.products?.length > 0 && (
-                                        <View style={styles.impactBox}>
+                                        <View style={[styles.impactBox, { flexDirection: 'column', alignItems: 'flex-start', gap: 4 }]}>
                                             {item.payload.products.map((p, idx) => (
-                                                <View key={idx} style={styles.impactBox}>
-                                                    <Text>{'• '}{p.name}</Text>
-                                                    <Text>{[p.qty, p.unit, p.status].filter(Boolean).join(' ')}</Text>
+                                                <View key={idx} style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', width: '100%' }}>
+                                                    <Text style={{ fontSize: 13, color: '#2E7D32', fontWeight: '600' }}>{'• '}</Text>
+                                                    <Text style={{ flex: 1, fontSize: 13, color: '#2E7D32', fontWeight: '600', flexWrap: 'wrap' }}>{p.name}{[p.qty, p.unit, p.status].filter(Boolean).length > 0 ? ' ' + [p.qty, p.unit, p.status].filter(Boolean).join(' ') : ''}</Text>
                                                 </View>
                                             ))}
                                         </View>
@@ -1113,8 +1113,8 @@ export default function AIScreen({ navigation }) {
                                                 >
                                                     {actionLoading ? <ActivityIndicator size="small" color="#fff" /> : (
                                                         <>
-                                                            <Ionicons name="checkmark" size={18} color="#fff" />
-                                                            <Text style={styles.actionText}> {getSmartActionLabel(item)}</Text>
+                                                            <Ionicons name="checkmark" size={16} color="#fff" />
+                                                            <Text style={styles.actionText} numberOfLines={2}> {getSmartActionLabel(item)}</Text>
                                                         </>
                                                     )}
                                                 </TouchableOpacity>
@@ -1877,8 +1877,8 @@ export default function AIScreen({ navigation }) {
 
                                     {selectedItem.expected_impact && (
                                         <View style={styles.detailImpact}>
-                                            <Octicons name="sparkle" size={16} color="#43A047" />
-                                            <Text style={styles.detailImpactText}> {selectedItem.expected_impact}</Text>
+                                            <Octicons name="sparkle" size={16} color="#43A047" style={{ flexShrink: 0 }} />
+                                            <Text style={[styles.detailImpactText, { flex: 1, flexWrap: 'wrap' }]}> {selectedItem.expected_impact}</Text>
                                         </View>
                                     )}
 
@@ -2059,7 +2059,7 @@ export default function AIScreen({ navigation }) {
                                             ? <ActivityIndicator color="#fff" />
                                             : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
                                                 {pricingItem?.suggestedPrice && pricingItem.suggestedPrice < pricingItem.currentPrice ? 'ลดราคาเลย' : 'ขึ้นราคาเลย'}
-                                              </Text>
+                                            </Text>
                                         }
                                     </TouchableOpacity>
                                 </View>
@@ -2227,6 +2227,7 @@ const styles = StyleSheet.create({
     impactBox: {
         flexDirection: 'row',
         alignItems: 'center',
+        flexWrap: 'wrap',
         backgroundColor: '#E8F5E9',
         borderRadius: 20,
         paddingVertical: 10,
@@ -2234,7 +2235,9 @@ const styles = StyleSheet.create({
         marginTop: 12,
     },
     impactText: {
-        fontSize: 16,
+        flex: 1,
+        flexShrink: 1,
+        fontSize: 14,
         color: '#2E7D32',
         fontWeight: '600',
     },
@@ -2273,16 +2276,21 @@ const styles = StyleSheet.create({
     },
     actionBtn: {
         flex: 2,
+        minWidth: 0,
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
         borderRadius: 25,
         paddingVertical: 12,
+        paddingHorizontal: 10,
     },
     actionText: {
-        fontSize: 18,
+        flexShrink: 1,
+        fontSize: 13,
         color: '#fff',
         fontWeight: 'bold',
+        flexWrap: 'wrap',
+        textAlign: 'center',
     },
     footerNote: {
         textAlign: 'center',
@@ -2884,16 +2892,20 @@ const styles = StyleSheet.create({
     },
     detailImpact: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         backgroundColor: '#E8F5E9',
         padding: 12,
         borderRadius: 10,
         marginBottom: 20,
     },
     detailImpactText: {
-        fontSize: 15,
+        flex: 1,
+        flexShrink: 1,
+        flexWrap: 'wrap',
+        fontSize: 14,
         color: '#2E7D32',
         fontWeight: '600',
+        lineHeight: 20,
     },
     detailReasonBox: {
         backgroundColor: '#F5F5F5',
