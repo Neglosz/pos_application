@@ -21,7 +21,7 @@ import { createCreditSale, createSale } from '../services/api';
 
 // Components
 import { PaymentMethodModal, QRPaymentModal, DebtPaymentModal, ReceiptModal, CashPaymentModal } from '../components/payment';
-import ProductQuantityModal from '../components/ProductQuantityModal';
+import ProductQuantityModal from './ProductQuantityModal';
 import AddStockModal from '../components/AddStockModal';
 
 const { width, height } = Dimensions.get('window');
@@ -1583,7 +1583,7 @@ export default function ScanScreen({ navigation, route }) {
                         </View>
                         <View style={styles.handleIndicator} />
 
-                        <ScrollView showsVerticalScrollIndicator={false}>
+                        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                             {/* Category Input */}
                             <Text style={styles.inputLabel}>
                                 <Ionicons name="pricetag-outline" size={14} /> หมวดหมู่
