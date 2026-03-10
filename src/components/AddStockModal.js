@@ -8,7 +8,7 @@ import { getProductCategories, addProduct, getProductByBarcode, addProductBatch,
 import { uploadProductImage, isLocalUri } from '../services/supabaseStorage';
 import CategoryManageModal from './CategoryManageModal';
 
-export default function AddStockModal({ visible, onClose, onConfirm, scannedCode }) {
+export default function AddStockModal({ visible, onClose, onConfirm, scannedCode, product }) {
     // Mode: 'loading', 'new', 'restock'
     const [mode, setMode] = useState('loading');
     const [existingProduct, setExistingProduct] = useState(null);
@@ -32,7 +32,16 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
 
     useEffect(() => {
         let cancelToken = { cancelled: false };
-        if (visible && scannedCode) {
+        if (visible && product) {
+            // สินค้าชั่ง (ไม่มี barcode) — ข้ามการค้นหา ตั้งค่า restock mode ตรง ๆ
+            setExistingProduct(product);
+            setMode('restock');
+            setCostPrice(product.cost_price?.toString() || '');
+            setSalePrice(product.price?.toString() || '');
+            setQuantity('');
+            setExpireDate(null);
+            loadCategories();
+        } else if (visible && scannedCode) {
             // เรียกตรวจสอบบาร์โค้ดจาก API ใหม่ทุกครั้งที่เปิด Modal
             checkExistingProduct(scannedCode, cancelToken);
             loadCategories();
@@ -45,7 +54,7 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
         return () => {
             cancelToken.cancelled = true;
         };
-    }, [visible, scannedCode]);
+    }, [visible, scannedCode, product]);
 
     const checkExistingProduct = async (code, cancelToken) => {
         setMode('loading');

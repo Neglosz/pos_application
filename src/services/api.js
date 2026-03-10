@@ -13,35 +13,42 @@ export const waitForAutoRefresh = () => {
 
     _pendingRefreshWait = (async () => {
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            const now = Math.floor(Date.now() / 1000);
-
-            // Session ยังใช้ได้ → คืนทันที
-            if (session?.access_token && (!session.expires_at || session.expires_at > now + 5)) {
-                return session;
-            }
-
-            // ไม่มี session เลย (ไม่มี refresh token) → ไม่ต้องรอ
-            if (!session) return null;
-
-            // Token หมดอายุ → รอให้ startAutoRefresh() refresh เสร็จ
+            // Subscribe ก่อน แล้วค่อย check session
+            // เพื่อป้องกัน race condition ที่ TOKEN_REFRESHED fire ระหว่าง getSession() กับ onAuthStateChange()
             return await new Promise((resolve) => {
-                const timer = setTimeout(() => {
+                let resolved = false;
+                const resolveOnce = (value) => {
+                    if (resolved) return;
+                    resolved = true;
+                    clearTimeout(timer);
                     authSub?.unsubscribe();
-                    resolve(null); // timeout 8 วินาที
+                    resolve(value);
+                };
+
+                const timer = setTimeout(() => {
+                    resolveOnce(null); // timeout 8 วินาที
                 }, 8000);
 
+                // 1. Subscribe ก่อน เพื่อไม่ให้พลาด TOKEN_REFRESHED
                 const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((event, freshSession) => {
                     if (event === 'TOKEN_REFRESHED') {
-                        clearTimeout(timer);
-                        authSub.unsubscribe();
-                        resolve(freshSession);
+                        resolveOnce(freshSession);
                     } else if (event === 'SIGNED_OUT') {
-                        clearTimeout(timer);
-                        authSub.unsubscribe();
-                        resolve(null);
+                        resolveOnce(null);
                     }
                 });
+
+                // 2. Check session หลัง subscribe → ถ้า TOKEN_REFRESHED เพิ่ง fire ไปแล้ว getSession() จะคืน fresh session
+                supabase.auth.getSession().then(({ data: { session } }) => {
+                    const now = Math.floor(Date.now() / 1000);
+                    if (!session) {
+                        resolveOnce(null);
+                    } else if (session.access_token && session.expires_at > now + 5) {
+                        // Session ยังใช้ได้ (ไม่ได้หมดอายุ)
+                        resolveOnce(session);
+                    }
+                    // Session หมดอายุ → รอ TOKEN_REFRESHED จาก startAutoRefresh()
+                }).catch(() => resolveOnce(null));
             });
         } finally {
             _pendingRefreshWait = null;
