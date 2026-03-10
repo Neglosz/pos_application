@@ -187,15 +187,6 @@ export default function ReceiptModal({
                         </TouchableOpacity>
                     </View>
 
-                    {/* Success Icon */}
-                    <View style={styles.successContainer}>
-                        <View style={styles.successIcon}>
-                            <AntDesign name="check-circle" size={50} color="#35E0AD" />
-                        </View>
-                        <Text style={styles.successTitle}>ชำระเงินสำเร็จ</Text>
-                        <Text style={styles.successSubtitle}>ขอบคุณที่ใช้บริการ</Text>
-                    </View>
-
                     {/* Store Info */}
                     <View style={styles.storeInfo}>
                         <Text style={styles.storeName}>{store?.name || DEFAULT_STORE.name}</Text>

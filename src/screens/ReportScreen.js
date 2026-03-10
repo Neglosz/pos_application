@@ -201,13 +201,13 @@ export default function ReportScreen() {
                     </View>
                 </View>
 
-                {/* Credit */}
+                {/* Credit (ยอดค้างชำระ) */}
                 <View style={styles.paymentCardCompact}>
                     <View style={styles.paymentHeader}>
                         <View style={[styles.paymentIconCompact, { backgroundColor: '#FFF3E0' }]}>
-                            <MaterialCommunityIcons name="credit-card-outline" size={16} color="#FF9800" />
+                            <MaterialCommunityIcons name="account-clock-outline" size={16} color="#FF9800" />
                         </View>
-                        <Text style={styles.paymentMethodTitleCompact}>เครดิต</Text>
+                        <Text style={styles.paymentMethodTitleCompact}>ค้างชำระ</Text>
                     </View>
 
                     <Text style={styles.paymentAmountCompact}>฿{paymentStats.credit?.amount?.toLocaleString() || 0}</Text>
