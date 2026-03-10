@@ -4,19 +4,56 @@ import { supabase } from './supabase';
 let currentStoreId = null;
 let currentUserId = null;
 
-// Singleton refresh: ถ้า refresh กำลังทำงานอยู่ → call อื่นรอแทนที่จะเรียกซ้ำ
-// (ป้องกัน race condition ตอนหลาย API call ยิงพร้อมกัน)
-let _refreshPromise = null;
-export const safeRefreshSession = () => {
-    if (_refreshPromise) return _refreshPromise;
-    _refreshPromise = supabase.auth.refreshSession()
-        .finally(() => { _refreshPromise = null; });
-    return _refreshPromise;
+// รอให้ Supabase's startAutoRefresh() ทำงานเสร็จ
+// ไม่เรียก refreshSession() เองเลย เพื่อป้องกัน race condition กับ auto-refresh
+// ที่ทำให้ refresh token ถูก revoke (Reuse Detection)
+let _pendingRefreshWait = null;
+export const waitForAutoRefresh = () => {
+    if (_pendingRefreshWait) return _pendingRefreshWait;
+
+    _pendingRefreshWait = (async () => {
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const now = Math.floor(Date.now() / 1000);
+
+            // Session ยังใช้ได้ → คืนทันที
+            if (session?.access_token && (!session.expires_at || session.expires_at > now + 5)) {
+                return session;
+            }
+
+            // ไม่มี session เลย (ไม่มี refresh token) → ไม่ต้องรอ
+            if (!session) return null;
+
+            // Token หมดอายุ → รอให้ startAutoRefresh() refresh เสร็จ
+            return await new Promise((resolve) => {
+                const timer = setTimeout(() => {
+                    authSub?.unsubscribe();
+                    resolve(null); // timeout 8 วินาที
+                }, 8000);
+
+                const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((event, freshSession) => {
+                    if (event === 'TOKEN_REFRESHED') {
+                        clearTimeout(timer);
+                        authSub.unsubscribe();
+                        resolve(freshSession);
+                    } else if (event === 'SIGNED_OUT') {
+                        clearTimeout(timer);
+                        authSub.unsubscribe();
+                        resolve(null);
+                    }
+                });
+            });
+        } finally {
+            _pendingRefreshWait = null;
+        }
+    })();
+
+    return _pendingRefreshWait;
 };
 
 export const apiRequest = async (endpoint, options = {}) => {
     // ถ้า refresh กำลังทำอยู่ รอให้เสร็จก่อนค่อยดึง token
-    if (_refreshPromise) await _refreshPromise;
+    if (_pendingRefreshWait) await _pendingRefreshWait;
 
     let token = null;
     try {
@@ -40,18 +77,17 @@ export const apiRequest = async (endpoint, options = {}) => {
     });
 
     if (response.status === 401 || response.status === 403) {
-        console.log("Token expired from Backend Request. Trying silent refresh...");
-        const { data: refreshData, error: refreshError } = await safeRefreshSession();
+        // ไม่ refresh เอง! รอให้ startAutoRefresh() ทำงานเสร็จแล้วใช้ token ที่ refresh แล้ว
+        const freshSession = await waitForAutoRefresh();
 
-        if (refreshError || !refreshData?.session) {
-            console.log("Refresh failed, kicking user to login.");
+        if (!freshSession) {
             await supabase.auth.signOut();
             return { success: false, error: 'Session expired permanently' };
         }
 
         const newHeaders = {
             ...headers,
-            'Authorization': `Bearer ${refreshData.session.access_token}`
+            'Authorization': `Bearer ${freshSession.access_token}`
         };
 
         response = await fetch(`${BASE_URL}${endpoint}`, {

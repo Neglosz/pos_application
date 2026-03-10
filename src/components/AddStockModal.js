@@ -465,7 +465,7 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
                 <Text style={[styles.label, fieldErrors.expireDate && styles.errorLabel]}>วันหมดอายุ (Lot นี้) *</Text>
                 <TouchableOpacity
                     style={[styles.dateInput, fieldErrors.expireDate && styles.errorInput]}
-                    onPress={() => setShowDatePicker(true)}
+                    onPress={() => { Keyboard.dismiss(); setShowDatePicker(true); }}
                 >
                     <Text style={[styles.dateText, !expireDate && { color: '#999' }]}>
                         {expireDate ? expireDate.toLocaleDateString('th-TH') : 'เลือกวันหมดอายุ'}
@@ -623,7 +623,7 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
                 <Text style={[styles.label, fieldErrors.expireDate && styles.errorLabel]}>วันหมดอายุ *</Text>
                 <TouchableOpacity
                     style={[styles.dateInput, fieldErrors.expireDate && styles.errorInput]}
-                    onPress={() => setShowDatePicker(true)}
+                    onPress={() => { Keyboard.dismiss(); setShowDatePicker(true); }}
                 >
                     <Text style={[styles.dateText, !expireDate && { color: '#999' }]}>
                         {expireDate ? expireDate.toLocaleDateString('th-TH') : 'เลือกวันหมดอายุ'}

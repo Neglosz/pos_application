@@ -14,9 +14,11 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     },
 });
 
-// Official Supabase React Native approach:
-// หยุด auto-refresh ตอน background เพื่อไม่ให้ timer ค้าง
-// เริ่ม auto-refresh ตอน foreground → Supabase จะ refresh token ให้เองถ้าหมดอายุ
+// Official Supabase React Native approach
+// เรียก startAutoRefresh() ตอน load ทันที (cold start ด้วย)
+supabase.auth.startAutoRefresh();
+
+// และจัดการตาม AppState
 AppState.addEventListener('change', (state) => {
     if (state === 'active') {
         supabase.auth.startAutoRefresh();
