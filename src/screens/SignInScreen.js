@@ -8,7 +8,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 
 import { supabase } from "../services/supabase";
-import { apiRequest, setCurrentStoreId, setCurrentUserId } from "../services/api";
+import { setCurrentStoreId, setCurrentUserId } from "../services/api";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -280,12 +280,9 @@ export default function SignInScreen({ onLogin, onNavigateToSignUp, onNavigateTo
             setLoading(false);
 
             // Auto-Fix: Claim Orphans if Owner
-            if (profile.role === 'owner' && userStores.length > 0) {
+            if (userStores.length > 0) {
                 setCurrentStoreId(userStores[0].id);
                 setCurrentUserId(data.user.id);
-                apiRequest('/admin/claim-orphans', { method: 'POST' })
-                    .then(res => console.log('Recovery result:', res))
-                    .catch(err => console.log('Recovery failed:', err));
             }
 
             if (onLogin) {

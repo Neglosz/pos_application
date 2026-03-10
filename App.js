@@ -183,6 +183,7 @@ export default function App() {
           setCurrentScreen('ResetPassword');
         }
       } else if (event === 'SIGNED_OUT') {
+        await AsyncStorage.multiRemove(['authData', 'currentStoreId', 'lastActiveTime']);
         setIsLoggedIn(false);
         setAuthData(null);
         setSelectedBranch(null);
@@ -215,16 +216,8 @@ export default function App() {
             }
           }
 
-          // ถ้ายังไม่เกิน -> ต่ออายุ Session (หมุน refresh token อีก 7 วัน)
-          const { error: refreshError } = await safeRefreshSession();
-          if (refreshError) {
-            // refresh token หมดอายุจริงๆ (ไม่ได้เปิดแอปนาน > 7 วัน) -> บังคับ logout
-            console.log("Refresh token expired, signing out...");
-            await supabase.auth.signOut();
-            await AsyncStorage.multiRemove(['authData', 'currentStoreId', 'lastActiveTime']);
-            setIsLoggedIn(false);
-            return;
-          }
+          // อัปเดตเวลา active ล่าสุด
+          // (token refresh จัดการโดย supabase.auth.startAutoRefresh() ใน supabase.js แล้ว)
           await AsyncStorage.setItem('lastActiveTime', now.toString());
         } catch (error) {
           console.error("Error checking activity:", error);
