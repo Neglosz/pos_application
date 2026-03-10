@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Modal, Animated, Dimensions, KeyboardAvoidingView, Platform, FlatList, Keyboard, TouchableWithoutFeedback, Image, ActivityIndicator, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Modal, Animated, Dimensions, KeyboardAvoidingView, Platform, FlatList, Keyboard, Image, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { AntDesign, Ionicons, Feather } from '@expo/vector-icons';
 import { PaymentMethodModal, QRPaymentModal, ReceiptModal, CashPaymentModal } from '../components/payment';
 import { getCustomersWithDebt, createCreditPayment, getCustomerPendingBills, getOrderDetails, cancelOrder } from '../services/api';
@@ -197,24 +197,27 @@ export default function DebtScreen() {
         openModal(debtor);
     };
 
-    const handleBillPress = async (bill) => {
+    const handleBillPress = (bill) => {
         const orderId = bill.order_id;
         if (!orderId) return;
-        setBillReceiptLoading(true);
-        try {
-            const res = await getOrderDetails(orderId);
-            if (res.success) {
-                setSelectedBillTransaction(res.data);
-                setSelectedBillOrderId(orderId);
-                setBillReceiptVisible(true);
-            } else {
-                Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลบิลได้');
+        // Close debt modal first, then fetch bill (avoids iOS stacked modal freeze)
+        closeModal(async () => {
+            setBillReceiptLoading(true);
+            try {
+                const res = await getOrderDetails(orderId);
+                if (res.success) {
+                    setSelectedBillTransaction(res.data);
+                    setSelectedBillOrderId(orderId);
+                    setBillReceiptVisible(true);
+                } else {
+                    Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลบิลได้');
+                }
+            } catch (err) {
+                Alert.alert('ข้อผิดพลาด', 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
+            } finally {
+                setBillReceiptLoading(false);
             }
-        } catch (err) {
-            Alert.alert('ข้อผิดพลาด', 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
-        } finally {
-            setBillReceiptLoading(false);
-        }
+        });
     };
 
     const handleCancelBillOrder = async () => {
@@ -527,9 +530,8 @@ export default function DebtScreen() {
                                 <AntDesign name="close" size={24} color="#000" />
                             </TouchableOpacity>
                         </View>
-                        <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-                            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                                <View>
+                        <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} onScrollBeginDrag={Keyboard.dismiss}>
+                            <View>
                                     <View style={styles.customerInfoModal}>
                                         {selectedDebtor?.image_url ? (
                                             <Image source={{ uri: selectedDebtor.image_url }} style={[styles.avatarLarge, { backgroundColor: '#f0f0f0' }]} />
@@ -596,8 +598,7 @@ export default function DebtScreen() {
                                     <TouchableOpacity style={styles.confirmButton} onPress={handleConfirm}>
                                         <Text style={styles.confirmButtonText}>ยืนยันการชำระ</Text>
                                     </TouchableOpacity>
-                                </View>
-                            </TouchableWithoutFeedback>
+                            </View>
                         </ScrollView>
                     </Animated.View>
                 </KeyboardAvoidingView>
