@@ -62,6 +62,13 @@ export default function DebtPaymentModal({
         return `${day}/${month}/${year}`;
     }
 
+    function displayThaiDate(ddmmyyyy) {
+        if (!ddmmyyyy) return ddmmyyyy;
+        const parts = ddmmyyyy.split('/');
+        if (parts.length === 3) return `${parts[0]}/${parts[1]}/${parseInt(parts[2]) + 543}`;
+        return ddmmyyyy;
+    }
+
     useEffect(() => {
         if (visible) {
             // Reset form when modal opens
@@ -502,7 +509,7 @@ export default function DebtPaymentModal({
                                         style={styles.dateInput}
                                         onPress={() => setShowDatePicker(true)}
                                     >
-                                        <Text style={styles.dateText}>{dueDate}</Text>
+                                        <Text style={styles.dateText}>{displayThaiDate(dueDate)}</Text>
                                         <MaterialCommunityIcons name="calendar" size={20} color="#666" />
                                     </TouchableOpacity>
                                 </View>

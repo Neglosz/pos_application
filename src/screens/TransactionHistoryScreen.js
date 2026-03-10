@@ -115,7 +115,7 @@ export default function TransactionHistoryScreen({ navigation }) {
             <View style={styles.info}>
                 <Text style={styles.category}>{item.category}</Text>
                 <Text style={styles.desc} numberOfLines={1}>{item.description || ''}</Text>
-                <Text style={styles.date}>{new Date(item.trans_date).toLocaleDateString('th-TH')}</Text>
+                <Text style={styles.date}>{new Date(item.trans_date).toLocaleDateString('th-TH-u-ca-buddhist')}</Text>
             </View>
             <View style={styles.amountContainer}>
                 <Text style={[styles.amount, { color: item.trans_type === 'income' ? '#4CAF50' : '#F44336' }]}>
@@ -131,7 +131,7 @@ export default function TransactionHistoryScreen({ navigation }) {
                                 setSelectedTransaction({
                                     id: item.reference_id || item.id, // ใช้ order_id ถ้ามี
                                     receiptNo: item.order_no || `MANUAL-${item.id}`,
-                                    date: new Date(item.trans_date).toLocaleString('th-TH'),
+                                    date: new Date(item.trans_date).toLocaleString('th-TH-u-ca-buddhist'),
                                     total: parseFloat(item.amount),
                                     paymentMethod: item.payment_method === 'cash' ? 'เงินสด' : (item.payment_method === 'qr' ? 'Thai QR' : 'อื่นๆ'),
                                     received: parseFloat(item.amount), // สมมติว่ารับเต็ม

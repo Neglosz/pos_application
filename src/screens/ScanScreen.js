@@ -829,7 +829,7 @@ export default function ScanScreen({ navigation, route }) {
                 const transactionData = response.data;
                 setLastTransaction({
                     receiptNo: transactionData.order_no,
-                    date: new Date(transactionData.created_at).toLocaleString('th-TH'),
+                    date: new Date(transactionData.created_at).toLocaleString('th-TH-u-ca-buddhist'),
                     paymentMethod: paymentMethod === 'qr' ? 'Thai QR' : 'เงินสด',
                     items: transactionData.order_items.map(item => ({
                         name: item.products.name,
@@ -1705,7 +1705,7 @@ export default function ScanScreen({ navigation, route }) {
                             </Text>
                             <TouchableOpacity style={[styles.textInput, fieldErrors.expireDate && { borderColor: '#E53935', borderWidth: 1.5 }]} onPress={() => { Keyboard.dismiss(); setShowDatePicker(true); }}>
                                 <Text style={{ color: newProductExpireDate ? '#333' : '#aaa' }}>
-                                    {newProductExpireDate ? newProductExpireDate.toLocaleDateString('th-TH') : 'เลือกวันหมดอายุ'}
+                                    {newProductExpireDate ? newProductExpireDate.toLocaleDateString('th-TH-u-ca-buddhist') : 'เลือกวันหมดอายุ'}
                                 </Text>
                             </TouchableOpacity>
                             {/* Android Date Picker (inline) */}
