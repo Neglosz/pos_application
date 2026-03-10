@@ -412,24 +412,6 @@ export default function ReportScreen() {
                                     </View>
                                 </View>
                             </View>
-
-                            {/* Recommendations Part */}
-                            {aiRecommendations.length > 0 && (
-                                <View style={styles.aiRecommendationsCard}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 15 }}>
-                                        <MaterialCommunityIcons name="lightbulb-outline" size={20} color="#F37021" />
-                                        <Text style={styles.sectionTitleAiRec}> คำแนะนำจาก AI</Text>
-                                    </View>
-                                    {aiRecommendations.map((rec, index) => (
-                                        <View key={rec.id} style={styles.aiRecItem}>
-                                            <View style={styles.aiRecNumberWrap}>
-                                                <Text style={styles.aiRecNumberText}>{index + 1}</Text>
-                                            </View>
-                                            <Text style={styles.aiRecText}>{rec.title || rec.message}</Text>
-                                        </View>
-                                    ))}
-                                </View>
-                            )}
                         </>
                     )}
 

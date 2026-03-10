@@ -75,7 +75,7 @@ export default function StockScreen() {
         const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
         if (diffDays < 0) return 'หมดอายุแล้ว';
-        if (diffDays == 0) return 'หมดอายุวันนี้';
+        if (diffDays == 0) return 'วันนี้';
         if (diffDays === 1) return 'พรุ่งนี้';
         if (diffDays <= 7) return `อีก ${diffDays} วัน`;
         return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });

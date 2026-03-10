@@ -21,7 +21,7 @@ import { createCreditSale, createSale } from '../services/api';
 
 // Components
 import { PaymentMethodModal, QRPaymentModal, DebtPaymentModal, ReceiptModal, CashPaymentModal } from '../components/payment';
-import ProductQuantityModal from './ProductQuantityModal';
+import ProductQuantityModal from '../components/ProductQuantityModal';
 import AddStockModal from '../components/AddStockModal';
 
 const { width, height } = Dimensions.get('window');
