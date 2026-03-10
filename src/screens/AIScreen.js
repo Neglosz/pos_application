@@ -324,8 +324,15 @@ export default function AIScreen({ navigation }) {
     };
 
     const handleAddStock = async (data) => {
-        // Refresh products globally after stock is added
+        // จับค่าก่อน async ทุกอย่าง เพื่อป้องกัน stale closure
+        const stockedItem = currentRestockItem;
+
         useProductStore.getState().refreshProducts();
+
+        // ปิด modal และ reset state ก่อน
+        setStockModalVisible(false);
+        setCurrentRestockItem(null);
+        setStockModalProduct(null);
 
         if (data.isNew) {
             Alert.alert("สำเร็จ", `เพิ่มสินค้าใหม่ "${data.name}" จำนวน ${data.addedQty} ชิ้น เรียบร้อย`);
@@ -333,14 +340,19 @@ export default function AIScreen({ navigation }) {
             Alert.alert("สำเร็จ", `เติมสต็อก "${data.name}" จำนวน ${data.addedQty} ชิ้น\n(สต็อกรวม: ${data.newStockQty} ชิ้น)`);
         }
 
-        // Mark as accepted หลังจากเติม stock จริงแล้ว (ทั้ง isNew และ restock)
-        if (currentRestockItem) {
-            await handleAction(currentRestockItem, 'accepted');
+        // เรียก API ตรงๆ ไม่ผ่าน handleAction เพื่อป้องกัน actionLoading guard block
+        if (stockedItem) {
+            try {
+                const response = await takeRecommendationAction(stockedItem.id, 'accepted');
+                if (response.success) {
+                    setRecommendations(prev => (prev || []).filter(r => r.id !== stockedItem.id));
+                    const statsRes = await getRecommendationStats('month');
+                    if (statsRes.success) setStats(statsRes.data);
+                }
+            } catch (e) {
+                console.error('Failed to mark restock as accepted:', e);
+            }
         }
-
-        setStockModalVisible(false);
-        setCurrentRestockItem(null);
-        setStockModalProduct(null);
     };
 
     // Handle Accept button - open appropriate modal
@@ -359,7 +371,7 @@ export default function AIScreen({ navigation }) {
                 setDiscountPrice('');
             } else {
                 setActionType('discount');
-                setDiscountPrice(aiDiscount?.price_after_discount?.toString() || '');
+                setDiscountPrice(aiDiscount?.percent?.toString() || '');
                 setDaysValid(aiDiscount?.days_valid?.toString() || '3');
             }
             setProductModalVisible(true);

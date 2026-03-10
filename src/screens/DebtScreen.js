@@ -278,7 +278,7 @@ export default function DebtScreen() {
             setModalVisible(false);
             setCurrentTransaction({
                 receiptNo: `TXHM${Date.now().toString().slice(-6)}`,
-                date: new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                date: new Date().toLocaleString('th-TH', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
                 paymentMethod: 'เงินสด',
                 items: [{
                     name: `ชำระหนี้ - ${selectedDebtor?.name || 'ลูกค้า'}`,
@@ -317,7 +317,7 @@ export default function DebtScreen() {
             setModalVisible(false);
             setCurrentTransaction({
                 receiptNo: `TXHM${Date.now().toString().slice(-6)}`,
-                date: new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                date: new Date().toLocaleString('th-TH', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
                 paymentMethod: 'Thai QR PromptPay',
                 items: [{
                     name: `ชำระหนี้ - ${selectedDebtor?.name || 'ลูกค้า'}`,
@@ -612,7 +612,7 @@ export default function DebtScreen() {
             <ReceiptModal
                 visible={billReceiptVisible}
                 transaction={selectedBillTransaction}
-                onPrint={() => console.log('Print bill')}
+                hidePrint={true}
                 onNewTransaction={() => { setBillReceiptVisible(false); setSelectedBillTransaction(null); }}
                 onClose={() => { setBillReceiptVisible(false); setSelectedBillTransaction(null); }}
                 onCancelOrder={handleCancelBillOrder}
