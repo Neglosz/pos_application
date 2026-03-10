@@ -96,14 +96,14 @@ export default function TopBar({ onLogout, onGoToBranchList }) {
                 navigation.navigate('DeviceConnect');
             },
         },
-        {
-            icon: <FontAwesome name='cloud' size={22} color="#165DFC" />,
-            label: 'สำรองข้อมูล',
-            onPress: () => {
-                setMenuVisible(false);
-                navigation.navigate('Backup');
-            },
-        },
+        // {
+        //     icon: <FontAwesome name='cloud' size={22} color="#165DFC" />,
+        //     label: 'สำรองข้อมูล',
+        //     onPress: () => {
+        //         setMenuVisible(false);
+        //         navigation.navigate('Backup');
+        //     },
+        // },
         {
             icon: <FontAwesome5 name='file-invoice-dollar' size={22} color="#F37021" />,
             label: 'รายการเดินบัญชี',

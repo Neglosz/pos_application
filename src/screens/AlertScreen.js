@@ -23,7 +23,7 @@ const tabs = [
     { id: 'all', label: 'ทั้งหมด' },
     { id: 'payment', label: 'การเงิน' },
     { id: 'stock', label: 'สินค้า/สต็อก' },
-    { id: 'system', label: 'ระบบ' },
+    // { id: 'system', label: 'ระบบ' },
 ];
 
 export default function AlertScreen({ navigation }) {
@@ -166,7 +166,7 @@ export default function AlertScreen({ navigation }) {
         const categoryMap = {
             'payment': ['payment', 'การเงิน'],
             'stock': ['stock', 'สต็อก', 'สินค้า'],
-            'system': ['system', 'ระบบ']
+            // 'system': ['system', 'ระบบ']
         };
 
         const validCategories = categoryMap[activeTab] || [activeTab];
@@ -218,9 +218,9 @@ export default function AlertScreen({ navigation }) {
             case 'สต็อก':
             case 'สินค้า':
                 return { icon: 'package-variant', color: '#FF9800' };
-            case 'system':
-            case 'ระบบ':
-                return { icon: 'cloud-sync', color: '#4CAF50' };
+            // case 'system':
+            // case 'ระบบ':
+            //     return { icon: 'cloud-sync', color: '#4CAF50' };
             default:
                 return { icon: 'bell', color: '#999' };
         }
@@ -332,7 +332,7 @@ export default function AlertScreen({ navigation }) {
         const categoryMap = {
             'payment': ['payment', 'การเงิน'],
             'stock': ['stock', 'สต็อก', 'สินค้า'],
-            'system': ['system', 'ระบบ']
+            // 'system': ['system', 'ระบบ']
         };
 
         const validCategories = categoryMap[tabId] || [tabId];
