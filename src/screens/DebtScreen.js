@@ -552,6 +552,11 @@ export default function DebtScreen() {
                                                 <ActivityIndicator size="small" color="#F37021" />
                                                 <Text style={styles.billsLoadingText}>กำลังโหลดรายการ...</Text>
                                             </View>
+                                        ) : billReceiptLoading ? (
+                                            <View style={styles.billsLoadingContainer}>
+                                                <ActivityIndicator size="small" color="#F37021" />
+                                                <Text style={styles.billsLoadingText}>กำลังโหลดบิล...</Text>
+                                            </View>
                                         ) : (
                                             <ScrollView style={styles.billsList} nestedScrollEnabled={true}>
                                                 {pendingBills.map((bill) => (
@@ -619,14 +624,6 @@ export default function DebtScreen() {
                 onClose={() => setCashModalVisible(false)}
                 isSubmitting={paymentLoading}
             />
-
-            {/* Loading overlay while fetching bill details */}
-            <Modal visible={billReceiptLoading} transparent={true} animationType="fade">
-                <View style={styles.loadingOverlay}>
-                    <ActivityIndicator size="large" color="#fff" />
-                    <Text style={styles.loadingText}>กำลังโหลดบิล...</Text>
-                </View>
-            </Modal>
 
             {/* Loading overlay during payment API call */}
             <Modal visible={paymentLoading} transparent={true} animationType="fade">

@@ -265,6 +265,7 @@ export default function ScanScreen({ navigation, route }) {
     const [newProductCategory, setNewProductCategory] = useState(null);
     const [showRestockModal, setShowRestockModal] = useState(false);
     const [restockBarcode, setRestockBarcode] = useState('');
+    const [restockProduct, setRestockProduct] = useState(null);
     const [newProductName, setNewProductName] = useState('');
     const [newProductPrice, setNewProductPrice] = useState('');
     const [newProductCost, setNewProductCost] = useState('');
@@ -1276,7 +1277,13 @@ export default function ScanScreen({ navigation, route }) {
                             style={styles.wCardRestockBtn}
                             onPress={(e) => {
                                 e.stopPropagation();
-                                setRestockBarcode(item.barcode);
+                                if (item.barcode) {
+                                    setRestockBarcode(item.barcode);
+                                    setRestockProduct(null);
+                                } else {
+                                    setRestockBarcode('');
+                                    setRestockProduct(item);
+                                }
                                 setShowRestockModal(true);
                             }}
                         >
@@ -1696,37 +1703,26 @@ export default function ScanScreen({ navigation, route }) {
                             <Text style={[styles.inputLabel, fieldErrors.expireDate && { color: '#E53935' }]}>
                                 <Ionicons name="calendar-outline" size={14} /> วันหมดอายุ *
                             </Text>
-                            <TouchableOpacity style={[styles.textInput, fieldErrors.expireDate && { borderColor: '#E53935', borderWidth: 1.5 }]} onPress={() => setShowDatePicker(true)}>
+                            <TouchableOpacity style={[styles.textInput, fieldErrors.expireDate && { borderColor: '#E53935', borderWidth: 1.5 }]} onPress={() => { Keyboard.dismiss(); setShowDatePicker(true); }}>
                                 <Text style={{ color: newProductExpireDate ? '#333' : '#aaa' }}>
                                     {newProductExpireDate ? newProductExpireDate.toLocaleDateString('th-TH') : 'เลือกวันหมดอายุ'}
                                 </Text>
                             </TouchableOpacity>
-                            {/* Date Picker Modal (iOS Style) */}
-                            {showDatePicker && (
-                                <View style={{ marginTop: 8 }}>
-                                    <DateTimePicker
-                                        value={newProductExpireDate || new Date()}
-                                        mode="date"
-                                        display="default"
-                                        minimumDate={new Date()}
-                                        onChange={(event, selectedDate) => {
-                                            if (Platform.OS === 'android') {
-                                                setShowDatePicker(false);
-                                                if (event.type === 'set' && selectedDate) {
-                                                    setNewProductExpireDate(selectedDate);
-                                                    setFieldErrors(prev => { const c = { ...prev }; delete c.expireDate; return c; });
-                                                }
-                                            } else {
-                                                // iOS
-                                                setShowDatePicker(false);
-                                                if (selectedDate) {
-                                                    setNewProductExpireDate(selectedDate);
-                                                    setFieldErrors(prev => { const c = { ...prev }; delete c.expireDate; return c; });
-                                                }
-                                            }
-                                        }}
-                                    />
-                                </View>
+                            {/* Android Date Picker (inline) */}
+                            {showDatePicker && Platform.OS === 'android' && (
+                                <DateTimePicker
+                                    value={newProductExpireDate || new Date()}
+                                    mode="date"
+                                    display="default"
+                                    minimumDate={new Date()}
+                                    onChange={(event, selectedDate) => {
+                                        setShowDatePicker(false);
+                                        if (event.type === 'set' && selectedDate) {
+                                            setNewProductExpireDate(selectedDate);
+                                            setFieldErrors(prev => { const c = { ...prev }; delete c.expireDate; return c; });
+                                        }
+                                    }}
+                                />
                             )}
 
                             {/* Unit Selector */}
@@ -1774,6 +1770,42 @@ export default function ScanScreen({ navigation, route }) {
                         </View>
                     </View>
                 </KeyboardAvoidingView>
+
+                {/* iOS Date Picker Overlay */}
+                {Platform.OS === 'ios' && showDatePicker && (
+                    <TouchableWithoutFeedback onPress={() => setShowDatePicker(false)}>
+                        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' }}>
+                            <TouchableWithoutFeedback>
+                                <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 30 }}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#eee' }}>
+                                        <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                                            <Text style={{ fontSize: 16, color: '#888' }}>ยกเลิก</Text>
+                                        </TouchableOpacity>
+                                        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333' }}>เลือกวันหมดอายุ</Text>
+                                        <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                                            <Text style={{ fontSize: 16, color: '#007AFF', fontWeight: '600' }}>ตกลง</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                    <DateTimePicker
+                                        value={newProductExpireDate || new Date()}
+                                        mode="date"
+                                        display="spinner"
+                                        minimumDate={new Date()}
+                                        onChange={(_, selectedDate) => {
+                                            if (selectedDate) {
+                                                setNewProductExpireDate(selectedDate);
+                                                setFieldErrors(prev => { const c = { ...prev }; delete c.expireDate; return c; });
+                                            }
+                                        }}
+                                        locale="th-TH"
+                                        textColor="#333"
+                                        style={{ height: 200 }}
+                                    />
+                                </View>
+                            </TouchableWithoutFeedback>
+                        </View>
+                    </TouchableWithoutFeedback>
+                )}
             </Modal>
         </React.Fragment >
     );
@@ -2048,14 +2080,17 @@ export default function ScanScreen({ navigation, route }) {
             <AddStockModal
                 visible={showRestockModal}
                 scannedCode={restockBarcode}
+                product={restockProduct}
                 onClose={() => {
                     setShowRestockModal(false);
                     setRestockBarcode('');
+                    setRestockProduct(null);
                 }}
                 onConfirm={(data) => {
                     Alert.alert("สำเร็จ", `เพิ่มสต็อก ${data.name} สำเร็จ`);
                     setShowRestockModal(false);
                     setRestockBarcode('');
+                    setRestockProduct(null);
                     useProductStore.getState().refreshProducts();
                 }}
             />
