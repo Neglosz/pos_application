@@ -6,10 +6,30 @@ import { useNotificationStore } from '../stores/useNotificationStore';
 
 /**
  * Hook to subscribe to Supabase Realtime changes for products and batches.
- * When changes occur, automatically refresh the product store.
+ * Debounced handlers prevent duplicate API calls when multiple rows update at once
+ * (e.g., scheduler updating 30 notifications simultaneously).
  */
 export const useRealtimeSync = () => {
     const channelRef = useRef(null);
+    // Debounce timers - batch rapid-fire events into a single fetch
+    const notifTimerRef = useRef(null);
+    const productTimerRef = useRef(null);
+
+    const debouncedRefreshProducts = () => {
+        if (productTimerRef.current) clearTimeout(productTimerRef.current);
+        productTimerRef.current = setTimeout(() => {
+            useProductStore.getState().refreshProducts();
+            useProductStore.getState().fetchWeightProducts();
+        }, 1000); // Wait 1s to batch all rapid updates together
+    };
+
+    const debouncedRefreshNotifications = () => {
+        if (notifTimerRef.current) clearTimeout(notifTimerRef.current);
+        notifTimerRef.current = setTimeout(() => {
+            useNotificationStore.getState().fetchNotifications();
+            useNotificationStore.getState().fetchUnreadCount();
+        }, 1500); // Wait 1.5s — notifications update in bulk (scheduler), so wait longer
+    };
 
     useEffect(() => {
         const storeId = getCurrentStoreId();
@@ -21,30 +41,28 @@ export const useRealtimeSync = () => {
 
         console.log('[RealtimeSync] Setting up subscription for store:', storeId);
 
-        // Create a channel for this store's products
         const channel = supabase
             .channel(`store-products-${storeId}`)
-            // Subscribe to products table changes
+            // Products table changes
             .on('postgres_changes', {
-                event: '*', // INSERT, UPDATE, DELETE
+                event: '*',
                 schema: 'public',
                 table: 'products',
                 filter: `store_id=eq.${storeId}`
             }, (payload) => {
                 console.log('[RealtimeSync] Product change detected:', payload.eventType);
-                useProductStore.getState().refreshProducts();
-                useProductStore.getState().fetchWeightProducts();
+                debouncedRefreshProducts();
             })
-            // Subscribe to product_batches table changes (for stock updates)
+            // Batches table changes (stock updates)
             .on('postgres_changes', {
                 event: '*',
                 schema: 'public',
                 table: 'product_batches'
             }, (payload) => {
                 console.log('[RealtimeSync] Batch change detected:', payload.eventType);
-                useProductStore.getState().refreshProducts();
+                debouncedRefreshProducts();
             })
-            // Subscribe to promotions table changes (for real-time promo apply/deactivate)
+            // Promotions table changes
             .on('postgres_changes', {
                 event: '*',
                 schema: 'public',
@@ -52,12 +70,9 @@ export const useRealtimeSync = () => {
                 filter: `store_id=eq.${storeId}`
             }, (payload) => {
                 console.log('[RealtimeSync] Promotion change detected:', payload.eventType);
-                // Small delay to ensure promotion_items are also committed before refreshing
-                setTimeout(() => {
-                    useProductStore.getState().refreshProducts();
-                }, 500);
+                debouncedRefreshProducts();
             })
-            // Subscribe to notifications table changes
+            // Notifications table changes — debounced heavily because scheduler updates many rows at once
             .on('postgres_changes', {
                 event: '*',
                 schema: 'public',
@@ -65,8 +80,7 @@ export const useRealtimeSync = () => {
                 filter: `store_id=eq.${storeId}`
             }, (payload) => {
                 console.log('[RealtimeSync] Notification change:', payload.eventType);
-                useNotificationStore.getState().fetchNotifications();
-                useNotificationStore.getState().fetchUnreadCount();
+                debouncedRefreshNotifications();
             })
             .subscribe((status) => {
                 console.log('[RealtimeSync] Subscription status:', status);
@@ -74,9 +88,11 @@ export const useRealtimeSync = () => {
 
         channelRef.current = channel;
 
-        // Cleanup on unmount or store change
         return () => {
             console.log('[RealtimeSync] Cleaning up subscription');
+            // Clear any pending debounce timers
+            if (notifTimerRef.current) clearTimeout(notifTimerRef.current);
+            if (productTimerRef.current) clearTimeout(productTimerRef.current);
             if (channelRef.current) {
                 supabase.removeChannel(channelRef.current);
                 channelRef.current = null;
