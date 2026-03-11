@@ -51,7 +51,13 @@
         {
           "isBackgroundEnabled": false
         }
-      ]
-    ]
+      ],
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "4a3424bf-6200-4f35-a995-4e5b06652e43"
+      }
+    }
   }
 }

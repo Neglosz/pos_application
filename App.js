@@ -38,6 +38,7 @@ import TransactionHistoryScreen from './src/screens/TransactionHistoryScreen';
 import { BluetoothProvider } from './src/contexts/BluetoothContext';
 
 import AllTransactionsScreen from './src/screens/AllTransactionsScreen';
+import SplashScreen from './src/screens/SplashScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -110,6 +111,7 @@ function MainStack({ onLogout, onGoToBranchList }) {
 }
 
 export default function App() {
+  const [showSplash, setShowSplash] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentScreen, setCurrentScreen] = useState('SignIn');
   const [authData, setAuthData] = useState(null);
@@ -422,9 +424,13 @@ export default function App() {
   // Main app wrap
   return (
     <SafeAreaProvider>
-      <StoreProvider profile={authData?.profile} store={selectedBranch}>
-        {renderContent()}
-      </StoreProvider>
+      {showSplash ? (
+        <SplashScreen onFinish={() => setShowSplash(false)} />
+      ) : (
+        <StoreProvider profile={authData?.profile} store={selectedBranch}>
+          {renderContent()}
+        </StoreProvider>
+      )}
     </SafeAreaProvider>
   );
 }
