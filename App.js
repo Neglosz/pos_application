@@ -355,7 +355,7 @@ export default function App() {
               onNavigateToSignUp={() => navigateTo('SignUp')}
               onNavigateToForgotPassword={() => navigateTo('ForgotPassword')}
             />
-            <StatusBar style="light" />
+            <StatusBar style="dark" />
           </>
         );
       } else if (currentScreen === 'SignUp') {
@@ -365,7 +365,7 @@ export default function App() {
               onSignUp={() => navigateTo('SignIn')}
               onNavigateToSignIn={() => navigateTo('SignIn')}
             />
-            <StatusBar style="light" />
+            <StatusBar style="dark" />
           </>
         );
       } else if (currentScreen === 'ForgotPassword') {
@@ -374,7 +374,7 @@ export default function App() {
             <ForgotPasswordScreen
               onNavigateToSignIn={() => navigateTo('SignIn')}
             />
-            <StatusBar style="light" />
+            <StatusBar style="dark" />
           </>
         );
       } else if (currentScreen === 'ResetPassword') {
@@ -383,7 +383,7 @@ export default function App() {
             <ResetPasswordScreen
               onNavigateToSignIn={() => navigateTo('SignIn')}
             />
-            <StatusBar style="light" />
+            <StatusBar style="dark" />
           </>
         );
       } else if (currentScreen === 'BranchList') {

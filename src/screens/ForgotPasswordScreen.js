@@ -14,8 +14,8 @@ export default function ForgotPasswordScreen({ onNavigateToSignIn }) {
     const [loading, setLoading] = useState(false);
 
     const handleResetPassword = async () => {
-        if(!email){
-            Alert.alert('ข้อมูลไม่ครบ','กรุณากรอกอีเมลของคุณ');
+        if (!email) {
+            Alert.alert('ข้อมูลไม่ครบ', 'กรุณากรอกอีเมลของคุณ');
             return;
         }
         if (!isValidEmail(email)) {
@@ -36,7 +36,7 @@ export default function ForgotPasswordScreen({ onNavigateToSignIn }) {
         }
 
         setLoading(false);
-        if(error){
+        if (error) {
             const m = error.message.toLowerCase();
             if (m.includes('network') || m.includes('fetch')) {
                 Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้ กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่');
@@ -54,17 +54,19 @@ export default function ForgotPasswordScreen({ onNavigateToSignIn }) {
     };
     return (
         <KeyboardAvoidingView
-            style={{ flex: 1, backgroundColor: '#52616B' }}
+            style={{ flex: 1, backgroundColor: '#FAF6F1' }}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-            <View style={{ flex: 1, backgroundColor: '#52616B' }}>
+            <View style={{ flex: 1, backgroundColor: '#FAF6F1' }}>
+                <View style={{ position: 'absolute', top: -120, left: -120, width: 300, height: 300, borderRadius: 150, backgroundColor: 'rgba(243, 112, 33, 0.15)', }} />
+                <View style={{ position: 'absolute', top: -100, right: -100, width: 250, height: 250, borderRadius: 125, backgroundColor: 'rgba(243, 200, 150, 0.20)', }} />
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <Image style={{ width: 100, height: 100 }} source={{ uri: "https://i.postimg.cc/CMk3WcZs/Chat-GPT-Image-Jan-5-2026-12-04-50-AM-Photoroom.png" }} />
-                    <Text style={{ fontSize: 30, fontWeight: '700', color: '#fff' }}>Zippy Till</Text>
-                    <Text style={{ fontSize: 18, color: '#fff' }}>ระบบจัดการร้านค้า</Text>
+                    <Text style={{ fontSize: 30, fontWeight: '700', color: '#000' }}>Zippy Till</Text>
+                    <Text style={{ fontSize: 18, color: '#000' }}>ระบบจัดการร้านค้า</Text>
                 </View>
             </View>
-            <View style={{ flex: 1.5, backgroundColor: '#fff', borderTopLeftRadius: 25, borderTopRightRadius: 25, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 8 }}>
+            <View style={{ flex: 1.5, backgroundColor: '#fff', borderTopLeftRadius: 55, borderTopRightRadius: 55, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 8 }}>
                 <ScrollView
                     contentContainerStyle={{ flexGrow: 1, paddingBottom: 30 }}
                     keyboardShouldPersistTaps="handled"
@@ -94,14 +96,14 @@ export default function ForgotPasswordScreen({ onNavigateToSignIn }) {
                                 </View>
                             </View>
                         </View>
-                        <TouchableOpacity 
-                            style={{ height: 50, backgroundColor: '#1E2022', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}
+                        <TouchableOpacity
+                            style={{ height: 50, backgroundColor: '#e9751dff', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}
                             onPress={handleResetPassword}
                             disabled={loading}
                         >
                             {loading ? (
-                                <ActivityIndicator color='#fff'/>
-                            ):(
+                                <ActivityIndicator color='#fff' />
+                            ) : (
                                 <Text style={{ fontWeight: '700', color: '#fff', fontSize: 18 }}>ส่งลิงค์รีเซ็ตรหัสผ่าน</Text>
                             )}
                         </TouchableOpacity>
