@@ -41,8 +41,8 @@ export default function SignUpScreen({ onSignUp, onNavigateToSignIn }) {
     const [loading, setLoading] = useState(false);
 
     const handleSignUp = async () => {
-        if(!fullName || !email || !password || !confirmPassword){
-            Alert.alert('ข้อมูลไม่ครบ','กรุณากรอกข้อมูลให้ครบทุกช่อง');
+        if (!fullName || !email || !password || !confirmPassword) {
+            Alert.alert('ข้อมูลไม่ครบ', 'กรุณากรอกข้อมูลให้ครบทุกช่อง');
             return;
         }
 
@@ -61,12 +61,12 @@ export default function SignUpScreen({ onSignUp, onNavigateToSignIn }) {
             return;
         }
 
-        if(password !== confirmPassword){
-            Alert.alert('รหัสผ่านไม่ตรงกัน','กรุณากรอกรหัสผ่านให้ตรงกันทั้งสองช่อง');
+        if (password !== confirmPassword) {
+            Alert.alert('รหัสผ่านไม่ตรงกัน', 'กรุณากรอกรหัสผ่านให้ตรงกันทั้งสองช่อง');
             return;
         }
-        if(password.length < 6){
-            Alert.alert('รหัสผ่านสั้นเกินไป','รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');
+        if (password.length < 6) {
+            Alert.alert('รหัสผ่านสั้นเกินไป', 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');
             return;
         }
 
@@ -83,41 +83,43 @@ export default function SignUpScreen({ onSignUp, onNavigateToSignIn }) {
             return;
         }
 
-        if(error){
+        if (error) {
             setLoading(false);
             Alert.alert('สมัครสมาชิกไม่สำเร็จ', translateSignUpError(error.message));
             return;
         }
 
-        if(data.user){
-            const {error:updateError} = await supabase
+        if (data.user) {
+            const { error: updateError } = await supabase
                 .from('profiles')
                 .update({ full_name: cleanName })
                 .eq('id', data.user.id);
-            if(updateError){
-                console.log('Update profile error:',updateError.message);
+            if (updateError) {
+                console.log('Update profile error:', updateError.message);
             }
         }
         setLoading(false);
 
-        Alert.alert('สมัครสมาชิกสำเร็จ','สร้างบัญชีเรียบร้อยแล้ว กรุณาตรวจสอบอีเมลเพื่อยืนยันบัญชีของคุณ', [
+        Alert.alert('สมัครสมาชิกสำเร็จ', 'สร้างบัญชีเรียบร้อยแล้ว กรุณาตรวจสอบอีเมลเพื่อยืนยันบัญชีของคุณ', [
             { text: 'ตกลง', onPress: () => onSignUp && onSignUp() }
         ]);
     };
 
     return (
         <KeyboardAvoidingView
-            style={{ flex: 1, backgroundColor: '#52616B' }}
+            style={{ flex: 1, backgroundColor: '#FAF6F1' }}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-            <View style={{ flex: 1, backgroundColor: '#52616B' }}>
+            <View style={{ flex: 1, backgroundColor: '#FAF6F1' }}>
+                <View style={{ position: 'absolute', top: -120, left: -120, width: 300, height: 300, borderRadius: 150, backgroundColor: 'rgba(243, 112, 33, 0.15)', }} />
+                <View style={{ position: 'absolute', top: -100, right: -100, width: 250, height: 250, borderRadius: 125, backgroundColor: 'rgba(243, 200, 150, 0.20)', }} />
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <Image style={{ width: 100, height: 100 }} source={{ uri: "https://i.postimg.cc/CMk3WcZs/Chat-GPT-Image-Jan-5-2026-12-04-50-AM-Photoroom.png" }} />
-                    <Text style={{ fontSize: 30, fontWeight: '700', color: '#fff' }}>Zippy Till</Text>
-                    <Text style={{ fontSize: 18, color: '#fff' }}>ระบบจัดการร้านค้า</Text>
+                    <Text style={{ fontSize: 30, fontWeight: '700', color: '#000' }}>Zippy Till</Text>
+                    <Text style={{ fontSize: 18, color: '#000' }}>ระบบจัดการร้านค้า</Text>
                 </View>
             </View>
-            <View style={{ flex: 2.5, backgroundColor: '#fff', borderTopLeftRadius: 25, borderTopRightRadius: 25, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 8 }}>
+            <View style={{ flex: 2.5, backgroundColor: '#fff', borderTopLeftRadius: 55, borderTopRightRadius: 55, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 8 }}>
                 <ScrollView
                     contentContainerStyle={{ flexGrow: 1, paddingBottom: 30 }}
                     keyboardShouldPersistTaps="handled"
@@ -206,19 +208,19 @@ export default function SignUpScreen({ onSignUp, onNavigateToSignIn }) {
                                 </TouchableOpacity>
                             </View>
                         </View>
-                        <TouchableOpacity 
-                            onPress={handleSignUp} 
+                        <TouchableOpacity
+                            onPress={handleSignUp}
                             disabled={loading}
-                            style={{ height: 50, backgroundColor: '#1E2022', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}
+                            style={{ height: 50, backgroundColor: '#e9751dff', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}
                         >
                             {loading ? (
-                                <ActivityIndicator color="#fff"/>
-                            ):(
+                                <ActivityIndicator color="#fff" />
+                            ) : (
                                 <Text style={{ fontWeight: '700', color: '#fff', fontSize: 18 }}>สมัครสมาชิก</Text>
                             )}
                         </TouchableOpacity>
                         <View style={{ flexDirection: 'row', justifyContent: 'center' }}>
-                            <Text style={{fontSize: 18 }}>มีบัญชีแล้ว? </Text>
+                            <Text style={{ fontSize: 18 }}>มีบัญชีแล้ว? </Text>
                             <TouchableOpacity onPress={onNavigateToSignIn}>
                                 <Text style={{ fontWeight: '700', fontSize: 18 }}>เข้าสู่ระบบ</Text>
                             </TouchableOpacity>

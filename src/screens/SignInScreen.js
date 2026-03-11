@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { View, Text, TextInput, TouchableOpacity, Image, KeyboardAvoidingView, ScrollView, Platform, ActivityIndicator, Alert, Modal } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, Image, KeyboardAvoidingView, ScrollView, Platform, ActivityIndicator, Alert, Modal, StatusBar } from "react-native";
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import Feather from '@expo/vector-icons/Feather';
 import { makeRedirectUri } from 'expo-auth-session';
@@ -306,231 +306,235 @@ export default function SignInScreen({ onLogin, onNavigateToSignUp, onNavigateTo
 
     return (
         <>
-        {/* ===== Modal เสร็จสิ้นโปรไฟล์ Google ===== */}
-        <Modal
-            visible={showProfileModal}
-            transparent
-            animationType="fade"
-            onRequestClose={handleProfileSkip}
-        >
-            <View style={{
-                flex: 1,
-                backgroundColor: 'rgba(0,0,0,0.55)',
-                justifyContent: 'center',
-                alignItems: 'center',
-                paddingHorizontal: 24,
-            }}>
+            {/* ===== Modal เสร็จสิ้นโปรไฟล์ Google ===== */}
+            <Modal
+                visible={showProfileModal}
+                transparent
+                animationType="fade"
+                onRequestClose={handleProfileSkip}
+            >
                 <View style={{
-                    backgroundColor: '#fff',
-                    borderRadius: 20,
-                    width: '100%',
-                    paddingTop: 0,
-                    paddingBottom: 28,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.25,
-                    shadowRadius: 10,
-                    elevation: 10,
-                    overflow: 'hidden',
+                    flex: 1,
+                    backgroundColor: 'rgba(0,0,0,0.55)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    paddingHorizontal: 24,
                 }}>
-                    {/* แถบบน */}
-                    <View style={{ backgroundColor: '#52616B', paddingVertical: 20, alignItems: 'center' }}>
-                        {/* รูปโปรไฟล์ */}
-                        <View style={{
-                            width: 90, height: 90, borderRadius: 45,
-                            borderWidth: 3, borderColor: '#fff',
-                            overflow: 'hidden',
-                            backgroundColor: '#C4CDD5',
-                            justifyContent: 'center', alignItems: 'center',
-                        }}>
-                            {modalAvatarUrl ? (
-                                <Image
-                                    source={{ uri: modalAvatarUrl }}
-                                    style={{ width: 90, height: 90 }}
-                                />
-                            ) : (
-                                <Feather name="user" size={40} color="#fff" />
-                            )}
-                        </View>
-                        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 18, marginTop: 10 }}>
-                            ยินดีต้อนรับ!
-                        </Text>
-                        <Text style={{ color: '#dce3e8', fontSize: 18, marginTop: 2 }}>
-                            ตั้งชื่อที่แสดงในแอปของคุณ
-                        </Text>
-                    </View>
-
-                    <View style={{ paddingHorizontal: 24, paddingTop: 24 }}>
-                        <Text style={{ fontWeight: '700', fontSize: 18, marginBottom: 8, color: '#333' }}>
-                            ชื่อที่ต้องการแสดง
-                        </Text>
-                        <View style={{
-                            flexDirection: 'row', alignItems: 'center',
-                            backgroundColor: '#f5f6f7',
-                            borderRadius: 10, paddingHorizontal: 14,
-                            height: 50, borderWidth: 1, borderColor: '#e0e0e0',
-                            marginBottom: 8,
-                        }}>
-                            <Feather name="user" size={18} color="#aaa" style={{ marginRight: 10 }} />
-                            <TextInput
-                                style={{ flex: 1, fontSize: 18, color: '#222' }}
-                                placeholder="กรอกชื่อของคุณ"
-                                placeholderTextColor="#bbb"
-                                value={modalName}
-                                onChangeText={setModalName}
-                                maxLength={100}
-                                editable={!modalSaving}
-                                autoFocus
-                            />
-                        </View>
-                        <Text style={{ fontSize: 18, color: '#aaa', marginBottom: 22 }}>
-                            ชื่อนี้จะแสดงให้ผู้อื่นเห็นในระบบ แก้ไขได้ภายหลังในหน้าโปรไฟล์
-                        </Text>
-
-                        {/* ปุ่ม */}
-                        <View style={{ flexDirection: 'row', gap: 12 }}>
-                            <TouchableOpacity
-                                onPress={handleProfileSkip}
-                                disabled={modalSaving}
-                                style={{
-                                    flex: 1, height: 48, borderRadius: 10,
-                                    borderWidth: 1.5, borderColor: '#ccc',
-                                    justifyContent: 'center', alignItems: 'center',
-                                    backgroundColor: '#fff',
-                                }}
-                            >
-                                <Text style={{ fontSize: 18, fontWeight: '600', color: '#666' }}>ข้าม</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                onPress={handleProfileConfirm}
-                                disabled={modalSaving}
-                                style={{
-                                    flex: 2, height: 48, borderRadius: 10,
-                                    backgroundColor: '#1E2022',
-                                    justifyContent: 'center', alignItems: 'center',
-                                }}
-                            >
-                                {modalSaving ? (
-                                    <ActivityIndicator color="#fff" />
+                    <View style={{
+                        backgroundColor: '#fff',
+                        borderRadius: 20,
+                        width: '100%',
+                        paddingTop: 0,
+                        paddingBottom: 28,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.25,
+                        shadowRadius: 10,
+                        elevation: 10,
+                        overflow: 'hidden',
+                    }}>
+                        {/* แถบบน */}
+                        <View style={{ backgroundColor: '#52616B', paddingVertical: 20, alignItems: 'center' }}>
+                            {/* รูปโปรไฟล์ */}
+                            <View style={{
+                                width: 90, height: 90, borderRadius: 45,
+                                borderWidth: 3, borderColor: '#fff',
+                                overflow: 'hidden',
+                                backgroundColor: '#C4CDD5',
+                                justifyContent: 'center', alignItems: 'center',
+                            }}>
+                                {modalAvatarUrl ? (
+                                    <Image
+                                        source={{ uri: modalAvatarUrl }}
+                                        style={{ width: 90, height: 90 }}
+                                    />
                                 ) : (
-                                    <Text style={{ fontSize: 18, fontWeight: '700', color: '#fff' }}>ยืนยัน</Text>
+                                    <Feather name="user" size={40} color="#fff" />
                                 )}
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </View>
-        </Modal>
-
-        <KeyboardAvoidingView
-            style={{ flex: 1, backgroundColor: '#52616B' }}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-            <View style={{ flex: 1, backgroundColor: '#52616B' }}>
-                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                    <Image style={{ width: 100, height: 100 }} source={{ uri: "https://i.postimg.cc/CMk3WcZs/Chat-GPT-Image-Jan-5-2026-12-04-50-AM-Photoroom.png" }} />
-                    <Text style={{ fontSize: 30, fontWeight: '700', color: '#fff' }}>Zippy Till</Text>
-                    <Text style={{ fontSize: 18, color: '#fff' }}>ระบบจัดการร้านค้า</Text>
-                </View>
-            </View>
-            <View style={{ flex: 2, backgroundColor: '#fff', borderTopLeftRadius: 25, borderTopRightRadius: 25, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 8 }}>
-                <ScrollView
-                    contentContainerStyle={{ flexGrow: 1, paddingBottom: 30 }}
-                    keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator={false}
-                >
-                    <View style={{ paddingTop: 25, paddingBottom: 15, alignItems: 'center' }}>
-                        <Text style={{ fontSize: 20, fontWeight: '800' }}>เข้าสู่ระบบ</Text>
-                        <Text style={{ fontSize: 18, marginTop: 5 }}>ยินดีต้อนรับกลับมา</Text>
-                    </View>
-                    <View style={{ paddingHorizontal: 20 }}>
-                        <View style={{ marginBottom: 15 }}>
-                            <Text style={{ fontWeight: '800', marginBottom: 8, fontSize: 18 }}>อีเมล</Text>
-                            <View style={{ height: 50, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.15, shadowRadius: 2, elevation: 3, backgroundColor: 'white', borderRadius: 10, flexDirection: 'row' }}>
-                                <View style={{ width: 50, justifyContent: 'center', alignItems: 'center' }}>
-                                    <MaterialCommunityIcons name="email-outline" size={24} color="#989898" />
-                                </View>
-                                <View style={{ flex: 1, justifyContent: 'center' }}>
-                                    <TextInput
-                                        placeholder="your@email.com"
-                                        style={{ fontSize: 18 }}
-                                        keyboardType="email-address"
-                                        autoCapitalize="none"
-                                        value={email}
-                                        onChangeText={setEmail}
-                                        editable={!loading}
-                                    />
-                                </View>
                             </View>
+                            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 18, marginTop: 10 }}>
+                                ยินดีต้อนรับ!
+                            </Text>
+                            <Text style={{ color: '#dce3e8', fontSize: 18, marginTop: 2 }}>
+                                ตั้งชื่อที่แสดงในแอปของคุณ
+                            </Text>
                         </View>
-                        <View style={{ marginBottom: 10 }}>
-                            <Text style={{ fontWeight: '800', marginBottom: 8, fontSize: 18 }}>รหัสผ่าน</Text>
-                            <View style={{ height: 50, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.15, shadowRadius: 2, elevation: 3, backgroundColor: 'white', borderRadius: 10, flexDirection: 'row' }}>
-                                <View style={{ width: 50, justifyContent: 'center', alignItems: 'center' }}>
-                                    <Feather name="lock" size={24} color="#989898" />
-                                </View>
-                                <View style={{ flex: 1, justifyContent: 'center' }}>
-                                    <TextInput
-                                        placeholder="••••••••••"
-                                        style={{ fontSize: 18 }}
-                                        secureTextEntry={!showPassword}
-                                        value={password}
-                                        onChangeText={setPassword}
-                                        editable={!loading}
-                                    />
-                                </View>
-                                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ width: 50, justifyContent: 'center', alignItems: 'center' }}>
-                                    <Feather name={showPassword ? "eye" : "eye-off"} size={24} color="#989898" />
+
+                        <View style={{ paddingHorizontal: 24, paddingTop: 24 }}>
+                            <Text style={{ fontWeight: '700', fontSize: 18, marginBottom: 8, color: '#333' }}>
+                                ชื่อที่ต้องการแสดง
+                            </Text>
+                            <View style={{
+                                flexDirection: 'row', alignItems: 'center',
+                                backgroundColor: '#f5f6f7',
+                                borderRadius: 10, paddingHorizontal: 14,
+                                height: 50, borderWidth: 1, borderColor: '#e0e0e0',
+                                marginBottom: 8,
+                            }}>
+                                <Feather name="user" size={18} color="#aaa" style={{ marginRight: 10 }} />
+                                <TextInput
+                                    style={{ flex: 1, fontSize: 18, color: '#222' }}
+                                    placeholder="กรอกชื่อของคุณ"
+                                    placeholderTextColor="#bbb"
+                                    value={modalName}
+                                    onChangeText={setModalName}
+                                    maxLength={100}
+                                    editable={!modalSaving}
+                                    autoFocus
+                                />
+                            </View>
+                            <Text style={{ fontSize: 18, color: '#aaa', marginBottom: 22 }}>
+                                ชื่อนี้จะแสดงให้ผู้อื่นเห็นในระบบ แก้ไขได้ภายหลังในหน้าโปรไฟล์
+                            </Text>
+
+                            {/* ปุ่ม */}
+                            <View style={{ flexDirection: 'row', gap: 12 }}>
+                                <TouchableOpacity
+                                    onPress={handleProfileSkip}
+                                    disabled={modalSaving}
+                                    style={{
+                                        flex: 1, height: 48, borderRadius: 10,
+                                        borderWidth: 1.5, borderColor: '#ccc',
+                                        justifyContent: 'center', alignItems: 'center',
+                                        backgroundColor: '#fff',
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 18, fontWeight: '600', color: '#666' }}>ข้าม</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={handleProfileConfirm}
+                                    disabled={modalSaving}
+                                    style={{
+                                        flex: 2, height: 48, borderRadius: 10,
+                                        backgroundColor: '#1E2022',
+                                        justifyContent: 'center', alignItems: 'center',
+                                    }}
+                                >
+                                    {modalSaving ? (
+                                        <ActivityIndicator color="#fff" />
+                                    ) : (
+                                        <Text style={{ fontSize: 18, fontWeight: '700', color: '#fff' }}>ยืนยัน</Text>
+                                    )}
                                 </TouchableOpacity>
                             </View>
                         </View>
-                        <View style={{ alignItems: 'flex-end', marginBottom: 20 }}>
-                            <TouchableOpacity onPress={onNavigateToForgotPassword}>
-                                <Text style={{ fontWeight: '700', fontSize: 16 }}>ลืมรหัสผ่าน?</Text>
-                            </TouchableOpacity>
-                        </View>
-                        <TouchableOpacity
-                            onPress={handleSignIn}
-                            style={{ height: 50, backgroundColor: '#1E2022', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}
-                            disabled={loading}
-                        >
-                            {loading ? (
-                                <ActivityIndicator color="#fff" />
-                            ) : (
-                                <Text style={{ fontWeight: '700', color: '#fff', fontSize: 18 }}>เข้าสู่ระบบ</Text>
-                            )}
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            onPress={handleGoogleLogin}
-                            style={{
-                                flexDirection: 'row',
-                                backgroundColor: '#fff',
-                                borderWidth: 1,
-                                borderColor: '#ddd',
-                                padding: 10,
-                                borderRadius: 10,
-                                justifyContent: 'center',
-                                alignItems: 'center',
-                                marginBottom: 20
-                            }}
-                        >
-                            {/* Google Logo 2025 */}
-                            <Image
-                                source={{ uri: 'https://www.gstatic.com/images/branding/googleg/1x/googleg_standard_color_128dp.png' }}
-                                style={{ width: 24, height: 24, marginRight: 10 }}
-                            />
-                            <Text style={{ fontWeight: '600', fontSize: 18 }}>เข้าสู่ระบบด้วย Google</Text>
-                        </TouchableOpacity>
-                        <View style={{ flexDirection: 'row', justifyContent: 'center' }}>
-                            <Text style ={{fontSize: 18}}>ยังไม่มีบัญชี? </Text>
-                            <TouchableOpacity onPress={onNavigateToSignUp}>
-                                <Text style={{ fontWeight: '700', fontSize: 18 }}>สมัครสมาชิก</Text>
-                            </TouchableOpacity>
-                        </View>
                     </View>
-                </ScrollView>
-            </View>
-        </KeyboardAvoidingView>
+                </View>
+            </Modal>
+
+            <KeyboardAvoidingView
+                style={{ flex: 1, backgroundColor: '#FAF6F1' }}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            >
+
+
+                <View style={{ flex: 1, backgroundColor: '#FAF6F1' }}>
+                    <View style={{ position: 'absolute', top: -120, left: -120, width: 300, height: 300, borderRadius: 150, backgroundColor: 'rgba(243, 112, 33, 0.15)', }} />
+                    <View style={{ position: 'absolute', top: -100, right: -100, width: 250, height: 250, borderRadius: 125, backgroundColor: 'rgba(243, 200, 150, 0.20)', }} />
+                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                        <Image style={{ width: 100, height: 100 }} source={{ uri: "https://i.postimg.cc/CMk3WcZs/Chat-GPT-Image-Jan-5-2026-12-04-50-AM-Photoroom.png" }} />
+                        <Text style={{ fontSize: 30, fontWeight: '700', color: '#000' }}>Zippy Till</Text>
+                        <Text style={{ fontSize: 18, color: '#000' }}>ระบบจัดการร้านค้า</Text>
+                    </View>
+                </View>
+                <View style={{ flex: 2, backgroundColor: '#fff', borderTopLeftRadius: 55, borderTopRightRadius: 55, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 8 }}>
+                    <ScrollView
+                        contentContainerStyle={{ flexGrow: 1, paddingBottom: 30 }}
+                        keyboardShouldPersistTaps="handled"
+                        showsVerticalScrollIndicator={false}
+                    >
+                        <View style={{ paddingTop: 25, paddingBottom: 15, alignItems: 'center' }}>
+                            <Text style={{ fontSize: 20, fontWeight: '800' }}>เข้าสู่ระบบ</Text>
+                            <Text style={{ fontSize: 18, marginTop: 5 }}>ยินดีต้อนรับกลับมา</Text>
+                        </View>
+                        <View style={{ paddingHorizontal: 20 }}>
+                            <View style={{ marginBottom: 15 }}>
+                                <Text style={{ fontWeight: '800', marginBottom: 8, fontSize: 18 }}>อีเมล</Text>
+                                <View style={{ height: 50, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.15, shadowRadius: 2, elevation: 3, backgroundColor: 'white', borderRadius: 10, flexDirection: 'row' }}>
+                                    <View style={{ width: 50, justifyContent: 'center', alignItems: 'center' }}>
+                                        <MaterialCommunityIcons name="email-outline" size={24} color="#989898" />
+                                    </View>
+                                    <View style={{ flex: 1, justifyContent: 'center' }}>
+                                        <TextInput
+                                            placeholder="your@email.com"
+                                            style={{ fontSize: 18 }}
+                                            keyboardType="email-address"
+                                            autoCapitalize="none"
+                                            value={email}
+                                            onChangeText={setEmail}
+                                            editable={!loading}
+                                        />
+                                    </View>
+                                </View>
+                            </View>
+                            <View style={{ marginBottom: 10 }}>
+                                <Text style={{ fontWeight: '800', marginBottom: 8, fontSize: 18 }}>รหัสผ่าน</Text>
+                                <View style={{ height: 50, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.15, shadowRadius: 2, elevation: 3, backgroundColor: 'white', borderRadius: 10, flexDirection: 'row' }}>
+                                    <View style={{ width: 50, justifyContent: 'center', alignItems: 'center' }}>
+                                        <Feather name="lock" size={24} color="#989898" />
+                                    </View>
+                                    <View style={{ flex: 1, justifyContent: 'center' }}>
+                                        <TextInput
+                                            placeholder="••••••••••"
+                                            style={{ fontSize: 18 }}
+                                            secureTextEntry={!showPassword}
+                                            value={password}
+                                            onChangeText={setPassword}
+                                            editable={!loading}
+                                        />
+                                    </View>
+                                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ width: 50, justifyContent: 'center', alignItems: 'center' }}>
+                                        <Feather name={showPassword ? "eye" : "eye-off"} size={24} color="#989898" />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                            <View style={{ alignItems: 'flex-end', marginBottom: 20 }}>
+                                <TouchableOpacity onPress={onNavigateToForgotPassword}>
+                                    <Text style={{ fontWeight: '700', fontSize: 16 }}>ลืมรหัสผ่าน?</Text>
+                                </TouchableOpacity>
+                            </View>
+                            <TouchableOpacity
+                                onPress={handleSignIn}
+                                style={{ height: 50, backgroundColor: '#e9751dff', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}
+                                disabled={loading}
+                            >
+                                {loading ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <Text style={{ fontWeight: '700', color: '#fff', fontSize: 18 }}>เข้าสู่ระบบ</Text>
+                                )}
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={handleGoogleLogin}
+                                style={{
+                                    flexDirection: 'row',
+                                    backgroundColor: '#fff',
+                                    borderWidth: 1,
+                                    borderColor: '#ddd',
+                                    padding: 10,
+                                    borderRadius: 10,
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    marginBottom: 20
+                                }}
+                            >
+                                {/* Google Logo 2025 */}
+                                <Image
+                                    source={{ uri: 'https://www.gstatic.com/images/branding/googleg/1x/googleg_standard_color_128dp.png' }}
+                                    style={{ width: 24, height: 24, marginRight: 10 }}
+                                />
+                                <Text style={{ fontWeight: '600', fontSize: 18 }}>เข้าสู่ระบบด้วย Google</Text>
+                            </TouchableOpacity>
+                            <View style={{ flexDirection: 'row', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: 18 }}>ยังไม่มีบัญชี? </Text>
+                                <TouchableOpacity onPress={onNavigateToSignUp}>
+                                    <Text style={{ fontWeight: '700', fontSize: 18 }}>สมัครสมาชิก</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </ScrollView>
+                </View>
+            </KeyboardAvoidingView>
         </>
     )
 }
