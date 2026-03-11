@@ -53,28 +53,9 @@ export default function AlertScreen({ navigation }) {
         }, [])
     );
 
-    useEffect(() => {
-        const channel = supabase
-            .channel('alert-screen-notifications')
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'notifications'
-            }, (payload) => {
-                const newStoreId = payload.new?.store_id;
-                const oldStoreId = payload.old?.store_id;
+    // NOTE: Realtime is handled globally by useRealtimeSync hook (with debounce).
+    // No local subscription needed here — avoids double-triggering fetchNotifications.
 
-                if ((newStoreId && newStoreId === currentStore?.id) ||
-                    (oldStoreId && oldStoreId === currentStore?.id)) {
-                    fetchNotifications();
-                }
-            })
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [currentStore?.id]);
 
     const handleBack = () => {
         navigation?.goBack();

@@ -32,11 +32,12 @@ const COLUMN_WRAPPER_STYLE = { justifyContent: 'space-between' };
 // Weight Data (Mock from SaleScreen)
 // Weight Data (Fixed Categories per user request)
 const FIXED_WEIGHT_CATEGORIES = [
+    { id: 'all', name: 'ทั้งหมด', emoji: '🛒', keywords: [] }, // Special: shows all products
     { id: 'meats', name: 'เนื้อสัตว์', emoji: '🥩', keywords: ['เนื้อ', 'หมู', 'ไก่', 'เป็ด', 'เครื่องใน', 'ลูกชิ้น', 'ไส้กรอก'] },
     { id: 'seafood', name: 'ทะเล', emoji: '🦐', keywords: ['ทะเล', 'กุ้ง', 'หมึก', 'ปลา', 'หอย', 'ปู'] },
     { id: 'veg', name: 'ผัก', emoji: '🥬', keywords: ['ผัก'] },
     { id: 'fruit', name: 'ผลไม้', emoji: '🍎', keywords: ['ผลไม้'] },
-    { id: 'dried', name: 'อื่นๆ', emoji: '🌾', keywords: ['แห้ง', 'ข้าว', 'ธัญพืช', 'กระเทียม', 'หอม', 'พริก', 'กะปิ', 'อาหารสัตว์'] },
+    { id: 'dried', name: 'อื่นๆ', emoji: '🌾', keywords: [] }, // Catch-all for unmatched products
 ];
 
 const WEIGHT_UNITS = [
@@ -144,7 +145,7 @@ export default function ScanScreen({ navigation, route }) {
     const [showCategoryFilter, setShowCategoryFilter] = useState(false);
 
     // --- State: Weight Tab ---
-    const [selectedWeightCategoryId, setSelectedWeightCategoryId] = useState(FIXED_WEIGHT_CATEGORIES[0].id);
+    const [selectedWeightCategoryId, setSelectedWeightCategoryId] = useState('all');
     const [selectedItem, setSelectedItem] = useState(null);
     const [weightInput, setWeightInput] = useState('1');
     const [selectedUnit, setSelectedUnit] = useState(WEIGHT_UNITS[0]);
@@ -157,15 +158,30 @@ export default function ScanScreen({ navigation, route }) {
         // 1. Initialize groups with fixed categories
         const groups = FIXED_WEIGHT_CATEGORIES.map(cat => ({ ...cat, items: [] }));
 
+        const allGroup = groups.find(g => g.id === 'all');
+        const otherGroup = groups.find(g => g.id === 'dried'); // catch-all fallback
+
         // 2. Distribute products
         if (weightProducts && weightProducts.length > 0) {
             weightProducts.forEach(p => {
-                const catName = categories.find(c => c.id === p.category_id)?.name || '';
+                // Always add to 'ทั้งหมด' group
+                if (allGroup) allGroup.items.push(p);
 
-                // Find matching group
-                const group = groups.find(g => g.keywords.some(kw => catName.includes(kw)));
-                if (group) {
-                    group.items.push(p);
+                // Use inline category name from API join (product_categories.name)
+                // Fallback to categories store lookup for cached data compatibility
+                const catName = p.product_categories?.name
+                    || categories.find(c => c.id === p.category_id)?.name
+                    || '';
+
+                // Find matching keyword group (skip 'all' and 'dried' catch-all)
+                const keywordGroups = groups.filter(g => g.id !== 'all' && g.id !== 'dried' && g.keywords.length > 0);
+                const matched = keywordGroups.find(g => g.keywords.some(kw => catName.includes(kw)));
+
+                if (matched) {
+                    matched.items.push(p);
+                } else {
+                    // Falls into catch-all group
+                    if (otherGroup) otherGroup.items.push(p);
                 }
             });
         }
@@ -186,6 +202,8 @@ export default function ScanScreen({ navigation, route }) {
     useEffect(() => {
         if (activeTab === 'weight') {
             fetchWeightProducts();
+            // Also ensure categories are loaded so keyword matching works
+            if (categories.length === 0) fetchCategories();
         }
     }, [activeTab]);
 
