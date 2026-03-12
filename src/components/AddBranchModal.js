@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, TextInput, Modal, StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../services/supabase";
+import { apiRequest } from '../services/api';
 import { Buffer } from 'buffer';
 
 import { API_BASE_URL as API_URL } from '../config';

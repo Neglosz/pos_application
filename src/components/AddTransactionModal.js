@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, TouchableWithoutFeedback, Alert, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, TouchableWithoutFeedback, Alert, Keyboard, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -67,7 +67,7 @@ export default function AddTransactionModal({ visible, onClose, onSave }) {
                             <TouchableOpacity style={styles.input} onPress={() => setShowDatePicker(true)}>
                                 <Text>{date.toLocaleDateString('th-TH-u-ca-buddhist')}</Text>
                             </TouchableOpacity>
-                            {showDatePicker && (
+                            {showDatePicker && Platform.OS === 'android' && (
                                 <DateTimePicker
                                     value={date}
                                     mode="date"

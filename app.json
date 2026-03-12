@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "pos_application",
+    "name": "ZippyTill",
     "slug": "pos_application",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/icon.jpg",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
