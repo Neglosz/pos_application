@@ -251,9 +251,20 @@ export default function App() {
         if (!storedAuth) return;
 
         // 2. ตรวจสอบว่า Supabase session ยังใช้งานได้จริงๆ
-        const { data: { session: freshSession } } = await supabase.auth.getSession();
+        let { data: { session: freshSession } } = await supabase.auth.getSession();
+
+        // ถ้า getSession() คืน null → ลอง refresh ก่อน (access token อาจแค่หมด แต่ refresh token ยังดีอยู่)
         if (!freshSession) {
-          console.log('Cold start: session expired, clearing auth...');
+          try {
+            const { data: refreshData } = await supabase.auth.refreshSession();
+            freshSession = refreshData?.session || null;
+          } catch (e) {
+            console.log('Cold start: refresh attempt failed:', e.message);
+          }
+        }
+
+        if (!freshSession) {
+          console.log('Cold start: session expired and refresh failed, clearing auth...');
           await AsyncStorage.multiRemove(['authData', 'currentStoreId', 'lastActiveTime']);
           return;
         }
