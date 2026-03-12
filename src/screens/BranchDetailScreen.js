@@ -6,7 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../services/supabase";
 import { Buffer } from 'buffer';
-import { getStoreSettings, updateStoreSettings } from "../services/api";
+import { getStoreSettings, updateStoreSettings, apiRequest } from "../services/api";
 
 
 const ENCRYPTION_KEY = 'yourpos-secret-key-2026';
@@ -122,7 +122,7 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
                 type: 'image/jpeg',
             });
 
-            const { apiRequest } = require('../services/api');
+            
             const result = await apiRequest('/branches/upload-image', {
                 method: 'POST',
                 headers: {
@@ -351,7 +351,7 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
                 newPassword += chars.charAt(Math.floor(Math.random() * chars.length));
             }
 
-            const { apiRequest } = require('../services/api');
+            
             const result = await apiRequest('/branches/reset-credentials', {
                 method: 'POST',
                 body: JSON.stringify({
@@ -391,7 +391,7 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) throw new Error('Session หมดอายุ กรุณา login ใหม่');
 
-            const { apiRequest } = require('../services/api');
+            
             const result = await apiRequest('/branches/delete', {
                 method: 'DELETE',
                 body: JSON.stringify({ store_id: branch.id }),
