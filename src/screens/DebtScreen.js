@@ -521,7 +521,7 @@ export default function DebtScreen() {
                 statusBarTranslucent={true}
             >
                 <KeyboardAvoidingView
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                     style={styles.modalWrapper}
                 >
                     <Animated.View style={[styles.modalOverlay, { opacity: fadeAnim }]}>

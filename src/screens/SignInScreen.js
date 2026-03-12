@@ -424,7 +424,7 @@ export default function SignInScreen({ onLogin, onNavigateToSignUp, onNavigateTo
 
             <KeyboardAvoidingView
                 style={{ flex: 1, backgroundColor: '#FAF6F1' }}
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             >
 
 

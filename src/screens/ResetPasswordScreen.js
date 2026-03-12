@@ -74,7 +74,7 @@ export default function ResetPasswordScreen({ onNavigateToSignIn }) {
     return (
         <KeyboardAvoidingView
             style={{ flex: 1, backgroundColor: '#FAF6F1' }}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
             <View style={{ position: 'absolute', top: -120, left: -120, width: 300, height: 300, borderRadius: 150, backgroundColor: 'rgba(243, 112, 33, 0.15)', }} />
             <View style={{ position: 'absolute', top: -100, right: -100, width: 250, height: 250, borderRadius: 125, backgroundColor: 'rgba(243, 200, 150, 0.20)', }} />
