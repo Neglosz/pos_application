@@ -1338,8 +1338,14 @@ export default function ScanScreen({ navigation, route }) {
     // 6. WEIGHT VIEW — Clean UX Redesign
     const renderWeightProductCard = useCallback(({ item }) => {
         const isSelected = selectedItem?.id === item.id;
+        const isOutOfStock = parseFloat(item.stock_qty || 0) <= 0;
         return (
-            <View style={[styles.wProductCard, isSelected && styles.wProductCardSelected]}>
+            <View style={[styles.wProductCard, isSelected && styles.wProductCardSelected, isOutOfStock && { opacity: 0.75 }]}>
+                {isOutOfStock && (
+                    <View style={styles.wCardOutOfStockRibbon}>
+                        <Text style={styles.wCardOutOfStockText}>หมดสต็อก</Text>
+                    </View>
+                )}
                 <TouchableOpacity
                     style={{ flex: 1 }}
                     onPress={() => {
@@ -2425,6 +2431,23 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '700',
         color: '#3B5BDB',
+    },
+    wCardOutOfStockRibbon: {
+        position: 'absolute',
+        top: 16,
+        right: -28,
+        width: 100,
+        backgroundColor: '#D32F2F',
+        paddingVertical: 5,
+        alignItems: 'center',
+        transform: [{ rotate: '45deg' }],
+        zIndex: 10,
+    },
+    wCardOutOfStockText: {
+        color: '#fff',
+        fontSize: 10,
+        fontWeight: 'bold',
+        letterSpacing: 0.5,
     },
 
     // Modal Styles
