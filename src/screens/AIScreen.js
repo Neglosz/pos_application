@@ -1480,7 +1480,9 @@ export default function AIScreen({ navigation }) {
                         'discount_percent': `ลด${promo.discount_value}%`,
                         'discount_amount': `ลด ฿${promo.discount_value}`,
                         'buy_x_get_y': `ซื้อ ${promo.min_qty_required} แถม ${promo.free_qty}`,
-                        'bundle': `ซื้อครบ ฿${promo.min_spend} ลด ฿${promo.discount_value}`
+                        'bundle': promo.min_spend
+                            ? `ซื้อครบ ฿${promo.min_spend} ลด ฿${promo.discount_value}`
+                            : `ซื้อคู่ถูกกว่า ลด ${promo.discount_value}%`
                     }[promo.type] || promo.type;
                     return (
                         <View key={promo.id} style={styles.recCard}>

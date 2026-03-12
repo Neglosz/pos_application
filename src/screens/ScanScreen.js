@@ -714,14 +714,13 @@ export default function ScanScreen({ navigation, route }) {
                 const payableQty = (fullSets * buy) + remainder;
                 lineTotal = payableQty * p.price;
             } else if (promo && promo.type === 'bundle' && promo.min_spend) {
+                // Fixed-amount bundle: apply discount when total reaches min_spend
                 const rawTotal = p.price * p.quantity;
-                if (rawTotal >= promo.min_spend) {
-                    lineTotal = rawTotal - parseFloat(promo.discount_value || 0);
-                }
-                else {
-                    lineTotal = rawTotal;
-                }
+                lineTotal = rawTotal >= promo.min_spend
+                    ? rawTotal - parseFloat(promo.discount_value || 0)
+                    : rawTotal;
             } else {
+                // bundle without min_spend: price is already discounted at product level
                 // Normal or Discount % (price is already discounted from backend)
                 lineTotal = p.price * p.quantity;
             }
@@ -1273,15 +1272,12 @@ export default function ScanScreen({ navigation, route }) {
     };
 
     // 6. WEIGHT VIEW — Clean UX Redesign
-    const renderWeightView = () => {
-        if (activeTab !== 'weight') return null;
-
-        const renderProductCard = (item) => {
-            const isSelected = selectedItem?.id === item.id;
-            return (
+    const renderWeightProductCard = useCallback(({ item }) => {
+        const isSelected = selectedItem?.id === item.id;
+        return (
+            <View style={[styles.wProductCard, isSelected && styles.wProductCardSelected]}>
                 <TouchableOpacity
-                    key={item.id}
-                    style={[styles.wProductCard, isSelected && styles.wProductCardSelected]}
+                    style={{ flex: 1 }}
                     onPress={() => {
                         setSelectedItem(item);
                         setWeightInput('1');
@@ -1298,28 +1294,34 @@ export default function ScanScreen({ navigation, route }) {
                                 <Ionicons name="cube-outline" size={28} color="#ccc" />
                             </View>
                         )}
-                        <TouchableOpacity
-                            style={styles.wCardRestockBtn}
-                            onPress={(e) => {
-                                e.stopPropagation();
-                                if (item.barcode) {
-                                    setRestockBarcode(item.barcode);
-                                    setRestockProduct(null);
-                                } else {
-                                    setRestockBarcode('');
-                                    setRestockProduct(item);
-                                }
-                                setShowRestockModal(true);
-                            }}
-                        >
-                            <Ionicons name="add-circle" size={26} color="#F37021" />
-                        </TouchableOpacity>
                     </View>
                     <Text style={styles.wCardName} numberOfLines={1}>{item.name}</Text>
                     <Text style={styles.wCardPrice}>฿{item.price}<Text style={styles.wCardUnit}>/{item.unit_type || 'กก.'}</Text></Text>
                 </TouchableOpacity>
-            );
-        };
+                <TouchableOpacity
+                    style={styles.wCardRestockBtn}
+                    onPress={(e) => {
+                        e.stopPropagation();
+                        if (item.barcode) {
+                            setRestockBarcode(item.barcode);
+                            setRestockProduct(null);
+                        } else {
+                            setRestockBarcode('');
+                            setRestockProduct(item);
+                        }
+                        setShowRestockModal(true);
+                    }}
+                    activeOpacity={0.7}
+                >
+                    <Ionicons name="download-outline" size={16} color="#3B5BDB" />
+                    <Text style={styles.wCardRestockBtnText}>เติมสต็อก</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }, [selectedItem]);
+
+    const renderWeightView = () => {
+        if (activeTab !== 'weight') return null;
 
         return (
             <View style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
@@ -1354,32 +1356,33 @@ export default function ScanScreen({ navigation, route }) {
                 </View>
 
                 {/* Product Grid — 2 columns */}
-                {currentWeightCategory?.items?.length > 0 ? (
-                    <ScrollView
-                        contentContainerStyle={{ paddingBottom: 120 }}
-                        showsVerticalScrollIndicator={false}
-                        refreshControl={<RefreshControl refreshing={searchRefreshing} onRefresh={onSearchRefresh} colors={['#F37021']} tintColor="#F37021" />}
-                    >
-                        <View style={styles.wGridContainer}>
-                            {currentWeightCategory.items.map(item => renderProductCard(item))}
+                <FlatList
+                    key={currentWeightCategory?.id || 'empty'}
+                    data={currentWeightCategory?.items || []}
+                    keyExtractor={(item) => item.id}
+                    renderItem={renderWeightProductCard}
+                    numColumns={2}
+                    columnWrapperStyle={{ justifyContent: 'space-between', paddingHorizontal: 14, marginBottom: 10 }}
+                    contentContainerStyle={{ paddingTop: 4, paddingBottom: 120 }}
+                    showsVerticalScrollIndicator={false}
+                    removeClippedSubviews={true}
+                    maxToRenderPerBatch={10}
+                    windowSize={5}
+                    refreshControl={<RefreshControl refreshing={searchRefreshing} onRefresh={onSearchRefresh} colors={['#F37021']} tintColor="#F37021" />}
+                    ListEmptyComponent={
+                        <View style={styles.wEmptyState}>
+                            <Ionicons name="basket-outline" size={48} color="#ddd" />
+                            <Text style={styles.wEmptyText}>ยังไม่มีสินค้าในหมวดนี้</Text>
+                            <TouchableOpacity
+                                style={styles.wEmptyAddBtn}
+                                onPress={() => setShowAddProductModal(true)}
+                            >
+                                <Ionicons name="add" size={16} color="#fff" />
+                                <Text style={styles.wEmptyAddText}>เพิ่มสินค้าตัวแรก</Text>
+                            </TouchableOpacity>
                         </View>
-                    </ScrollView>
-                ) : (
-                    <ScrollView
-                        contentContainerStyle={styles.wEmptyState}
-                        refreshControl={<RefreshControl refreshing={searchRefreshing} onRefresh={onSearchRefresh} colors={['#F37021']} tintColor="#F37021" />}
-                    >
-                        <Ionicons name="basket-outline" size={48} color="#ddd" />
-                        <Text style={styles.wEmptyText}>ยังไม่มีสินค้าในหมวดนี้</Text>
-                        <TouchableOpacity
-                            style={styles.wEmptyAddBtn}
-                            onPress={() => setShowAddProductModal(true)}
-                        >
-                            <Ionicons name="add" size={16} color="#fff" />
-                            <Text style={styles.wEmptyAddText}>เพิ่มสินค้าตัวแรก</Text>
-                        </TouchableOpacity>
-                    </ScrollView>
-                )}
+                    }
+                />
             </View>
         );
     };
@@ -1877,7 +1880,37 @@ export default function ScanScreen({ navigation, route }) {
                                     )}
                                     <View style={{ marginLeft: 10, flex: 1 }}>
                                         <Text style={styles.cartItemName} numberOfLines={1}>{item.name}</Text>
-                                        <Text style={styles.cartItemPrice}>฿{item.price}</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: 4 }}>
+                                            {item.discount_percent > 0 && (
+                                                <Text style={{ textDecorationLine: 'line-through', color: '#999', fontSize: 12 }}>
+                                                    ฿{item.original_price}
+                                                </Text>
+                                            )}
+                                            <Text style={[styles.cartItemPrice, item.discount_percent > 0 && { color: '#F37021', fontWeight: 'bold' }]}>
+                                                ฿{item.price}
+                                            </Text>
+                                            {item.promotion?.type === 'buy_x_get_y' && (
+                                                <View style={{ backgroundColor: '#FFD700', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                    <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#000' }}>
+                                                        ซื้อ {item.promotion.min_qty} แถม {item.promotion.free_qty}
+                                                    </Text>
+                                                </View>
+                                            )}
+                                            {item.promotion?.type === 'bundle' && (
+                                                <View style={{ backgroundColor: '#E8F5E9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                    <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#2E7D32' }}>
+                                                        🛒 ซื้อคู่ถูกกว่า
+                                                    </Text>
+                                                </View>
+                                            )}
+                                            {item.promotion?.type === 'discount_amount' && (
+                                                <View style={{ backgroundColor: '#FFF3E0', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                    <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#E65100' }}>
+                                                        ลด ฿{item.promotion.discount_value}
+                                                    </Text>
+                                                </View>
+                                            )}
+                                        </View>
                                     </View>
                                 </View>
                                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -2235,14 +2268,14 @@ const styles = StyleSheet.create({
 
     // Product grid
     wGridContainer: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 14, gap: 10 },
-    wProductCard: { width: (width - 38) / 2, backgroundColor: '#fff', borderRadius: 16, padding: 10, alignItems: 'center', borderWidth: 1.5, borderColor: '#F0F0F0' },
+    wProductCard: { width: (width - 38) / 2, backgroundColor: '#fff', borderRadius: 16, paddingTop: 10, paddingHorizontal: 10, paddingBottom: 0, alignItems: 'center', borderWidth: 1.5, borderColor: '#F0F0F0', overflow: 'hidden' },
     wProductCardSelected: { borderColor: '#F37021', backgroundColor: '#FFFBF7', shadowColor: '#F37021', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 4 },
     wCardCheck: { position: 'absolute', top: 8, right: 8, width: 22, height: 22, borderRadius: 11, backgroundColor: '#F37021', justifyContent: 'center', alignItems: 'center', zIndex: 2 },
     wCardImageWrap: { width: '100%', aspectRatio: 1.3, borderRadius: 12, overflow: 'hidden', backgroundColor: '#F9FAFB', marginBottom: 8 },
     wCardImage: { width: '100%', height: '100%', resizeMode: 'cover' },
     wCardImagePlaceholder: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', backgroundColor: '#F5F5F5' },
     wCardName: { fontSize: 18, fontWeight: '600', color: '#333', textAlign: 'center', marginBottom: 3 },
-    wCardPrice: { fontSize: 18, fontWeight: '700', color: '#F37021' },
+    wCardPrice: { fontSize: 18, fontWeight: '700', color: '#F37021', textAlign: 'center', alignSelf: 'stretch' },
     wCardUnit: { fontSize: 18, fontWeight: '400', color: '#999' },
 
     // Empty state
@@ -2293,20 +2326,22 @@ const styles = StyleSheet.create({
     imagePickerButton: { width: '100%', height: 150, backgroundColor: '#f0f0f0', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 15, borderStyle: 'dashed', borderWidth: 1, borderColor: '#ccc' },
 
     wCardRestockBtn: {
-        position: 'absolute',
-        top: 6,
-        right: 6,
-        backgroundColor: '#fff',
-        borderRadius: 15,
-        width: 30,
-        height: 30,
-        justifyContent: 'center',
+        flexDirection: 'row',
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 3,
-        elevation: 3,
+        justifyContent: 'center',
+        alignSelf: 'stretch',
+        marginHorizontal: -10,
+        marginTop: 8,
+        paddingVertical: 8,
+        gap: 6,
+        backgroundColor: '#EEF2FF',
+        borderTopWidth: 1,
+        borderTopColor: '#D4DEFF',
+    },
+    wCardRestockBtnText: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#3B5BDB',
     },
 
     // Modal Styles

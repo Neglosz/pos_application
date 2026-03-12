@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
@@ -117,6 +117,19 @@ export default function App() {
   const [authData, setAuthData] = useState(null);
   const [selectedBranch, setSelectedBranch] = useState(null);
 
+  // ---- Session recovery refs ----
+  // เก็บ session ล่าสุดที่ valid ไว้ เพื่อ recover กรณี SIGNED_OUT โดยไม่ตั้งใจ
+  const lastValidSessionRef = useRef(null);
+  // flag บอกว่า signOut นี้ตั้งใจ (กดออก / 30 วัน) ไม่ใช่ Supabase ยิงเอง
+  const isIntentionalSignOutRef = useRef(false);
+
+  // ฟังก์ชัน signOut กลาง — ทุกที่ต้องออกจากระบบมาเรียกตรงนี้เท่านั้น
+  const performSignOut = useCallback(async () => {
+    isIntentionalSignOutRef.current = true;
+    lastValidSessionRef.current = null;
+    await supabase.auth.signOut();
+  }, []);
+
   // Auth screen navigation handler
   const navigateTo = (screen) => {
     setCurrentScreen(screen);
@@ -179,12 +192,57 @@ export default function App() {
   // Listen for Supabase Auth State Changes
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+
+      // บันทึก session ล่าสุดที่ valid ไว้ทุกครั้งที่ login หรือ token refresh
+      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
+        lastValidSessionRef.current = {
+          access_token: session.access_token,
+          refresh_token: session.refresh_token,
+        };
+      }
+
       if (event === 'PASSWORD_RECOVERY') {
         const storedAuth = await AsyncStorage.getItem('authData');
         if (!storedAuth) {
           setCurrentScreen('ResetPassword');
         }
+
       } else if (event === 'SIGNED_OUT') {
+
+        // ถ้าเป็น signOut ที่ตั้งใจ (กด logout / 30 วัน) → clear ทันที
+        if (isIntentionalSignOutRef.current) {
+          isIntentionalSignOutRef.current = false;
+          lastValidSessionRef.current = null;
+          await AsyncStorage.multiRemove(['authData', 'currentStoreId', 'lastActiveTime']);
+          setIsLoggedIn(false);
+          setAuthData(null);
+          setSelectedBranch(null);
+          setCurrentScreen('SignIn');
+          return;
+        }
+
+        // SIGNED_OUT ที่ Supabase ยิงเอง (refresh token reuse violation, network error ฯลฯ)
+        // → ลอง recover ด้วย token ล่าสุดที่เราบันทึกไว้
+        const savedSession = lastValidSessionRef.current;
+        if (savedSession) {
+          try {
+            const { data, error } = await supabase.auth.setSession(savedSession);
+            if (!error && data?.session) {
+              // Recovery สำเร็จ! อัปเดต token ล่าสุดและไม่ต้อง logout
+              lastValidSessionRef.current = {
+                access_token: data.session.access_token,
+                refresh_token: data.session.refresh_token,
+              };
+              console.log('[Auth] Recovered from unexpected SIGNED_OUT');
+              return;
+            }
+          } catch (e) {
+            console.log('[Auth] Recovery failed:', e.message);
+          }
+        }
+
+        // Recovery ไม่สำเร็จ → logout จริงๆ
+        lastValidSessionRef.current = null;
         await AsyncStorage.multiRemove(['authData', 'currentStoreId', 'lastActiveTime']);
         setIsLoggedIn(false);
         setAuthData(null);
@@ -211,8 +269,7 @@ export default function App() {
             if (now - lastActive > ONE_MONTH_MS) {
               // ถ้าไม่ได้เข้าแอปเกิน 30 วัน -> บังคับ Logout
               console.log("พักแอปนานเกิน 1 เดือน กำลังเตะออกจากระบบ...");
-              await supabase.auth.signOut();
-              await AsyncStorage.multiRemove(['authData', 'currentStoreId', 'lastActiveTime']);
+              await performSignOut();
               setIsLoggedIn(false);
               return; // สั่งหยุด ไม่ให้ลงไปอัปเดต Session หรือเวลาด้านล่าง
             }
@@ -242,8 +299,7 @@ export default function App() {
         const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
         if (lastActiveStr && now - parseInt(lastActiveStr, 10) > ONE_MONTH_MS) {
           console.log('Cold start: inactive > 30 days, signing out...');
-          await supabase.auth.signOut();
-          await AsyncStorage.multiRemove(['authData', 'currentStoreId', 'lastActiveTime']);
+          await performSignOut();
           return;
         }
 
@@ -336,12 +392,8 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    await AsyncStorage.multiRemove(['authData', 'currentStoreId', 'lastActiveTime']);
-    setIsLoggedIn(false);
-    setCurrentScreen('SignIn');
-    setAuthData(null);
-    setSelectedBranch(null);
+    await performSignOut();
+    // onAuthStateChange SIGNED_OUT handler จะ clear auth และ navigate ให้เอง
   };
 
   const handleBackToBranchList = () => {
