@@ -40,6 +40,18 @@ export default function AddTransactionModal({ visible, onClose, onSave }) {
         setDate(new Date());
     };
 
+    const onDateChange = (event, selectedDate) => {
+        if (Platform.OS === 'android') {
+            setShowDatePicker(false);
+            if (event.type === 'set' && selectedDate) {
+                setDate(selectedDate);
+            }
+        } else {
+            // iOS: update live, dismiss via confirm button
+            if (selectedDate) setDate(selectedDate);
+        }
+    };
+
     return (
         <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -72,10 +84,7 @@ export default function AddTransactionModal({ visible, onClose, onSave }) {
                                     value={date}
                                     mode="date"
                                     display="default"
-                                    onChange={(event, selectedDate) => {
-                                        setShowDatePicker(false);
-                                        if (selectedDate) setDate(selectedDate);
-                                    }}
+                                    onChange={onDateChange}
                                 />
                             )}
 
@@ -117,6 +126,36 @@ export default function AddTransactionModal({ visible, onClose, onSave }) {
                     </TouchableWithoutFeedback>
                 </View>
             </TouchableWithoutFeedback>
+
+            {/* iOS Date Picker Overlay (inside main modal) */}
+            {Platform.OS === 'ios' && showDatePicker && (
+                <TouchableWithoutFeedback onPress={() => setShowDatePicker(false)}>
+                    <View style={styles.datePickerOverlay}>
+                        <TouchableWithoutFeedback>
+                            <View style={styles.datePickerContainer}>
+                                <View style={styles.datePickerHeader}>
+                                    <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                                        <Text style={styles.datePickerCancel}>ยกเลิก</Text>
+                                    </TouchableOpacity>
+                                    <Text style={styles.datePickerTitle}>เลือกวันที่</Text>
+                                    <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                                        <Text style={styles.datePickerDone}>ตกลง</Text>
+                                    </TouchableOpacity>
+                                </View>
+                                <DateTimePicker
+                                    value={date}
+                                    mode="date"
+                                    display="spinner"
+                                    onChange={onDateChange}
+                                    locale="th-TH"
+                                    textColor="#333"
+                                    style={{ height: 200 }}
+                                />
+                            </View>
+                        </TouchableWithoutFeedback>
+                    </View>
+                </TouchableWithoutFeedback>
+            )}
         </Modal>
     );
 }
@@ -138,4 +177,44 @@ const styles = StyleSheet.create({
     saveBtn: { flex: 1, padding: 14, borderRadius: 8, backgroundColor: '#F37021', alignItems: 'center' },
     cancelText: { color: '#666', fontWeight: 'bold' },
     saveText: { color: '#fff', fontWeight: 'bold' },
+
+    // Date Picker Modal (iOS)
+    datePickerOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        justifyContent: 'flex-end',
+        backgroundColor: 'rgba(0,0,0,0.4)',
+    },
+    datePickerContainer: {
+        backgroundColor: '#fff',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        paddingBottom: 30,
+    },
+    datePickerHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+    },
+    datePickerTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#333',
+    },
+    datePickerCancel: {
+        fontSize: 16,
+        color: '#888',
+    },
+    datePickerDone: {
+        fontSize: 16,
+        color: '#007AFF',
+        fontWeight: '600',
+    },
 });

@@ -4,77 +4,17 @@ import { supabase } from './supabase';
 let currentStoreId = null;
 let currentUserId = null;
 
-// รอให้ Supabase's startAutoRefresh() ทำงานเสร็จ
-// ไม่เรียก refreshSession() เองเลย เพื่อป้องกัน race condition กับ auto-refresh
-// ที่ทำให้ refresh token ถูก revoke (Reuse Detection)
-let _pendingRefreshWait = null;
-export const waitForAutoRefresh = () => {
-    if (_pendingRefreshWait) return _pendingRefreshWait;
-
-    _pendingRefreshWait = (async () => {
-        try {
-            // Subscribe ก่อน แล้วค่อย check session
-            // เพื่อป้องกัน race condition ที่ TOKEN_REFRESHED fire ระหว่าง getSession() กับ onAuthStateChange()
-            return await new Promise((resolve) => {
-                let resolved = false;
-                const resolveOnce = (value) => {
-                    if (resolved) return;
-                    resolved = true;
-                    clearTimeout(timer);
-                    authSub?.unsubscribe();
-                    resolve(value);
-                };
-
-                const timer = setTimeout(() => {
-                    resolveOnce(null); // timeout 8 วินาที
-                }, 8000);
-
-                // 1. Subscribe ก่อน เพื่อไม่ให้พลาด TOKEN_REFRESHED
-                const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((event, freshSession) => {
-                    if (event === 'TOKEN_REFRESHED') {
-                        resolveOnce(freshSession);
-                    } else if (event === 'SIGNED_OUT') {
-                        resolveOnce(null);
-                    }
-                });
-
-                // 2. Check session หลัง subscribe → ถ้า TOKEN_REFRESHED เพิ่ง fire ไปแล้ว getSession() จะคืน fresh session
-                supabase.auth.getSession().then(({ data: { session } }) => {
-                    const now = Math.floor(Date.now() / 1000);
-                    if (!session) {
-                        resolveOnce(null);
-                    } else if (session.access_token && session.expires_at > now + 5) {
-                        // Session ยังใช้ได้ (ไม่ได้หมดอายุ)
-                        resolveOnce(session);
-                    }
-                    // Session หมดอายุ → รอ TOKEN_REFRESHED จาก startAutoRefresh()
-                }).catch(() => resolveOnce(null));
-            });
-        } finally {
-            _pendingRefreshWait = null;
-        }
-    })();
-
-    return _pendingRefreshWait;
-};
-
 export const apiRequest = async (endpoint, options = {}) => {
-    // ถ้า refresh กำลังทำอยู่ รอให้เสร็จก่อนค่อยดึง token
-    if (_pendingRefreshWait) await _pendingRefreshWait;
-
     let token = null;
     try {
-        const { data: { session } } = await supabase.auth.getSession();
+        // getSession() ใน Supabase v2 จะจัดการเรื่องการ Refresh Token ให้อัตโนมัติและปลอดภัยกว่า
+        // (มี lock ป้องกันการ refresh ชนกันอยู่แล้ว)
+        const { data: { session }, error } = await supabase.auth.getSession();
         
-        if (session) {
-            const now = Math.floor(Date.now() / 1000);
-            // ถ้าน้อยกว่า 60 วินาทีจะหมดอายุ บังคับขอใหม่เลย
-            if (session.expires_at - now < 60) {
-                 const { data } = await supabase.auth.refreshSession();
-                 token = data.session?.access_token;
-            } else {
-                 token = session.access_token;
-            }
+        if (error) {
+            console.error("Session fetch error:", error);
+        } else if (session) {
+            token = session.access_token;
         }
     } catch (error) {
         console.error("Error fetching session:", error);
@@ -92,26 +32,6 @@ export const apiRequest = async (endpoint, options = {}) => {
         ...options,
         headers,
     });
-
-    if (response.status === 401 || response.status === 403) {
-        // ไม่ refresh เอง! รอให้ startAutoRefresh() ทำงานเสร็จแล้วใช้ token ที่ refresh แล้ว
-        const freshSession = await waitForAutoRefresh();
-
-        if (!freshSession) {
-            await supabase.auth.signOut();
-            return { success: false, error: 'Session expired permanently' };
-        }
-
-        const newHeaders = {
-            ...headers,
-            'Authorization': `Bearer ${freshSession.access_token}`
-        };
-
-        response = await fetch(`${BASE_URL}${endpoint}`, {
-            ...options,
-            headers: newHeaders,
-        });
-    }
 
     return response.json();
 }
