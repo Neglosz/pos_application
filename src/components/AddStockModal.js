@@ -778,7 +778,7 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
             statusBarTranslucent={true}
         >
             <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 style={styles.keyboardAvoidingView}
             >
                 <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
