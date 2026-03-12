@@ -1404,7 +1404,7 @@ export default function ScanScreen({ navigation, route }) {
                     <View style={styles.wModalOverlay}>
                         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                             <KeyboardAvoidingView
-                                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                             >
                                 <SafeAreaView edges={['bottom']} style={styles.wModalContent}>
                                     {/* Handle indicator */}
@@ -1599,7 +1599,7 @@ export default function ScanScreen({ navigation, route }) {
                 onRequestClose={() => setShowAddProductModal(false)}
             >
                 <KeyboardAvoidingView
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                     style={styles.modalOverlay}
                 >
                     <View style={[styles.modalContainer, { paddingBottom: Math.max(insets.bottom, 20) + 20, maxHeight: height * 0.9 }]}>

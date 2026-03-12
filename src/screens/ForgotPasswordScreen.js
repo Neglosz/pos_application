@@ -55,7 +55,7 @@ export default function ForgotPasswordScreen({ onNavigateToSignIn }) {
     return (
         <KeyboardAvoidingView
             style={{ flex: 1, backgroundColor: '#FAF6F1' }}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
             <View style={{ flex: 1, backgroundColor: '#FAF6F1' }}>
                 <View style={{ position: 'absolute', top: -120, left: -120, width: 300, height: 300, borderRadius: 150, backgroundColor: 'rgba(243, 112, 33, 0.15)', }} />
