@@ -699,6 +699,14 @@ export default function ScanScreen({ navigation, route }) {
     // --- Logic: Payment ---
     // Calculate Total with Promotion Logic
     const calculateTotal = (items) => {
+        // Group items by bundle promotion_id to check if all partners are in cart
+        const bundlePartnerCount = {};
+        items.forEach(p => {
+            if (p.promotion?.type === 'bundle' && p.promotion?.id) {
+                bundlePartnerCount[p.promotion.id] = (bundlePartnerCount[p.promotion.id] || 0) + 1;
+            }
+        });
+
         return items.reduce((sum, p) => {
             let lineTotal = 0;
             const promo = p.promotion;
@@ -709,18 +717,23 @@ export default function ScanScreen({ navigation, route }) {
                 const setSize = buy + get;
                 const fullSets = Math.floor(p.quantity / setSize);
                 const remainder = p.quantity % setSize;
-
-                // Pay for 'buy' amount in each set + remainder
                 const payableQty = (fullSets * buy) + remainder;
                 lineTotal = payableQty * p.price;
-            } else if (promo && promo.type === 'bundle' && promo.min_spend) {
-                // Fixed-amount bundle: apply discount when total reaches min_spend
+            } else if (promo && promo.type === 'bundle') {
                 const rawTotal = p.price * p.quantity;
-                lineTotal = rawTotal >= promo.min_spend
-                    ? rawTotal - parseFloat(promo.discount_value || 0)
-                    : rawTotal;
+                if (promo.min_spend) {
+                    // Fixed-amount bundle: apply discount when total reaches min_spend
+                    lineTotal = rawTotal >= promo.min_spend
+                        ? rawTotal - parseFloat(promo.discount_value || 0)
+                        : rawTotal;
+                } else if ((bundlePartnerCount[promo.id] || 0) >= 2) {
+                    // Percent bundle: only apply when 2+ partner products are in cart
+                    const pct = parseFloat(promo.discount_value || 0);
+                    lineTotal = rawTotal * (1 - pct / 100);
+                } else {
+                    lineTotal = rawTotal; // partner missing — no discount
+                }
             } else {
-                // bundle without min_spend: price is already discounted at product level
                 // Normal or Discount % (price is already discounted from backend)
                 lineTotal = p.price * p.quantity;
             }
@@ -730,6 +743,23 @@ export default function ScanScreen({ navigation, route }) {
 
     const totalAmount = calculateTotal(products);
     const totalItems = products.length;
+
+    // IDs of bundle promotions where ALL partners are already in cart (discount active)
+    const completedBundleIds = useMemo(() => {
+        const count = {};
+        products.forEach(p => {
+            if (p.promotion?.type === 'bundle' && p.promotion?.id)
+                count[p.promotion.id] = (count[p.promotion.id] || 0) + 1;
+        });
+        return new Set(Object.keys(count).filter(id => count[id] >= 2));
+    }, [products]);
+
+    // Total before any promotions (original prices × qty)
+    const totalFullPrice = useMemo(() =>
+        products.reduce((sum, p) => sum + (p.original_price || p.price) * p.quantity, 0),
+        [products]
+    );
+    const totalSavings = Math.round(totalFullPrice - totalAmount);
 
     const handleConfirmAddToCart = (quantity) => {
         if (selectedProductToAdd) {
@@ -744,6 +774,16 @@ export default function ScanScreen({ navigation, route }) {
     const checkCartPromotionsAlert = () => {
         const missedPromos = [];
 
+        // Group bundle products by promotion_id
+        const bundleGroups = {};
+        products.forEach(p => {
+            if (p.promotion?.type === 'bundle' && p.promotion?.id) {
+                const id = p.promotion.id;
+                if (!bundleGroups[id]) bundleGroups[id] = { promo: p.promotion, names: [] };
+                bundleGroups[id].names.push(p.name);
+            }
+        });
+
         products.forEach(p => {
             const promo = p.promotion;
             if (!promo) return;
@@ -753,13 +793,11 @@ export default function ScanScreen({ navigation, route }) {
             if (promo.type === 'buy_x_get_y') {
                 const setSize = (promo.min_qty || 1) + (promo.free_qty || 1);
                 const remainder = qty % setSize;
-
                 if (remainder > 0) {
                     const need = setSize - remainder;
                     missedPromos.push(`- ${p.name}: ซื้อ ${promo.min_qty} แถม ${promo.free_qty} (ขาดอีก ${need} ชิ้น)`);
                 }
-            }
-            else if (promo.type === 'bundle' && promo.min_spend) {
+            } else if (promo.type === 'bundle' && promo.min_spend) {
                 const currentTotal = p.price * qty;
                 if (currentTotal < promo.min_spend) {
                     const need = promo.min_spend - currentTotal;
@@ -767,6 +805,14 @@ export default function ScanScreen({ navigation, route }) {
                 }
             }
         });
+
+        // Check incomplete percent-bundle (partner product not in cart)
+        Object.values(bundleGroups).forEach(({ promo, names }) => {
+            if (!promo.min_spend && names.length < 2) {
+                missedPromos.push(`- 🛒 โปรซื้อคู่ "${promo.name}": เพิ่มสินค้าคู่เข้าตะกร้าเพื่อรับส่วนลด ${promo.discount_value}%`);
+            }
+        });
+
         return missedPromos;
     };
 
@@ -1015,21 +1061,39 @@ export default function ScanScreen({ navigation, route }) {
                             )}
                             <View style={{ marginLeft: 10, flex: 1 }}>
                                 <Text style={styles.cartItemName} numberOfLines={1}>{item.name}</Text>
-                                <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-                                    {item.discount_percent > 0 && (
-                                        <Text style={{ textDecorationLine: 'line-through', color: '#999', fontSize: 12, marginRight: 5 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: 4 }}>
+                                    {item.original_price > item.price && (
+                                        <Text style={{ textDecorationLine: 'line-through', color: '#999', fontSize: 12 }}>
                                             ฿{item.original_price}
                                         </Text>
                                     )}
-                                    <Text style={[styles.cartItemPrice, item.discount_percent > 0 && { color: '#F37021', fontWeight: 'bold' }]}>
+                                    <Text style={[styles.cartItemPrice, item.original_price > item.price && { color: '#F37021', fontWeight: 'bold' }]}>
                                         ฿{item.price}
                                     </Text>
-
-                                    {/* B1G1 Badge in Cart */}
                                     {item.promotion?.type === 'buy_x_get_y' && (
-                                        <View style={{ marginLeft: 8, backgroundColor: '#FFD700', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                        <View style={{ backgroundColor: '#FFD700', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
                                             <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#000' }}>
                                                 ซื้อ {item.promotion.min_qty} แถม {item.promotion.free_qty}
+                                            </Text>
+                                        </View>
+                                    )}
+                                    {item.promotion?.type === 'bundle' && (
+                                        completedBundleIds.has(item.promotion.id)
+                                            ? <View style={{ backgroundColor: '#1B5E20', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#fff' }}>
+                                                    🛒 ลด {item.promotion.discount_value}% ✓
+                                                </Text>
+                                            </View>
+                                            : <View style={{ backgroundColor: '#EEEEEE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#757575' }}>
+                                                    🛒 ซื้อคู่ถูกกว่า?
+                                                </Text>
+                                            </View>
+                                    )}
+                                    {item.promotion?.type === 'discount_amount' && (
+                                        <View style={{ backgroundColor: '#FFF3E0', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                            <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#E65100' }}>
+                                                ลด ฿{item.promotion.discount_value}
                                             </Text>
                                         </View>
                                     )}
@@ -1881,12 +1945,12 @@ export default function ScanScreen({ navigation, route }) {
                                     <View style={{ marginLeft: 10, flex: 1 }}>
                                         <Text style={styles.cartItemName} numberOfLines={1}>{item.name}</Text>
                                         <View style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: 4 }}>
-                                            {item.discount_percent > 0 && (
+                                            {item.original_price > item.price && (
                                                 <Text style={{ textDecorationLine: 'line-through', color: '#999', fontSize: 12 }}>
                                                     ฿{item.original_price}
                                                 </Text>
                                             )}
-                                            <Text style={[styles.cartItemPrice, item.discount_percent > 0 && { color: '#F37021', fontWeight: 'bold' }]}>
+                                            <Text style={[styles.cartItemPrice, item.original_price > item.price && { color: '#F37021', fontWeight: 'bold' }]}>
                                                 ฿{item.price}
                                             </Text>
                                             {item.promotion?.type === 'buy_x_get_y' && (
@@ -1897,11 +1961,17 @@ export default function ScanScreen({ navigation, route }) {
                                                 </View>
                                             )}
                                             {item.promotion?.type === 'bundle' && (
-                                                <View style={{ backgroundColor: '#E8F5E9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                                                    <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#2E7D32' }}>
-                                                        🛒 ซื้อคู่ถูกกว่า
-                                                    </Text>
-                                                </View>
+                                                completedBundleIds.has(item.promotion.id)
+                                                    ? <View style={{ backgroundColor: '#1B5E20', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                        <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#fff' }}>
+                                                            🛒 ลด {item.promotion.discount_value}% ✓
+                                                        </Text>
+                                                    </View>
+                                                    : <View style={{ backgroundColor: '#EEEEEE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                        <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#757575' }}>
+                                                            🛒 ซื้อคู่ถูกกว่า?
+                                                        </Text>
+                                                    </View>
                                             )}
                                             {item.promotion?.type === 'discount_amount' && (
                                                 <View style={{ backgroundColor: '#FFF3E0', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
@@ -1986,6 +2056,12 @@ export default function ScanScreen({ navigation, route }) {
                         )}
                     />
                     <View style={{ marginTop: 20, borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 15 }}>
+                        {totalSavings > 0 && (
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, backgroundColor: '#F1FFF4', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
+                                <Text style={{ fontSize: 16, color: '#2E7D32', fontWeight: '600' }}>ประหยัดได้</Text>
+                                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#2E7D32' }}>-฿{totalSavings.toLocaleString()}</Text>
+                            </View>
+                        )}
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 }}>
                             <Text style={{ fontSize: 18, fontWeight: 'bold' }}>รวมทั้งสิ้น</Text>
                             <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#F37021' }}>฿{totalAmount.toLocaleString()}</Text>
@@ -2059,7 +2135,14 @@ export default function ScanScreen({ navigation, route }) {
                     <View style={styles.itemCountBadge}>
                         <Text style={styles.itemCountText}>{totalItems}</Text>
                     </View>
-                    <Text style={styles.payButtonText}>ชำระเงิน</Text>
+                    <View style={{ flex: 1, alignItems: 'center' }}>
+                        <Text style={styles.payButtonText}>ชำระเงิน</Text>
+                        {totalSavings > 0 && (
+                            <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.85)', marginTop: 1 }}>
+                                ประหยัด ฿{totalSavings.toLocaleString()}
+                            </Text>
+                        )}
+                    </View>
                     <Text style={styles.payTotalText}>฿{totalAmount.toLocaleString()}</Text>
                 </TouchableOpacity>
             </View>
