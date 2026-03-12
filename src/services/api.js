@@ -4,34 +4,48 @@ import { supabase } from './supabase';
 let currentStoreId = null;
 let currentUserId = null;
 
-export const apiRequest = async (endpoint, options = {}) => {
-    let token = null;
+const buildHeaders = (token, extraHeaders = {}) => ({
+    'Content-Type': 'application/json',
+    ...(currentStoreId && { 'x-store-id': currentStoreId }),
+    ...(currentUserId && { 'x-user-id': currentUserId }),
+    ...(token && { 'Authorization': `Bearer ${token}` }),
+    ...extraHeaders,
+});
+
+const getAccessToken = async () => {
     try {
-        // getSession() ใน Supabase v2 จะจัดการเรื่องการ Refresh Token ให้อัตโนมัติและปลอดภัยกว่า
-        // (มี lock ป้องกันการ refresh ชนกันอยู่แล้ว)
         const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-            console.error("Session fetch error:", error);
-        } else if (session) {
-            token = session.access_token;
-        }
+        if (error) console.error("Session fetch error:", error);
+        return session?.access_token || null;
     } catch (error) {
         console.error("Error fetching session:", error);
+        return null;
     }
+};
 
-    const headers = {
-        'Content-Type': 'application/json',
-        ...(currentStoreId && { 'x-store-id': currentStoreId }),
-        ...(currentUserId && { 'x-user-id': currentUserId }),
-        ...(token && { 'Authorization': `Bearer ${token}` }),
-        ...options.headers,
-    };
+export const apiRequest = async (endpoint, options = {}) => {
+    let token = await getAccessToken();
 
     let response = await fetch(`${BASE_URL}${endpoint}`, {
         ...options,
-        headers,
+        headers: buildHeaders(token, options.headers),
     });
+
+    // ถ้าได้ 401 (token หมดอายุ) → force refresh แล้ว retry ครั้งเดียว
+    if (response.status === 401) {
+        try {
+            const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+            if (!refreshError && refreshData?.session) {
+                token = refreshData.session.access_token;
+                response = await fetch(`${BASE_URL}${endpoint}`, {
+                    ...options,
+                    headers: buildHeaders(token, options.headers),
+                });
+            }
+        } catch (refreshError) {
+            console.error("Token refresh failed on 401:", refreshError);
+        }
+    }
 
     return response.json();
 }
