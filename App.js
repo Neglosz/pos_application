@@ -9,7 +9,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Alert, Linking, AppState } from 'react-native';
 import { enableScreens } from 'react-native-screens';
 import { StoreProvider } from './src/contexts/StoreContext';
-import { setCurrentStoreId, setCurrentUserId, waitForAutoRefresh } from './src/services/api';
+import { setCurrentStoreId, setCurrentUserId } from './src/services/api';
 import { supabase } from './src/services/supabase';
 import { initNetworkMonitoring } from './src/services/network';
 
@@ -251,8 +251,7 @@ export default function App() {
         if (!storedAuth) return;
 
         // 2. ตรวจสอบว่า Supabase session ยังใช้งานได้จริงๆ
-        // ใช้ waitForAutoRefresh() เพื่อรอให้ startAutoRefresh() ทำงานเสร็จ
-        const freshSession = await waitForAutoRefresh();
+        const { data: { session: freshSession } } = await supabase.auth.getSession();
         if (!freshSession) {
           console.log('Cold start: session expired, clearing auth...');
           await AsyncStorage.multiRemove(['authData', 'currentStoreId', 'lastActiveTime']);

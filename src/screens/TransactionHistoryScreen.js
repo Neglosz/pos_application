@@ -314,12 +314,6 @@ export default function TransactionHistoryScreen({ navigation }) {
                             ฿{summary.expense.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
                         </Text>
                     </View>
-                    <View style={[styles.summaryCard, { borderLeftColor: summary.net >= 0 ? '#2196F3' : '#FF9800' }]}>
-                        <Text style={styles.summaryLabel}>สุทธิ</Text>
-                        <Text style={[styles.summaryValue, { color: summary.net >= 0 ? '#2196F3' : '#FF9800' }]}>
-                            {summary.net >= 0 ? '' : '-'}฿{Math.abs(summary.net).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
-                        </Text>
-                    </View>
                 </View>
             )}
 
