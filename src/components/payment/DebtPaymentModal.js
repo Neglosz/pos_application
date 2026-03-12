@@ -385,7 +385,7 @@ export default function DebtPaymentModal({
         >
             <KeyboardAvoidingView
                 style={styles.modalWrapper}
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             >
                 <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                     <View style={styles.modalInner}>
