@@ -4,7 +4,7 @@ import { View, Text, Modal, StyleSheet, TouchableOpacity, TextInput, Image, Scro
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { getProductCategories, addProduct, getProductByBarcode, addProductBatch, getCurrentStoreId } from '../services/api';
+import { getProductCategories, addProduct, getProductByBarcode, addProductBatch, getCurrentStoreId, ocrExpiryDate } from '../services/api';
 import { uploadProductImage, isLocalUri } from '../services/supabaseStorage';
 import CategoryManageModal from './CategoryManageModal';
 
@@ -25,6 +25,7 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
     const [expireDate, setExpireDate] = useState(null);
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [isOcrLoading, setIsOcrLoading] = useState(false);
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [fieldErrors, setFieldErrors] = useState({});
     // Datas
@@ -401,6 +402,70 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
         }
     };
 
+    const handleOcrExpiry = async () => {
+        Alert.alert(
+            "สแกนวันหมดอายุ",
+            "เลือกแหล่งที่มาของรูปภาพ",
+            [
+                {
+                    text: "ถ่ายรูป",
+                    onPress: async () => {
+                        const permission = await ImagePicker.requestCameraPermissionsAsync();
+                        if (permission.granted) {
+                            let result = await ImagePicker.launchCameraAsync({
+                                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                                quality: 0.8,
+                                base64: true,
+                            });
+                            if (!result.canceled && result.assets[0].base64) {
+                                processOcrImage(result.assets[0].base64);
+                            }
+                        } else {
+                            alert("ต้องการสิทธิ์การเข้าถึงกล้อง");
+                        }
+                    }
+                },
+                {
+                    text: "เลือกจากอัลบั้ม",
+                    onPress: async () => {
+                        let result = await ImagePicker.launchImageLibraryAsync({
+                            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                            quality: 0.8,
+                            base64: true,
+                        });
+                        if (!result.canceled && result.assets[0].base64) {
+                            processOcrImage(result.assets[0].base64);
+                        }
+                    }
+                },
+                {
+                    text: "ยกเลิก",
+                    style: "cancel"
+                }
+            ]
+        );
+    };
+
+    const processOcrImage = async (base64) => {
+        setIsOcrLoading(true);
+        try {
+            const res = await ocrExpiryDate(base64);
+            if (res.success && res.date) {
+                const scannedDate = new Date(res.date);
+                setExpireDate(scannedDate);
+                setFieldErrors(prev => ({ ...prev, expireDate: false }));
+                Alert.alert('สำเร็จ', `อ่านวันหมดอายุได้: ${scannedDate.toLocaleDateString('th-TH')}`);
+            } else {
+                Alert.alert('ไม่พบวันหมดอายุ', res.error || 'กรุณาถ่ายให้ชัดเจนกว่านี้ หรือกรอกข้อมูลด้วยตนเอง');
+            }
+        } catch (error) {
+            console.error('OCR Error:', error);
+            Alert.alert('ข้อผิดพลาด', 'ไม่สามารถเชื่อมต่อระบบอ่านข้อมูลได้');
+        } finally {
+            setIsOcrLoading(false);
+        }
+    };
+
     const renderLoading = () => (
         <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#1E2022" />
@@ -472,15 +537,28 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
 
             <View style={styles.inputGroup}>
                 <Text style={[styles.label, fieldErrors.expireDate && styles.errorLabel]}>วันหมดอายุ (Lot นี้) *</Text>
-                <TouchableOpacity
-                    style={[styles.dateInput, fieldErrors.expireDate && styles.errorInput]}
-                    onPress={() => { Keyboard.dismiss(); setShowDatePicker(true); }}
-                >
-                    <Text style={[styles.dateText, !expireDate && { color: '#999' }]}>
-                        {expireDate ? expireDate.toLocaleDateString('th-TH-u-ca-buddhist') : 'เลือกวันหมดอายุ'}
-                    </Text>
-                    <Ionicons name="calendar-outline" size={20} color="#666" />
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <TouchableOpacity
+                        style={[styles.dateInput, fieldErrors.expireDate && styles.errorInput, { flex: 1, marginRight: 10 }]}
+                        onPress={() => { Keyboard.dismiss(); setShowDatePicker(true); }}
+                    >
+                        <Text style={[styles.dateText, !expireDate && { color: '#999' }]}>
+                            {expireDate ? expireDate.toLocaleDateString('th-TH-u-ca-buddhist') : 'เลือกวันหมดอายุ'}
+                        </Text>
+                        <Ionicons name="calendar-outline" size={20} color="#666" />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        style={styles.ocrButton}
+                        onPress={handleOcrExpiry}
+                        disabled={isOcrLoading}
+                    >
+                        {isOcrLoading ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                            <Ionicons name="camera-outline" size={24} color="#fff" />
+                        )}
+                    </TouchableOpacity>
+                </View>
                 {showDatePicker && Platform.OS === 'android' && (
                     <DateTimePicker
                         value={expireDate || new Date()}
@@ -630,15 +708,28 @@ export default function AddStockModal({ visible, onClose, onConfirm, scannedCode
             {/* Row 4: Expiry Date */}
             <View style={styles.inputGroup}>
                 <Text style={[styles.label, fieldErrors.expireDate && styles.errorLabel]}>วันหมดอายุ *</Text>
-                <TouchableOpacity
-                    style={[styles.dateInput, fieldErrors.expireDate && styles.errorInput]}
-                    onPress={() => { Keyboard.dismiss(); setShowDatePicker(true); }}
-                >
-                    <Text style={[styles.dateText, !expireDate && { color: '#999' }]}>
-                        {expireDate ? expireDate.toLocaleDateString('th-TH-u-ca-buddhist') : 'เลือกวันหมดอายุ'}
-                    </Text>
-                    <Ionicons name="calendar-outline" size={20} color="#666" />
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <TouchableOpacity
+                        style={[styles.dateInput, fieldErrors.expireDate && styles.errorInput, { flex: 1, marginRight: 10 }]}
+                        onPress={() => { Keyboard.dismiss(); setShowDatePicker(true); }}
+                    >
+                        <Text style={[styles.dateText, !expireDate && { color: '#999' }]}>
+                            {expireDate ? expireDate.toLocaleDateString('th-TH-u-ca-buddhist') : 'เลือกวันหมดอายุ'}
+                        </Text>
+                        <Ionicons name="calendar-outline" size={20} color="#666" />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        style={styles.ocrButton}
+                        onPress={handleOcrExpiry}
+                        disabled={isOcrLoading}
+                    >
+                        {isOcrLoading ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                            <Ionicons name="camera-outline" size={24} color="#fff" />
+                        )}
+                    </TouchableOpacity>
+                </View>
                 {showDatePicker && Platform.OS === 'android' && (
                     <DateTimePicker
                         value={expireDate || new Date()}
@@ -938,6 +1029,14 @@ const styles = StyleSheet.create({
     dateText: {
         fontSize: 16,
         color: '#333',
+    },
+    ocrButton: {
+        backgroundColor: '#1E2022',
+        width: 48,
+        height: 48,
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     saveButton: {
         backgroundColor: '#1E2022',

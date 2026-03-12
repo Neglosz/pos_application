@@ -122,17 +122,15 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
                 type: 'image/jpeg',
             });
 
-            const { API_BASE_URL } = require('../config');
-            const response = await fetch(`${API_BASE_URL}/branches/upload-image`, {
+            const { apiRequest } = require('../services/api');
+            const result = await apiRequest('/branches/upload-image', {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${session.access_token}`,
-
+                    'Content-Type': 'multipart/form-data',
                 },
                 body: formData,
             });
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'อัปโหลดไม่สำเร็จ');
+            if (!result.success) throw new Error(result.error || 'อัปโหลดไม่สำเร็จ');
             branch.image_url = result.imageUrl;
             Alert.alert('สำเร็จ', 'เปลี่ยนรูปเรียบร้อยแล้ว');
         } catch (error) {
@@ -353,13 +351,9 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
                 newPassword += chars.charAt(Math.floor(Math.random() * chars.length));
             }
 
-            const { API_BASE_URL } = require('../config');
-            const response = await fetch(`${API_BASE_URL}/branches/reset-credentials`, {
+            const { apiRequest } = require('../services/api');
+            const result = await apiRequest('/branches/reset-credentials', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session.access_token}`,
-                },
                 body: JSON.stringify({
                     store_id: branch.id,
                     old_user_id: oldUserId,
@@ -368,8 +362,7 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
                 }),
             });
 
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'รีเซ็ตไม่สำเร็จ');
+            if (!result.success) throw new Error(result.error || 'รีเซ็ตไม่สำเร็จ');
 
             setCredentials({ email: newEmail, password: newPassword });
             Alert.alert('สำเร็จ', `รีเซ็ตเรียบร้อย\n\nEmail: ${newEmail}\nPassword: ${newPassword}`);
@@ -398,18 +391,13 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) throw new Error('Session หมดอายุ กรุณา login ใหม่');
 
-            const { API_BASE_URL } = require('../config');
-            const response = await fetch(`${API_BASE_URL}/branches/delete`, {
+            const { apiRequest } = require('../services/api');
+            const result = await apiRequest('/branches/delete', {
                 method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session.access_token}`,
-                },
                 body: JSON.stringify({ store_id: branch.id }),
             });
 
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'ไม่สามารถลบสาขาได้');
+            if (!result.success) throw new Error(result.error || 'ไม่สามารถลบสาขาได้');
 
             Alert.alert('สำเร็จ', 'ลบสาขาเรียบร้อยแล้ว', [
                 { text: 'ตกลง', onPress: () => onBack && onBack() }

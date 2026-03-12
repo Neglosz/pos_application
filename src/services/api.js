@@ -65,7 +65,17 @@ export const apiRequest = async (endpoint, options = {}) => {
     let token = null;
     try {
         const { data: { session } } = await supabase.auth.getSession();
-        token = session?.access_token;
+        
+        if (session) {
+            const now = Math.floor(Date.now() / 1000);
+            // ถ้าน้อยกว่า 60 วินาทีจะหมดอายุ บังคับขอใหม่เลย
+            if (session.expires_at - now < 60) {
+                 const { data } = await supabase.auth.refreshSession();
+                 token = data.session?.access_token;
+            } else {
+                 token = session.access_token;
+            }
+        }
     } catch (error) {
         console.error("Error fetching session:", error);
     }
@@ -530,6 +540,13 @@ export const scheduleRecommendation = async (id, triggerType, promotionId, sched
 
 export const getScheduledReminders = async () => {
     return apiRequest('/ai/scheduled-reminders');
+};
+
+export const ocrExpiryDate = async (imageBase64) => {
+    return apiRequest('/ai/ocr-expiry', {
+        method: 'POST',
+        body: JSON.stringify({ imageBase64 }),
+    });
 };
 
 export const deleteTransaction = async (id) => {

@@ -143,11 +143,9 @@ export default function AddBranchModal({ visible, onClose, onSuccess }) {
             if (storeError) throw storeError;
 
             // 2. Create manager account via Supabase Admin API (through backend)
-            const response = await fetch(`${API_URL}/branches/create-manager`, {
+            const result = await apiRequest('/branches/create-manager', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session.access_token}`,
                     'x-user-id': user.id,
                     'x-store-id': store.id,
                 },
@@ -158,9 +156,7 @@ export default function AddBranchModal({ visible, onClose, onSuccess }) {
                 }),
             });
 
-            const result = await response.json();
-
-            if (!response.ok) {
+            if (!result.success && result.error) {
                 throw new Error(result.error || 'ไม่สามารถสร้างบัญชีผู้จัดการได้');
             }
 
