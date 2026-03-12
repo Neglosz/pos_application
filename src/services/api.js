@@ -299,6 +299,11 @@ export const deleteProductCategory = async (id) => {
     });
 };
 
+// Lookup product by ID
+export const getProductById = async (productId) => {
+    return apiRequest(`/products/${productId}`);
+};
+
 // Lookup product by barcode
 export const getProductByBarcode = async (barcode) => {
     return apiRequest(`/products/barcode/${encodeURIComponent(barcode)}`);

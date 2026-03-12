@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, KeyboardAvoidingView, Keyboard, Platform, Modal, Linking, Alert, useWindowDimensions, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
-import { getAIRecommendations, getRecommendationStats, getRecommendationHistory, takeRecommendationAction, sendAIChat, applyPromotion, disposeProduct, getActivePromotions, deactivatePromotion, updateProductPrice, scheduleRecommendation, getScheduledReminders } from '../services/api';
+import { apiRequest, getAIRecommendations, getRecommendationStats, getRecommendationHistory, takeRecommendationAction, sendAIChat, applyPromotion, disposeProduct, getActivePromotions, deactivatePromotion, updateProductPrice, scheduleRecommendation, getScheduledReminders, getProductById } from '../services/api';
 import { useFocusEffect } from '@react-navigation/native';
 import { useProductStore } from '../stores/useProductStore'
 import { useCartStore } from '../stores/useCartStore';
@@ -357,12 +357,15 @@ export default function AIScreen({ navigation }) {
 
     // Handle Accept button - open appropriate modal
     const handleAcceptAction = async (item) => {
+        item = parseItemPayload(item);
+
         setSelectedItem(item);
 
         const aiDiscount = item.payload?.recommended_discount;
         // Open product modal for ANY item with recommended_discount (expiry, promotion, pricing, stock with promo)
-        // Exception: stock type with action_label=เติมสต็อก (restock) = just mark accepted
-        const isRestockOnly = item.type === 'stock' && item.action_label === 'เติมสต็อก';
+        // Exception: stock type with restock action_label = open AddStock modal
+        const RESTOCK_LABELS = ['เติมสต็อก', 'สั่งเพิ่ม', 'สั่งของ', 'เติมสินค้า'];
+        const isRestockOnly = item.type === 'stock' && RESTOCK_LABELS.some(l => (item.action_label || '').includes(l));
         const hasPromoAction = aiDiscount && !isRestockOnly;
 
         if (hasPromoAction) {
@@ -387,47 +390,78 @@ export default function AIScreen({ navigation }) {
                 setDebtModalVisible(true);
             }
         } else if (isRestockOnly) {
-            // เปิด AddStockModal ของ AIScreen โดยตรง — mark accepted เฉพาะตอนที่เติมจริงใน handleAddStock
-            const targetProduct = item.payload?.products?.[0];
+            // เปิด AddStockModal — mark accepted เฉพาะตอนที่เติมจริงใน handleAddStock
+            setCurrentRestockItem(item);
 
-            if (targetProduct) {
-                const allProducts = useProductStore.getState().products || [];
-                const storeProduct = allProducts.find(p => p.name === targetProduct.name);
-
-                setCurrentRestockItem(item); // set ก่อนเสมอ
-
-                if (storeProduct && storeProduct.is_weightable) {
-                    // สินค้าชั่งน้ำหนัก — ส่ง product object ตรงๆ ให้ AddStockModal
-                    setStockModalProduct(storeProduct);
+            const openStockModal = (product) => {
+                if (product.is_weightable || !product.barcode) {
+                    setStockModalProduct(product);
                     setStockModalBarcode('');
-                    setStockModalVisible(true);
-                } else if (storeProduct && storeProduct.barcode) {
-                    // สินค้ามีบาร์โค้ด — ให้ AddStockModal ค้นหาเอง
-                    setStockModalProduct(null);
-                    setStockModalBarcode(storeProduct.barcode);
-                    setStockModalVisible(true);
-                } else if (storeProduct) {
-                    // มีสินค้าแต่ไม่มีบาร์โค้ด — ส่ง product ตรงๆ
-                    setStockModalProduct(storeProduct);
-                    setStockModalBarcode('');
-                    setStockModalVisible(true);
                 } else {
-                    // ไม่เจอสินค้าในระบบ — fallback ไป StockScan และ reset
+                    setStockModalProduct(null);
+                    setStockModalBarcode(product.barcode);
+                }
+                setStockModalVisible(true);
+            };
+
+            const resolveProduct = async () => {
+                const cached = useProductStore.getState().products || [];
+
+                // ชื่อสินค้าที่จะใช้ค้นหา
+                const targetName =
+                    item.payload?.products?.[0]?.name ||
+                    item.payload?.target_products?.[0] ||
+                    null;
+
+                // 1) ลอง match จาก cache ก่อน (เร็ว)
+                if (targetName) {
+                    const found = cached.find(p =>
+                        p.name === targetName ||
+                        p.name.includes(targetName) ||
+                        targetName.includes(p.name)
+                    );
+                    if (found) return found;
+                }
+
+                // 2) Fetch by ID (ถ้ามี affected_product_ids)
+                if (item.payload?.affected_product_ids?.length > 0) {
+                    try {
+                        const result = await getProductById(item.payload.affected_product_ids[0]);
+                        if (result?.success && result?.data) return result.data;
+                    } catch (_) {}
+                }
+
+                // 3) Search by name จาก server (type=all ให้ได้ทั้ง normal+weight)
+                if (targetName) {
+                    try {
+                        const result = await apiRequest(`/products?search=${encodeURIComponent(targetName)}&type=all&limit=5`);
+                        if (result?.success && result?.data?.length > 0) {
+                            // เลือกตัวที่ชื่อตรงที่สุด
+                            const exact = result.data.find(p => p.name === targetName);
+                            return exact || result.data[0];
+                        }
+                    } catch (_) {}
+                }
+
+                return null;
+            };
+
+            resolveProduct().then(storeProduct => {
+                if (storeProduct) {
+                    openStockModal(storeProduct);
+                } else {
+                    const productName = item.payload?.target_products?.[0] || item.title;
                     setCurrentRestockItem(null);
                     Alert.alert(
-                        'ไม่พบสินค้า',
-                        `ไม่พบ "${targetProduct.name}" ในระบบ กรุณาสแกนบาร์โค้ดสินค้าเพื่อเติมสต็อก`,
+                        'ไม่พบสินค้าในระบบ',
+                        `ไม่พบ "${productName}" กรุณาสแกนบาร์โค้ดสินค้าเพื่อเติมสต็อก`,
                         [
                             { text: 'ยกเลิก', style: 'cancel' },
                             { text: 'เปิดกล้องสแกน', onPress: () => navigation.navigate('StockScan') }
                         ]
                     );
                 }
-            } else {
-                // ไม่มีข้อมูลสินค้าจาก AI เลย
-                setCurrentRestockItem(null);
-                navigation.navigate('StockScan');
-            }
+            });
         } else if (item.type === 'pricing') {
             // Open pricing modal
             const product = item.payload?.products?.[0];
@@ -866,6 +900,13 @@ export default function AIScreen({ navigation }) {
         return configs[type] || configs.stock;
     };
 
+    // Helper: ensure item.payload is a parsed object (not a string)
+    const parseItemPayload = (item) => {
+        if (!item) return item;
+        if (typeof item.payload !== 'string') return item;
+        try { return { ...item, payload: JSON.parse(item.payload) }; } catch (_) { return { ...item, payload: {} }; }
+    };
+
     // Parse action_label (may contain "/" for multi-action) into typed action array
     const getDetailActions = (item) => {
         if (!item) return [{ label: 'ตกลง', actionType: 'primary' }];
@@ -877,7 +918,7 @@ export default function AIScreen({ navigation }) {
             const l = label;
             if (l.includes('ปรับราคา') || l.includes('ขึ้นราคา') || l.includes('ลดราคา')) return { label, actionType: 'pricing' };
             if (l.includes('จัดโปร') || l.includes('สร้างโปร')) return { label, actionType: 'promotion' };
-            if (l.includes('เติมสต็อก') || l.includes('สั่งของ')) return { label, actionType: 'stock' };
+            if (l.includes('เติมสต็อก') || l.includes('สั่งของ') || l.includes('สั่งเพิ่ม')) return { label, actionType: 'stock' };
             if (l.includes('ตัดสต็อก')) return { label, actionType: 'dispose' };
             if (l.includes('ทวงถาม') || l.includes('โทร')) return { label, actionType: 'debt' };
             return { label, actionType: 'primary' };
@@ -886,6 +927,8 @@ export default function AIScreen({ navigation }) {
 
     // Route to the correct modal/handler based on explicit actionType
     const handleDetailAction = (item, actionType) => {
+        item = parseItemPayload(item);
+
         if (actionType === 'pricing') {
             const product = item.payload?.products?.[0];
             setPricingItem({
