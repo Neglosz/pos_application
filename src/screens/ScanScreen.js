@@ -512,9 +512,16 @@ export default function ScanScreen({ navigation, route }) {
 
     // --- Initial Data Load (for Search) ---
     useEffect(() => {
-        if (storeProducts.length === 0) fetchProducts(true);
         if (categories.length === 0) fetchCategories();
     }, []);
+
+    useFocusEffect(
+        useCallback(() => {
+            // เมื่อเปิดหน้าจอนี้ (Focus) ให้รีเฟรชข้อมูลสินค้าใหม่แบบเบื้องหลัง
+            // เพื่อดึงข้อมูลล่าสุดและเคลียร์สินค้าที่ถูกลบออกจากแคชออฟไลน์
+            refreshProducts();
+        }, [])
+    );
 
     // --- Logic: Sound ---
     const playSound = async () => {
@@ -1351,13 +1358,17 @@ export default function ScanScreen({ navigation, route }) {
                     <ScrollView
                         contentContainerStyle={{ paddingBottom: 120 }}
                         showsVerticalScrollIndicator={false}
+                        refreshControl={<RefreshControl refreshing={searchRefreshing} onRefresh={onSearchRefresh} colors={['#F37021']} tintColor="#F37021" />}
                     >
                         <View style={styles.wGridContainer}>
                             {currentWeightCategory.items.map(item => renderProductCard(item))}
                         </View>
                     </ScrollView>
                 ) : (
-                    <View style={styles.wEmptyState}>
+                    <ScrollView
+                        contentContainerStyle={styles.wEmptyState}
+                        refreshControl={<RefreshControl refreshing={searchRefreshing} onRefresh={onSearchRefresh} colors={['#F37021']} tintColor="#F37021" />}
+                    >
                         <Ionicons name="basket-outline" size={48} color="#ddd" />
                         <Text style={styles.wEmptyText}>ยังไม่มีสินค้าในหมวดนี้</Text>
                         <TouchableOpacity
@@ -1367,7 +1378,7 @@ export default function ScanScreen({ navigation, route }) {
                             <Ionicons name="add" size={16} color="#fff" />
                             <Text style={styles.wEmptyAddText}>เพิ่มสินค้าตัวแรก</Text>
                         </TouchableOpacity>
-                    </View>
+                    </ScrollView>
                 )}
             </View>
         );
