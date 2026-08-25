@@ -1,0 +1,21 @@
+name: tests
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  app:
+    name: app unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      # The Expo dependency tree needs legacy peer resolution, matching how the
+      # lockfile was produced locally.
+      - run: npm ci --legacy-peer-deps
+      - run: npm test -- --ci
