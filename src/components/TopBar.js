@@ -124,7 +124,7 @@ export default function TopBar({ onLogout, onGoToBranchList }) {
                     <Ionicons name="storefront" size={20} color="#fff" />
                 )}
             </TouchableOpacity>
-            <Text style={styles.title}>Zippy Till</Text>
+            <Text style={styles.title}>ชำ-ชำนาญ</Text>
             {/* Bell Icon */}
             <TouchableOpacity
                 style={styles.bellContainer}

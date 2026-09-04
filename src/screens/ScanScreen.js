@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Vibration, ActivityIndicator, Dimensions, Image, TextInput, ScrollView, FlatList, Animated, Platform, Modal, TouchableWithoutFeedback, Keyboard, KeyboardAvoidingView, PanResponder, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Vibration, ActivityIndicator, Dimensions, TextInput, ScrollView, FlatList, Animated, Platform, Modal, TouchableWithoutFeedback, Keyboard, KeyboardAvoidingView, PanResponder, RefreshControl } from 'react-native';
+// expo-image instead of core Image — every product/cart photo here renders inside a
+// scrolling grid/list, and expo-image's memory+disk cache is what actually keeps
+// that smooth on low-end Android (core Image re-decodes on every mount with no cache).
+import { Image } from 'expo-image';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -192,6 +196,22 @@ export default function ScanScreen({ navigation, route }) {
     const currentWeightCategory = useMemo(() => {
         return weightCategories.find(cat => cat.id === selectedWeightCategoryId) || weightCategories[0];
     }, [weightCategories, selectedWeightCategoryId]);
+
+    // This used to run inline inside renderSearchView() — a plain function called on
+    // every render of this (very large, very stateful) screen, not just when the
+    // search tab's own inputs changed. Two full passes over the whole product catalog,
+    // re-lowercasing the query for every single item, on every keystroke anywhere in
+    // this component — a real, measurable source of stutter on a slow Android CPU,
+    // not just "the device is slow".
+    const searchDisplayProducts = useMemo(() => {
+        const q = searchQueryLocal.trim().toLowerCase();
+        const base = q
+            ? storeProducts.filter(p =>
+                p.name?.toLowerCase().includes(q) || p.barcode?.toLowerCase().includes(q)
+            )
+            : storeProducts;
+        return base.filter(p => parseFloat(p.stock_qty || 0) > 0);
+    }, [storeProducts, searchQueryLocal]);
 
     // Helper to change category
     const setSelectedWeightCategory = (cat) => {
@@ -1283,13 +1303,6 @@ export default function ScanScreen({ navigation, route }) {
     // 5. SEARCH VIEW
     const renderSearchView = () => {
         if (activeTab !== 'search') return null;
-        const displayProducts = (searchQueryLocal.trim()
-            ? storeProducts.filter(p =>
-                p.name?.toLowerCase().includes(searchQueryLocal.toLowerCase().trim()) ||
-                p.barcode?.toLowerCase().includes(searchQueryLocal.toLowerCase().trim())
-            )
-            : storeProducts
-        ).filter(p => parseFloat(p.stock_qty || 0) > 0);
         return (
             <View style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
                 {/* Search Bar */}
@@ -1309,7 +1322,7 @@ export default function ScanScreen({ navigation, route }) {
 
                 {/* Grid */}
                 <FlatList
-                    data={displayProducts}
+                    data={searchDisplayProducts}
                     numColumns={2}
                     keyExtractor={item => item.id}
                     removeClippedSubviews={true}
@@ -1358,7 +1371,7 @@ export default function ScanScreen({ navigation, route }) {
                 >
                     <View style={styles.wCardImageWrap}>
                         {item.image_url ? (
-                            <Image source={{ uri: item.image_url }} style={styles.wCardImage} />
+                            <Image source={{ uri: item.image_url }} style={styles.wCardImage} contentFit="cover" />
                         ) : (
                             <View style={styles.wCardImagePlaceholder}>
                                 <Ionicons name="cube-outline" size={28} color="#ccc" />

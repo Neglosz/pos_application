@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Modal, Animated, Dimensions, KeyboardAvoidingView, Platform, FlatList, Keyboard, Image, ActivityIndicator, RefreshControl, Alert } from 'react-native';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Modal, Animated, Dimensions, KeyboardAvoidingView, Platform, FlatList, Keyboard, ActivityIndicator, RefreshControl, Alert } from 'react-native';
+import { Image } from 'expo-image';
 import { AntDesign, Ionicons, Feather } from '@expo/vector-icons';
 import { PaymentMethodModal, QRPaymentModal, ReceiptModal, CashPaymentModal } from '../components/payment';
 import { getCustomersWithDebt, createCreditPayment, getCustomerPendingBills, getOrderDetails, cancelOrder } from '../services/api';
@@ -18,7 +19,7 @@ const getAvatarColor = (name) => {
     return colors[Math.abs(hash) % colors.length];
 };
 
-export default function DebtScreen() {
+export default function DebtScreen({ route }) {
     const { currentStore } = useStore();
     const [modalVisible, setModalVisible] = useState(false);
     const [showModal, setShowModal] = useState(false);
@@ -84,7 +85,11 @@ export default function DebtScreen() {
         return date.toLocaleDateString('th-TH-u-ca-buddhist', { day: '2-digit', month: '2-digit', year: '2-digit' });
     };
 
-    const getFilterCounts = () => {
+    // Was two plain functions called straight in the render body — every debtor
+    // was re-scanned (with a `new Date()` + two setHours calls each) on every
+    // render of this screen, including ones triggered by typing in unrelated
+    // fields. useMemo makes this recompute only when the inputs actually change.
+    const filterCounts = useMemo(() => {
         let nearDue = 0;
         let overDue = 0;
         debtors.forEach(debtor => {
@@ -101,11 +106,9 @@ export default function DebtScreen() {
             else if (diffDays <= 3) nearDue++;
         });
         return { all: debtors.length, nearDue, overDue };
-    };
+    }, [debtors]);
 
-    const filterCounts = getFilterCounts();
-
-    const getFilteredDebtors = () => {
+    const filteredDebtors = useMemo(() => {
         let result = debtors;
         if (searchText.trim()) {
             const q = searchText.toLowerCase();
@@ -130,9 +133,7 @@ export default function DebtScreen() {
             if (filterType === 'overDue') return diffDays < 0;
             return false;
         });
-    };
-
-    const filteredDebtors = getFilteredDebtors();
+    }, [debtors, searchText, filterType]);
 
     // Payment flow states
     const [paymentMethodVisible, setPaymentMethodVisible] = useState(false);
@@ -177,6 +178,22 @@ export default function DebtScreen() {
             Animated.spring(scaleAnim, { toValue: 1, tension: 65, friction: 11, useNativeDriver: true }),
         ]).start();
     };
+
+    // Deep link from AlertScreen ("ไปดู" on a payment_overdue notification) — open
+    // that specific customer's modal once their data has loaded. Guarded by a ref
+    // (not state) so it fires exactly once per id and doesn't reopen the modal every
+    // time `debtors` refetches (e.g. on every focus) while the same param is still set.
+    const highlightCustomerId = route?.params?.highlightCustomerId;
+    const consumedHighlightRef = useRef(null);
+    useEffect(() => {
+        if (!highlightCustomerId || debtors.length === 0) return;
+        if (consumedHighlightRef.current === highlightCustomerId) return;
+        const target = debtors.find((d) => d.id === highlightCustomerId || d.customer_id === highlightCustomerId);
+        if (target) {
+            consumedHighlightRef.current = highlightCustomerId;
+            openModal(target);
+        }
+    }, [highlightCustomerId, debtors]);
 
     // Close modal with animation
     const closeModal = (callback) => {

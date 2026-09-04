@@ -44,3 +44,6 @@ yarn-error.*
 
 # Test artifacts
 coverage/
+
+# Supabase CLI local state
+supabase/.temp/
