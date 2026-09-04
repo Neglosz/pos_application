@@ -80,10 +80,11 @@ export default function ResetPasswordScreen({ onNavigateToSignIn }) {
             <View style={{ position: 'absolute', top: -100, right: -100, width: 250, height: 250, borderRadius: 125, backgroundColor: 'rgba(243, 200, 150, 0.20)', }} />
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                 <Image
-                    style={{ width: 100, height: 100 }}
-                    source={{ uri: "https://i.postimg.cc/CMk3WcZs/Chat-GPT-Image-Jan-5-2026-12-04-50-AM-Photoroom.png" }}
+                    style={{ width: 110, height: 110 }}
+                    resizeMode="contain"
+                    source={require('../../assets/logo.png')}
                 />
-                <Text style={{ fontSize: 30, fontWeight: '700', color: '#000', marginTop: 10 }}>Zippy Till</Text>
+                <Text style={{ fontSize: 30, fontWeight: '700', color: '#000', marginTop: 10 }}>ชำ-ชำนาญ</Text>
                 <Text style={{ fontSize: 18, color: '#000' }}>ระบบจัดการร้านค้า</Text>
             </View>
 

@@ -3,11 +3,9 @@ import { View, Text, TouchableOpacity, TextInput, Modal, StyleSheet, ActivityInd
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../services/supabase";
 import { apiRequest } from '../services/api';
-import { Buffer } from 'buffer';
 
 import { API_BASE_URL as API_URL } from '../config';
 const EMAIL_DOMAIN = 'yourpos.app';
-const ENCRYPTION_KEY = 'yourpos-secret-key-2026';
 
 export default function AddBranchModal({ visible, onClose, onSuccess }) {
     const [branchName, setBranchName] = useState('');
@@ -71,15 +69,6 @@ export default function AddBranchModal({ visible, onClose, onSuccess }) {
             .substring(0, 30);
         const ts = Date.now().toString(36);
         setGeneratedEmail(`${slug || 'store'}-${ts}@zippy.pos`);
-    };
-
-    // Simple XOR encryption with Base64 encoding
-    const encryptPassword = (password) => {
-        let result = '';
-        for (let i = 0; i < password.length; i++) {
-            result += String.fromCharCode(password.charCodeAt(i) ^ ENCRYPTION_KEY.charCodeAt(i % ENCRYPTION_KEY.length));
-        }
-        return Buffer.from(result, 'binary').toString('base64');
     };
 
     const handleSubmit = async () => {
@@ -161,21 +150,8 @@ export default function AddBranchModal({ visible, onClose, onSuccess }) {
                 throw new Error(result.error || 'ไม่สามารถสร้างบัญชีผู้จัดการได้');
             }
 
-            // 3. Store encrypted credentials in store_credentials table
-            const encryptedPassword = encryptPassword(generatedPassword);
-
-            const { error: credError } = await supabase
-                .from('store_credentials')
-                .insert({
-                    store_id: store.id,
-                    email: generatedEmail,
-                    password_encrypted: encryptedPassword,
-                });
-
-            if (credError) {
-                console.error('Failed to store credentials:', credError);
-                // Don't throw - store was created successfully
-            }
+            // 3. Credentials are stored by /branches/create-manager, encrypted with a
+            // server-side key. The app must not write store_credentials itself.
 
             Alert.alert('สำเร็จ', 'สร้างสาขาใหม่เรียบร้อยแล้ว');
             onSuccess && onSuccess();

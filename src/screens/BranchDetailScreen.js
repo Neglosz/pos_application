@@ -5,11 +5,9 @@ import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../services/supabase";
-import { Buffer } from 'buffer';
 import { getStoreSettings, updateStoreSettings, apiRequest } from "../services/api";
 
 
-const ENCRYPTION_KEY = 'yourpos-secret-key-2026';
 const THEME_COLOR = '#F37021'; // Orange
 const BG_COLOR = '#F8F9FA'; // Light Gray Background
 
@@ -251,38 +249,23 @@ export default function BranchDetailScreen({ branch, onBack, onEnterPOS }) {
     const fetchCredentials = async () => {
         if (!branch?.id) return;
         try {
-            const { data, error } = await supabase
-                .from('store_credentials')
-                .select('*')
-                .eq('store_id', branch.id)
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .single();
+            // The password is encrypted with a key that only the server holds, so the
+            // backend decrypts it and returns it to the owner. The app no longer reads
+            // store_credentials directly.
+            const res = await apiRequest(`/branches/${branch.id}/credentials`, {
+                headers: { 'x-store-id': branch.id },
+            });
 
-            if (data) {
-                const decryptedPassword = decryptPassword(data.password_encrypted);
+            if (res?.success && res.data) {
                 setCredentials({
-                    email: data.email,
-                    password: decryptedPassword,
+                    email: res.data.email,
+                    password: res.data.password || '******',
                 });
             }
         } catch (error) {
             console.error('Failed to fetch credentials:', error);
         } finally {
             setLoading(false);
-        }
-    };
-
-    const decryptPassword = (encryptedPassword) => {
-        try {
-            const encrypted = Buffer.from(encryptedPassword, 'base64').toString('binary');
-            let result = '';
-            for (let i = 0; i < encrypted.length; i++) {
-                result += String.fromCharCode(encrypted.charCodeAt(i) ^ ENCRYPTION_KEY.charCodeAt(i % ENCRYPTION_KEY.length));
-            }
-            return result;
-        } catch {
-            return '******';
         }
     };
 

@@ -149,7 +149,7 @@ export default function SplashScreen({ onFinish }) {
                     <View style={styles.logoGlow} />
                     <Animated.View style={[styles.logoContainer, { opacity: logoImageOpacity }]}>
                         <Image
-                            source={{ uri: 'https://i.postimg.cc/CMk3WcZs/Chat-GPT-Image-Jan-5-2026-12-04-50-AM-Photoroom.png' }}
+                            source={require('../../assets/logo.png')}
                             style={styles.logoImage}
                             resizeMode="contain"
                         />
@@ -166,7 +166,7 @@ export default function SplashScreen({ onFinish }) {
                         { opacity: textOpacity, transform: [{ translateY: textY }] },
                     ]}
                 >
-                    Zippy Till
+                    ชำ-ชำนาญ
                 </Animated.Text>
 
                 {/* Subtitle */}
